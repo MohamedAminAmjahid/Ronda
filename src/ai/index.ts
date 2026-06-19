@@ -1,0 +1,5 @@
+export * from './observable'
+export * from './memory'
+export * from './evaluate'
+export { chooseAction } from './bot'
+export type { Difficulty } from './bot'

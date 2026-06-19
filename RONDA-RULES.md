@@ -37,10 +37,14 @@ Caída + Missa peuvent se cumuler sur le même coup. *(assumé)*
 - **Ronda** : 2 cartes de même valeur en main → **1 point** (base).
 - **Tringa** : 3 cartes de même valeur en main → **5 points** (base).
 
-### 4.1 Moment de la déclaration — CONFIRMÉ
+### 4.1 Déclaration — CONFIRMÉ
+- **Pas de bluff possible** : le bouton « Ronda »/« Tringa » n'apparaît à un joueur **que
+  s'il détient réellement** la combinaison. Impossible de déclarer ce qu'on n'a pas.
 - Déclaration **retardable** : possible tant que le joueur détient encore **toutes** les
   cartes de la combinaison en main.
 - Dès qu'il **joue une carte** de la combinaison **sans l'avoir déclarée** → droit **perdu**.
+- Un joueur peut **choisir de ne pas déclarer** (dissimuler), par stratégie — par ex. pour ne
+  pas offrir à un adversaire au combo plus fort le bonus de conflit (voir 4.2 et 4.3).
 
 ### 4.2 Conflit de combinaisons — CONFIRMÉ
 Quand les deux joueurs déclarent, la **combinaison la plus forte gagne et prend aussi le
@@ -50,43 +54,65 @@ point de l'autre** (le perdant marque 0) :
 - Deux rondas → le gagnant marque **2 points** (1 + 1).
 - Tringa contre ronda → la tringa marque **6 points** (5 + 1).
 
-### 4.3 Contre-ronda (contestation) — PROPOSITION
-On peut **contester** une déclaration adverse avant qu'il ne joue :
-- S'il bluffait → il marque 0 et le contesteur **gagne** les points contestés.
-- S'il l'avait vraiment → le contesteur **perd 1 point** (risque du contre).
-- S'applique aussi à la tringa (contre-tringa), même mécanique. *(assumé)*
+### 4.3 Contre-ronda (attraper une combinaison dissimulée) — CONFIRMÉ
+Sert à **punir la dissimulation** (pas à contester un bluff, qui est impossible) :
+- Un joueur qui a dissimulé une ronda/tringa devra quand même **jouer ces cartes**.
+- Si l'adversaire **remarque** qu'il pose 2 (ronda) ou 3 (tringa) cartes de même valeur
+  **issues de la même main**, il peut crier **« contre »** (« je t'ai attrapé »).
+- Contre **correct** → le contesteur **gagne le point dissimulé** (1 pour une ronda).
+- Contre **à tort** (les cartes venaient de mains différentes, pas une vraie combinaison) →
+  le contesteur **perd 1 point** (le « bull »).
+- Si personne ne remarque → la dissimulation réussit, aucun point, on continue.
+- En pratique, **seules les rondas sont dissimulées** : une tringa gagne toujours, donc on la
+  déclare systématiquement (aucun intérêt à la cacher). Le contre concerne donc les rondas.
 
-## 5. Fin de manche, distributions, fin de partie
-- Mains de 3 cartes jouées → **redistribuer 3 cartes** à chacun (table **jamais
-  réalimentée**) tant que la pioche le permet.
-- 40 cartes : donne initiale (3+3+4) puis distributions de 6 ; la dernière manche
-  s'appelle **« Mab9ach »** (titre affiché au centre).
+## 5. Structure : manche / donne / partie — CONFIRMÉ
 
-### 5.1 Dernière manche — « Mab9ach » — CONFIRMÉ
+**Vocabulaire à respecter dans le code :**
+- **Manche** = une distribution de 3 cartes par joueur (un mini-cycle de jeu).
+- **Donne** = un cycle complet des 40 cartes : distribution initiale (3+3+4) puis manches de
+  6 cartes jusqu'à épuisement. La table n'est **jamais réalimentée** en cours de donne. La
+  dernière manche d'une donne s'appelle **« Mab9ach »**.
+- **Partie** = la course à **41 points**, qui s'étend sur **plusieurs donnes**.
+
+**Boucle de la partie :**
+1. Jouer une donne entière (jusqu'à Mab9ach) puis appliquer le **décompte** (5.2).
+2. Si un joueur atteint **≥ 41** → `GAME_OVER`.
+3. Sinon → **rebattre les 40 cartes**, le **donneur alterne**, redistribuer, et rejouer une
+   donne. Les **scores sont cumulés** d'une donne à l'autre.
+
+### 5.1 Dernière manche d'une donne — « Mab9ach » — CONFIRMÉ
 - La **prise de la toute dernière carte** par le **donneur** (qui joue la dernière carte) :
-  - avec un **12 (Rey)** → **+5 points**
-  - avec un **1 (As)** → **−5 points**
+  - capture avec un **12 (Rey)** → **+5 points**
+  - capture avec un **1 (As)** → **−5 points**
   - **aucune** prise → **−5 points**
-- En dernière manche, le **dernier à capturer** ramasse les cartes restantes de la table.
+  - capture avec **une autre valeur** → **0 point** (ni bonus ni malus)
+- En Mab9ach, le **dernier à capturer** ramasse les **cartes restantes de la table** ;
+  ces cartes rejoignent sa pile capturée et **comptent dans le décompte final** (section 5.2).
 
 ### 5.2 Décompte des cartes — CONFIRMÉ
 - Le joueur ayant capturé **plus de 20 cartes** marque **+1 point par carte au-dessus de 20**
   (ex. 23 → +3). Ce décompte **s'ajoute** à tous les autres points (Mab9ach, ronda, etc.).
 
 ### 5.3 Score cible — CONFIRMÉ
-- La partie se gagne à **41 points**.
+- La **partie** se gagne au premier à **41 points**, scores cumulés sur plusieurs donnes
+  (voir la boucle en section 5).
 
 ## 6. Cas limites à coder et tester
-- Plusieurs cartes de même valeur sur la table → on en capture **une seule**. *(assumé)*
+- Plusieurs cartes de même valeur sur la table → on en capture **une seule, automatiquement**
+  (la couleur n'a aucun impact : ni sur le score ni sur l'escalier ; pas de choix joueur).
+- Caída : c'est **la carte exacte que l'adversaire vient de jouer** qui doit être capturée.
 - Escalier qui s'arrête dès qu'un maillon manque.
-- Pioche insuffisante pour une dernière donne complète.
+- Donneur qui **alterne** à chaque nouvelle donne.
+- Pioche insuffisante pour une dernière manche complète.
 - Cumuls de bonus (caída + missa).
 - Égalité 20-20 au décompte → personne ne marque le décompte. *(assumé)*
-- Bluff de déclaration + contre-ronda.
+- Dissimulation de ronda + contre (correct vs à tort selon mains identiques/différentes).
 
 ## 7. Tests prioritaires (Vitest)
 1. Capture simple. 2. Escalier dont **7 → 10**. 3. Caída → +1. 4. Missa → +1.
 5. Ronda (2) = 1 pt, Tringa (3) = 5 pts. 6. Déclaration retardée + perte du droit.
 7. Conflit : 2 rondas → 2 pts au plus haut ; tringa vs ronda → 6 pts. 8. Contre-ronda.
 9. Mab9ach : dernière prise 12 (+5), 1 (−5), aucune (−5). 10. Décompte > 20.
-11. Partie gagnée à 41.
+11. Fin de donne sans 41 → nouvelle donne, donneur alterné, **scores cumulés**.
+12. Partie gagnée au premier à **41** (`GAME_OVER`).

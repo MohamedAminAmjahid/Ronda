@@ -1,0 +1,212 @@
+import { useReducer, useCallback, useEffect, useRef, useState } from 'react'
+import { applyAction, createInitialState } from '../engine'
+import type { Card, Combination, GameEvent, GameState, PlayerId, Value } from '../engine/types'
+import type { Rng } from '../engine/deck'
+import type { Action } from '../engine/types'
+import { getObservableState } from '../ai/observable'
+import { chooseAction } from '../ai/bot'
+import { createMemory, updateMemory } from '../ai/memory'
+import type { AiMemory } from '../ai/memory'
+
+// ── Identités fixes ─────────────────────────────────────────────────────────
+
+export const HUMAN_ID: PlayerId = 0
+export const BOT_ID: PlayerId = 1
+
+// ── RNG dérivé d'un seed — reducer pur ──────────────────────────────────────
+
+/**
+ * Crée un LCG (Numerical Recipes) à partir d'un seed entier.
+ * Retourne { rng, getSeed } : après N appels à rng(), getSeed() renvoie
+ * le seed courant pour le persister dans l'état sans garder de closure mutable.
+ *
+ * Pourquoi cette forme et pas un closure directement dans l'état ?
+ * React StrictMode double-invoque les reducers. Un RNG mutable en état
+ * produirait des valeurs différentes entre les deux invocations, cassant
+ * la règle de pureté. Ici l'état ne stocke qu'un nombre (seed) ;
+ * le reducer reconstruit un RNG frais à chaque réduction → pur et StrictMode-safe.
+ */
+function makeLcg(initialSeed: number): { rng: Rng; getSeed: () => number } {
+  let s = (initialSeed >>> 0) || 1
+  return {
+    rng() {
+      s = (Math.imul(s, 1664525) + 1013904223) >>> 0
+      return s / 0x100000000
+    },
+    getSeed: () => s,
+  }
+}
+
+// ── Vue dérivée ──────────────────────────────────────────────────────────────
+
+/** Tout ce dont l'UI a besoin pour afficher l'écran de jeu. */
+export interface GameView {
+  state: GameState
+  humanId: PlayerId
+  botId: PlayerId
+  /** C'est le tour de l'humain et la phase est PLAYING. */
+  isHumanTurn: boolean
+  /**
+   * L'humain peut déclarer sa combo (bouton Ronda / Tringa visible).
+   * Faux si déjà déclaré ou si le droit a été perdu.
+   */
+  canDeclare: boolean
+  /**
+   * L'humain peut contester la combo adverse (bouton Contre visible).
+   * Câblé à l'étape 3 avec AiMemory + boucle bot.
+   */
+  canContest: boolean
+  isGameOver: boolean
+  /**
+   * Événements produits par la dernière action (caída, missa, ronda…).
+   * `id` change à chaque nouvelle occurrence — permet de retrigger useEffect
+   * même pour deux caídas consécutives.
+   * null si aucun événement remarquable.
+   */
+  lastEvent: { events: readonly GameEvent[]; id: number } | null
+}
+
+function toView(gs: GameState): GameView {
+  const isHumanTurn = gs.currentPlayer === HUMAN_ID && gs.phase === 'PLAYING'
+  const h = gs.players[HUMAN_ID]
+  return {
+    state: gs,
+    humanId: HUMAN_ID,
+    botId: BOT_ID,
+    isHumanTurn,
+    canDeclare:
+      isHumanTurn &&
+      h.pendingCombo !== null &&
+      h.declaredCombo === null &&
+      !h.lostComboRight,
+    canContest: false, // étape 3 : AiMemory + bot loop
+    isGameOver: gs.phase === 'GAME_OVER',
+    lastEvent:
+      gs.lastEvents.length > 0
+        ? { events: gs.lastEvents, id: gs.eventSeq }
+        : null,
+  }
+}
+
+// ── Reducer pur ──────────────────────────────────────────────────────────────
+
+type RS = { gs: GameState; seed: number }
+
+type RA =
+  | { kind: 'ACT'; action: Action }
+  | { kind: 'NEW'; seed: number; firstDealer: PlayerId }
+
+function reduce(s: RS, a: RA): RS {
+  switch (a.kind) {
+    case 'ACT': {
+      const { rng, getSeed } = makeLcg(s.seed)
+      const gs = applyAction(s.gs, a.action, rng)
+      return { gs, seed: getSeed() }
+    }
+    case 'NEW': {
+      const { rng, getSeed } = makeLcg(a.seed)
+      const gs = createInitialState(rng, a.firstDealer)
+      return { gs, seed: getSeed() }
+    }
+  }
+}
+
+// ── Hook ─────────────────────────────────────────────────────────────────────
+
+/** Phase applicative — hors du reducer (pas de partie avant startGame). */
+export type AppPhase = 'RITUAL_PICKER' | 'IN_GAME'
+
+export function useRondaGame() {
+  const [appPhase, setAppPhase] = useState<AppPhase>('RITUAL_PICKER')
+
+  // État du jeu — le state initial est un placeholder ; la vraie partie commence
+  // seulement quand startGame() dispatche 'NEW' avec le bon donneur.
+  const [s, dispatch] = useReducer(reduce, undefined, (): RS => {
+    const { rng, getSeed } = makeLcg(1)
+    return { gs: createInitialState(rng, 0), seed: getSeed() }
+  })
+
+  // AiMemory persiste entre les renders sans déclencher de re-render
+  const memRef = useRef<AiMemory>(createMemory())
+
+  // ── Boucle bot ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (appPhase !== 'IN_GAME') return          // pas de bot pendant les rituels
+    const gs = s.gs
+    if (gs.currentPlayer !== BOT_ID || gs.phase !== 'PLAYING') return
+
+    const obs = getObservableState(gs, BOT_ID)
+
+    // Met à jour la mémoire avec l'état visible actuel
+    memRef.current = updateMemory(memRef.current, obs)
+
+    const tid = setTimeout(() => {
+      const action = chooseAction(obs, BOT_ID, 'medium', memRef.current)
+
+      // Si le bot joue une carte, on l'enregistre dans la mémoire
+      if (action.type === 'PLAY_CARD') {
+        memRef.current = updateMemory(
+          memRef.current,
+          obs,
+          { byPlayer: BOT_ID, card: action.card },
+        )
+      }
+      // Si le bot conteste, on enregistre la valeur contestée
+      if (action.type === 'CONTEST') {
+        memRef.current = updateMemory(
+          memRef.current,
+          obs,
+          undefined,
+          action.accusedValue,
+        )
+      }
+
+      dispatch({ kind: 'ACT', action })
+    }, 600)
+
+    return () => clearTimeout(tid)
+  }, [s.gs, appPhase])
+
+  // ── Callbacks humain ──────────────────────────────────────────────────────
+
+  const playCard = useCallback(
+    (card: Card) => {
+      // Enregistre la carte jouée par l'humain dans la mémoire du bot
+      const obs = getObservableState(s.gs, BOT_ID)
+      memRef.current = updateMemory(
+        memRef.current,
+        obs,
+        { byPlayer: HUMAN_ID, card },
+      )
+      dispatch({ kind: 'ACT', action: { type: 'PLAY_CARD', playerId: HUMAN_ID, card } })
+    },
+    [s.gs],
+  )
+
+  const declare = useCallback(
+    (combination: Combination) =>
+      dispatch({ kind: 'ACT', action: { type: 'DECLARE', playerId: HUMAN_ID, combination } }),
+    [],
+  )
+
+  const contest = useCallback(
+    (accusedValue: Value) =>
+      dispatch({ kind: 'ACT', action: { type: 'CONTEST', playerId: HUMAN_ID, accusedValue } }),
+    [],
+  )
+
+  /** Lance la partie avec le donneur déterminé par le rituel. */
+  const startGame = useCallback((firstDealer: PlayerId) => {
+    memRef.current = createMemory()
+    dispatch({ kind: 'NEW', seed: Date.now(), firstDealer })
+    setAppPhase('IN_GAME')
+  }, [])
+
+  /** Revient à l'écran de sélection du rituel (puis menu). */
+  const newGame = useCallback(() => {
+    memRef.current = createMemory()
+    setAppPhase('RITUAL_PICKER')
+  }, [])
+
+  return { appPhase, view: toView(s.gs), startGame, playCard, declare, contest, newGame }
+}
