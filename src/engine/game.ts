@@ -198,7 +198,9 @@ function applyDeclare(
   combination: PlayerState['pendingCombo'],
 ): GameState {
   if (combination === null) throw new Error('No combination to declare')
-  if (state.currentPlayer !== playerId) throw new Error('Not your turn')
+  // La déclaration est une annonce libre : elle n'avance pas le tour et peut
+  // donc être faite même hors de son tour (le bouton Ronda/Tringa reste visible
+  // côté UI quel que soit le tour courant).
 
   const player = state.players[playerId]
   if (player.lostComboRight) throw new Error('Lost right to declare')

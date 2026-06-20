@@ -406,10 +406,15 @@ function DeckStack({ count }: { count: number }) {
 
 interface GameScreenProps {
   onBack: () => void   // retour au menu
+  /**
+   * Source de l'état de jeu. Par défaut le hook solo (vs IA) ; le mode en ligne
+   * injecte useOnlineGame (même interface). Le solo reste strictement inchangé.
+   */
+  useGame?: typeof useRondaGame
 }
 
-export function GameScreen({ onBack }: GameScreenProps) {
-  const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useRondaGame()
+export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) {
+  const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)

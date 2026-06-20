@@ -176,7 +176,7 @@ function applyDeclare2v2(
   combination: Combination | null,
 ): GameState2v2 {
   if (combination === null) throw new Error('No combination to declare')
-  if (state.currentPlayer !== playerId) throw new Error('Not your turn')
+  // Annonce libre (n'avance pas le tour) → autorisée même hors de son tour.
 
   const player = state.players[playerId]
   if (player.lostComboRight) throw new Error('Lost right to declare')

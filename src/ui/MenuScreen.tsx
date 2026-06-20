@@ -39,15 +39,16 @@ function KhatamLogo() {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onPlayVsAi:  () => void
-  onPlay2v2:   () => void
-  onRules:     () => void
-  onCredits:   () => void
+  onPlayVsAi:   () => void
+  onPlay2v2:    () => void
+  onPlayOnline: () => void
+  onRules:      () => void
+  onCredits:    () => void
 }
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlayVsAi, onPlay2v2, onRules, onCredits }: Props) {
+export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onRules, onCredits }: Props) {
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -76,11 +77,9 @@ export function MenuScreen({ onPlayVsAi, onPlay2v2, onRules, onCredits }: Props)
             <Text style={s.btnSecondaryTxt}>2 contre 2</Text>
           </TouchableOpacity>
 
-          {/* Jouer avec un ami — désactivé (multijoueur à venir) */}
-          <TouchableOpacity style={s.btnDisabled} disabled>
-            <Text style={s.btnDisabledIcon}>🔒</Text>
-            <Text style={s.btnDisabledTxt}>Jouer avec un ami</Text>
-            <Text style={s.btnDisabledBadge}>Bientôt</Text>
+          {/* Jouer en ligne (multijoueur Colyseus) */}
+          <TouchableOpacity style={s.btnSecondary} onPress={onPlayOnline}>
+            <Text style={s.btnSecondaryTxt}>Jouer en ligne</Text>
           </TouchableOpacity>
 
           {/* Règles + Crédits — liens discrets */}

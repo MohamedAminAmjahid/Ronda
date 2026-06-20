@@ -71,7 +71,6 @@ function toView(gs: GameState2v2): GameView2v2 {
     teamScores: [gs.teams[0].score, gs.teams[1].score],
     teamCapturedCount: [gs.teams[0].captured.length, gs.teams[1].captured.length],
     canDeclare:
-      isHumanTurn &&
       h.pendingCombo !== null &&
       h.declaredCombo === null &&
       !h.lostComboRight,

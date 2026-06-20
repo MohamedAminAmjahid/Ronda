@@ -83,7 +83,6 @@ function toView(gs: GameState): GameView {
     botId: BOT_ID,
     isHumanTurn,
     canDeclare:
-      isHumanTurn &&
       h.pendingCombo !== null &&
       h.declaredCombo === null &&
       !h.lostComboRight,
