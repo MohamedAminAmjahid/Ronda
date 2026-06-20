@@ -51,7 +51,11 @@ export function OnlineScreen({ onBack }: Props) {
   if (connectionStatus === 'playing') {
     return (
       <View style={{ flex: 1 }}>
-        <GameScreen onBack={() => { game.newGame(); onBack() }} useGame={useOnlineGame} />
+        <GameScreen
+          onBack={() => { game.newGame(); onBack() }}
+          useGame={useOnlineGame}
+          opponentName={game.opponentName ?? undefined}
+        />
         {opponentDisconnected && (
           <View style={s.discOverlay} pointerEvents="none">
             <Text style={s.discTitle}>Adversaire déconnecté</Text>

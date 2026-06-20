@@ -51,9 +51,19 @@ export function BotThinking() {
   )
 }
 
+// ── Jeton de donneur (cercle laiton « D ») ───────────────────────────────────
+
+function DealerToken() {
+  return (
+    <View style={styles.dealerToken}>
+      <Text style={styles.dealerTokenTxt}>D</Text>
+    </View>
+  )
+}
+
 // ── Overlay annonce "Donne N" ─────────────────────────────────────────────────
 
-function DealAnnounce({ dealNumber }: { dealNumber: number }) {
+function DealAnnounce({ dealNumber, starterText }: { dealNumber: number; starterText: string }) {
   const opacity = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
@@ -69,6 +79,7 @@ function DealAnnounce({ dealNumber }: { dealNumber: number }) {
     <Animated.View style={[styles.dealAnnounceRoot, { opacity }]} pointerEvents="none">
       <Text style={styles.dealAnnounceLabel}>DONNE</Text>
       <Text style={styles.dealAnnounceNum}>{dealNumber}</Text>
+      <Text style={styles.dealAnnounceStarter}>{starterText}</Text>
     </Animated.View>
   )
 }
@@ -411,9 +422,11 @@ interface GameScreenProps {
    * injecte useOnlineGame (même interface). Le solo reste strictement inchangé.
    */
   useGame?: typeof useRondaGame
+  /** Nom de l'adversaire (mode online). undefined en solo → affiche « Bot ». */
+  opponentName?: string
 }
 
-export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) {
+export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
@@ -461,6 +474,8 @@ export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) 
   // ── Annonce "Donne N" ─────────────────────────────────────────────────────
   // Déclenché quand dealNumber change (ou quand on entre en IN_GAME).
   const [dealAnnouncing, setDealAnnouncing] = useState<number | null>(null)
+  // Qui commence la donne, capturé au moment de l'annonce (currentPlayer initial).
+  const [starterIsHuman, setStarterIsHuman] = useState(true)
   const prevDealNumber = useRef<number | null>(null)
 
   useEffect(() => {
@@ -471,6 +486,7 @@ export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) 
     const dn = view.state.dealNumber
     if (prevDealNumber.current === dn) return
     prevDealNumber.current = dn
+    setStarterIsHuman(view.state.currentPlayer === HUMAN_ID)
     setDealAnnouncing(dn + 1)   // 1-indexé pour l'affichage
     const tid = setTimeout(() => setDealAnnouncing(null), 1500)
     return () => clearTimeout(tid)
@@ -653,7 +669,10 @@ export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) 
       <View style={styles.scorebar}>
         <View style={styles.scorebarInner}>
           <View>
-            <Text style={styles.sbName}>Toi</Text>
+            <View style={styles.sbNameRow}>
+              <Text style={styles.sbName}>Toi</Text>
+              {state.dealer === HUMAN_ID && <DealerToken />}
+            </View>
             <Text style={styles.sbScore}>{human.score}</Text>
           </View>
           <View style={styles.sbMid}>
@@ -661,7 +680,10 @@ export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) 
             <Text style={styles.sbTarget}>→ 41</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.sbName}>Bot</Text>
+            <View style={styles.sbNameRow}>
+              {state.dealer === BOT_ID && <DealerToken />}
+              <Text style={styles.sbName}>{opponentName ?? 'Bot'}</Text>
+            </View>
             <Text style={styles.sbScore}>{bot.score}</Text>
           </View>
         </View>
@@ -812,7 +834,10 @@ export function GameScreen({ onBack, useGame = useRondaGame }: GameScreenProps) 
 
       {/* ── Overlay "Donne N" ─────────────────────────────── */}
       {dealAnnouncing !== null && (
-        <DealAnnounce dealNumber={dealAnnouncing} />
+        <DealAnnounce
+          dealNumber={dealAnnouncing}
+          starterText={starterIsHuman ? 'Vous commencez' : `${opponentName ?? 'Le bot'} commence`}
+        />
       )}
 
       {/* ── 6. Barre d'actions ─────────────────────────────── */}
@@ -887,6 +912,25 @@ const styles = StyleSheet.create({
     letterSpacing: 1.8,
     textTransform: 'uppercase',
     color: C.boneOff,
+  },
+  sbNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dealerToken: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: C.brass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dealerTokenTxt: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 11,
+    color: C.ink,
+    lineHeight: 14,
   },
   sbScore: {
     fontFamily: 'Cairo_600SemiBold',
@@ -1274,6 +1318,13 @@ const styles = StyleSheet.create({
     fontSize: 96,
     color: C.brass,
     lineHeight: 100,
+  },
+  dealAnnounceStarter: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 13,
+    color: C.boneOff,
+    letterSpacing: 1,
+    marginTop: 8,
   },
 
   // Écran résultat de donne
