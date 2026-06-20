@@ -1,6 +1,38 @@
 import type { Card, GameState, PlayerId, PlayerState } from './types'
 import { createDeck, shuffle, type Rng } from './deck'
 import { detectCombination } from './combinations'
+import { ESCALIER_SEQUENCE } from './capture'
+
+/**
+ * Valide les 4 cartes posées sur la table au DÉBUT d'une donne.
+ * Deux contraintes (uniquement pour la distribution initiale) :
+ *   1. Pas de doublon de valeur.
+ *   2. Pas de suite de 3+ valeurs consécutives dans l'ordre escalier
+ *      (1-2-3-4-5-6-7-10-11-12). Une suite de 2 est tolérée.
+ */
+export function isTableValid(table: readonly Card[]): boolean {
+  const values = table.map(c => c.value)
+
+  // 1. Pas de doublon
+  if (new Set(values).size !== values.length) return false
+
+  // 2. Pas de suite de 3+ consécutives (positions adjacentes dans l'escalier)
+  const indices = values
+    .map(v => ESCALIER_SEQUENCE.indexOf(v))
+    .sort((a, b) => a - b)
+
+  let run = 1
+  for (let i = 1; i < indices.length; i++) {
+    if (indices[i] === indices[i - 1] + 1) {
+      run++
+      if (run >= 3) return false
+    } else {
+      run = 1
+    }
+  }
+
+  return true
+}
 
 function emptyPlayer(score: number): PlayerState {
   return {
@@ -35,7 +67,15 @@ interface DealContext {
 /** Rebat et redistribue pour une nouvelle donne, en conservant les scores. */
 export function startNewDeal(ctx: DealContext, rng: Rng): GameState {
   const { scores, dealer, dealNumber } = ctx
-  const shuffled = shuffle(createDeck(), rng)
+
+  // Redistribue jusqu'à obtenir une table initiale valide (pas de doublon,
+  // pas de suite de 3+). Si invalide, on remet les 40 cartes et on remélange
+  // avec le RNG. La boucle termine car chaque shuffle fait avancer le RNG et
+  // les tables invalides sont rares (~quelques % des tirages).
+  let shuffled = shuffle(createDeck(), rng)
+  while (!isTableValid(shuffled.slice(6, 10))) {
+    shuffled = shuffle(createDeck(), rng)
+  }
 
   const nonDealer = (1 - dealer) as PlayerId
 
@@ -70,6 +110,7 @@ export function startNewDeal(ctx: DealContext, rng: Rng): GameState {
     dealNumber,
     isMabqach: deck.length === 0,
     lastCapture: null,
+    caidaChain: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -117,5 +158,6 @@ export function dealNextRound(state: GameState, rng: Rng): GameState {
     roundNumber: state.roundNumber + 1,
     isMabqach: deck.length === 0,
     lastPlayed: [null, null],
+    caidaChain: null,   // la redistribution coupe toute chaîne de caída
   }
 }

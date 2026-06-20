@@ -1,5 +1,5 @@
 import { useReducer, useCallback, useEffect, useRef, useState } from 'react'
-import { applyAction, createInitialState } from '../engine'
+import { applyAction, createInitialState, startNewDeal } from '../engine'
 import type { Card, Combination, GameEvent, GameState, PlayerId, Value } from '../engine/types'
 import type { Rng } from '../engine/deck'
 import type { Action } from '../engine/types'
@@ -53,10 +53,18 @@ export interface GameView {
   canDeclare: boolean
   /**
    * L'humain peut contester la combo adverse (bouton Contre visible).
-   * Câblé à l'étape 3 avec AiMemory + boucle bot.
+   * Vrai si l'adversaire vient de révéler ≥2 cartes de même valeur cette manche.
    */
   canContest: boolean
+  /** Valeur à contester si canContest (sinon null). */
+  contestValue: Value | null
   isGameOver: boolean
+  /** La donne est terminée, décompte effectué — afficher l'écran résultat. */
+  isDealEnd: boolean
+  /** Le bot est en train de « réfléchir » (délai avant son coup). */
+  isBotThinking: boolean
+  /** Une animation de capture est en cours — le jeu est gelé. */
+  isCaptureAnimating: boolean
   /**
    * Événements produits par la dernière action (caída, missa, ronda…).
    * `id` change à chaque nouvelle occurrence — permet de retrigger useEffect
@@ -79,8 +87,12 @@ function toView(gs: GameState): GameView {
       h.pendingCombo !== null &&
       h.declaredCombo === null &&
       !h.lostComboRight,
-    canContest: false, // étape 3 : AiMemory + bot loop
+    canContest: false,    // surchargé au retour du hook (dépend de la mémoire)
+    contestValue: null,
     isGameOver: gs.phase === 'GAME_OVER',
+    isDealEnd: gs.phase === 'DEAL_END',
+    isBotThinking: false,      // surchargés au retour du hook (états React transitoires)
+    isCaptureAnimating: false,
     lastEvent:
       gs.lastEvents.length > 0
         ? { events: gs.lastEvents, id: gs.eventSeq }
@@ -95,6 +107,7 @@ type RS = { gs: GameState; seed: number }
 type RA =
   | { kind: 'ACT'; action: Action }
   | { kind: 'NEW'; seed: number; firstDealer: PlayerId }
+  | { kind: 'CONTINUE_DEAL' }
 
 function reduce(s: RS, a: RA): RS {
   switch (a.kind) {
@@ -106,6 +119,18 @@ function reduce(s: RS, a: RA): RS {
     case 'NEW': {
       const { rng, getSeed } = makeLcg(a.seed)
       const gs = createInitialState(rng, a.firstDealer)
+      return { gs, seed: getSeed() }
+    }
+    case 'CONTINUE_DEAL': {
+      const { rng, getSeed } = makeLcg(s.seed)
+      const gs = startNewDeal(
+        {
+          scores: [s.gs.players[0].score, s.gs.players[1].score],
+          dealer: (1 - s.gs.dealer) as PlayerId,
+          dealNumber: s.gs.dealNumber + 1,
+        },
+        rng,
+      )
       return { gs, seed: getSeed() }
     }
   }
@@ -126,12 +151,19 @@ export function useRondaGame() {
     return { gs: createInitialState(rng, 0), seed: getSeed() }
   })
 
+  // Le bot « réfléchit » pendant son délai aléatoire (2–3 s) avant de jouer.
+  const [isBotThinking, setIsBotThinking] = useState(false)
+
+  // Gel du jeu pendant l'animation de capture (piloté par GameScreen).
+  const [isCaptureAnimating, setIsCaptureAnimating] = useState(false)
+
   // AiMemory persiste entre les renders sans déclencher de re-render
   const memRef = useRef<AiMemory>(createMemory())
 
   // ── Boucle bot ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (appPhase !== 'IN_GAME') return          // pas de bot pendant les rituels
+    if (isCaptureAnimating) return              // jeu gelé pendant l'animation de capture
     const gs = s.gs
     if (gs.currentPlayer !== BOT_ID || gs.phase !== 'PLAYING') return
 
@@ -139,6 +171,10 @@ export function useRondaGame() {
 
     // Met à jour la mémoire avec l'état visible actuel
     memRef.current = updateMemory(memRef.current, obs)
+
+    // Délai « humain » aléatoire entre 2000 et 3000 ms.
+    setIsBotThinking(true)
+    const delay = Math.random() * 1000 + 2000
 
     const tid = setTimeout(() => {
       const action = chooseAction(obs, BOT_ID, 'medium', memRef.current)
@@ -161,11 +197,15 @@ export function useRondaGame() {
         )
       }
 
+      setIsBotThinking(false)
       dispatch({ kind: 'ACT', action })
-    }, 600)
+    }, delay)
 
-    return () => clearTimeout(tid)
-  }, [s.gs, appPhase])
+    return () => {
+      clearTimeout(tid)
+      setIsBotThinking(false)
+    }
+  }, [s.gs, appPhase, isCaptureAnimating])
 
   // ── Callbacks humain ──────────────────────────────────────────────────────
 
@@ -190,10 +230,31 @@ export function useRondaGame() {
   )
 
   const contest = useCallback(
-    (accusedValue: Value) =>
-      dispatch({ kind: 'ACT', action: { type: 'CONTEST', playerId: HUMAN_ID, accusedValue } }),
-    [],
+    (accusedValue: Value) => {
+      // Enregistre la valeur contestée pour ne pas re-proposer le bouton.
+      const obs = getObservableState(s.gs, BOT_ID)
+      memRef.current = updateMemory(memRef.current, obs, undefined, accusedValue)
+      dispatch({ kind: 'ACT', action: { type: 'CONTEST', playerId: HUMAN_ID, accusedValue } })
+    },
+    [s.gs],
   )
+
+  // Fenêtre de contre : l'adversaire (bot) vient de révéler ≥2 cartes de même
+  // valeur dans la manche courante (info publique, lue dans la mémoire).
+  const computeContest = (): { canContest: boolean; contestValue: Value | null } => {
+    const gs = s.gs
+    const isHumanTurn = gs.currentPlayer === HUMAN_ID && gs.phase === 'PLAYING'
+    const last = gs.lastPlayed[BOT_ID]
+    if (!isHumanTurn || last === null) return { canContest: false, contestValue: null }
+    const plays = memRef.current.currentHandPlays[BOT_ID]
+    const count = plays.filter(c => c.value === last.value).length
+    const alreadyContested = memRef.current.contestedValues.has(last.value)
+    const alreadyDeclared = gs.players[BOT_ID].declaredCombo?.value === last.value
+    if (count >= 2 && !alreadyContested && !alreadyDeclared) {
+      return { canContest: true, contestValue: last.value }
+    }
+    return { canContest: false, contestValue: null }
+  }
 
   /** Lance la partie avec le donneur déterminé par le rituel. */
   const startGame = useCallback((firstDealer: PlayerId) => {
@@ -202,11 +263,26 @@ export function useRondaGame() {
     setAppPhase('IN_GAME')
   }, [])
 
+  /** Confirme la fin de donne et démarre la suivante. */
+  const nextDeal = useCallback(() => {
+    dispatch({ kind: 'CONTINUE_DEAL' })
+  }, [])
+
   /** Revient à l'écran de sélection du rituel (puis menu). */
   const newGame = useCallback(() => {
     memRef.current = createMemory()
     setAppPhase('RITUAL_PICKER')
   }, [])
 
-  return { appPhase, view: toView(s.gs), startGame, playCard, declare, contest, newGame }
+  return {
+    appPhase,
+    view: { ...toView(s.gs), isBotThinking, isCaptureAnimating, ...computeContest() },
+    setCaptureAnimating: setIsCaptureAnimating,
+    startGame,
+    nextDeal,
+    playCard,
+    declare,
+    contest,
+    newGame,
+  }
 }

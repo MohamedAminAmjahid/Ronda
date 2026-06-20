@@ -44,11 +44,15 @@ export function resolveCapture(
   const captured: Card[] = [tableArr[captureIdx]]
   tableArr.splice(captureIdx, 1)
 
-  // Caída : la carte capturée est exactement la dernière posée par l'adversaire
+  // Caída : la carte capturée est EXACTEMENT celle que l'adversaire a posée au tour
+  // immédiatement précédent — même valeur ET même couleur.
+  // Un seul exemplaire de chaque carte existe dans le jeu, donc ce test suffit à
+  // garantir qu'il s'agit bien de la carte posée au dernier tour (pas d'une autre
+  // carte de même valeur déjà présente avant sur la table).
   const isCaida =
     lastPlayedByOpponent !== null &&
-    lastPlayedByOpponent.value === playedCard.value &&
-    lastPlayedByOpponent.suit === captured[0].suit
+    lastPlayedByOpponent.value === captured[0].value &&
+    lastPlayedByOpponent.suit  === captured[0].suit
 
   // Escalier : on continue avec la valeur suivante dans la séquence
   let next = nextValue(playedCard.value)

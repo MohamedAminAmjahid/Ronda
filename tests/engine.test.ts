@@ -9,8 +9,18 @@ import {
 } from '../src/engine/combinations'
 import { mabqachBonus, cardCountBonus, isGameOver, applyEndOfDeal } from '../src/engine/scoring'
 import { applyAction } from '../src/engine/game'
+import { isTableValid, createInitialState, startNewDeal } from '../src/engine/deal'
 
 const rngZero = () => 0
+
+// LCG déterministe pour exercer la distribution sur de nombreux seeds.
+function makeLcg(seed: number): () => number {
+  let s = (seed >>> 0) || 1
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0
+    return s / 0x100000000
+  }
+}
 
 function makeCard(value: Value, suit: Card['suit'] = 'oros'): Card {
   return { value, suit }
@@ -41,6 +51,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     dealNumber: 0,
     isMabqach: false,
     lastCapture: null,
+    caidaChain: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -124,6 +135,26 @@ describe('3. Caida', () => {
   it('isCaida false si lastPlayedByOpponent est null', () => {
     const tableCard = makeCard(6, 'copas')
     const result = resolveCapture(makeCard(6), [tableCard], null)
+    expect(result!.isCaida).toBe(false)
+  })
+
+  it('carte sur table depuis le debut, adversaire n a pas joue de 4 au dernier tour -> isCaida false', () => {
+    // La table contient un 4 de oros depuis le debut de la manche.
+    // L'adversaire a joue un 7 (pas un 4) a son dernier tour.
+    // Le joueur capture ce 4 : il ne doit pas y avoir de caida.
+    const tableCard        = makeCard(4, 'oros')
+    const opponentLastPlay = makeCard(7, 'copas')
+    const result = resolveCapture(makeCard(4, 'espadas'), [tableCard], opponentLastPlay)
+    expect(result!.isCaida).toBe(false)
+  })
+
+  it('adversaire a capture avec un 4, pas pose : pas de caida sur un autre 4 restant', () => {
+    // L'adversaire a joue 4 bastos (qui a capture 4 oros).
+    // Il reste 4 copas sur la table (carte ancienne).
+    // Le joueur capture 4 copas : pas de caida car ce n'est pas la carte posee par l'adversaire.
+    const tableCard        = makeCard(4, 'copas')
+    const opponentLastPlay = makeCard(4, 'bastos')   // a capture, pas pose
+    const result = resolveCapture(makeCard(4, 'espadas'), [tableCard], opponentLastPlay)
     expect(result!.isCaida).toBe(false)
   })
 })
@@ -393,12 +424,14 @@ describe('11. Multi-donnes', () => {
 
     const next = applyEndOfDeal(state, rngZero)
 
-    // Phase recalculee en PLAYING (pas encore 41)
-    expect(next.phase).toBe('PLAYING')
-    // Donneur alterne : 1 -> 0
-    expect(next.dealer).toBe(0)
-    // Numero de donne incremente
-    expect(next.dealNumber).toBe(1)
+    // Phase en DEAL_END (pas encore 41) — le donneur et le numero de donne
+    // sont encore ceux de la donne terminee ; l'alternance se fait quand
+    // l'UI dispatche CONTINUE_DEAL (qui appelle startNewDeal).
+    expect(next.phase).toBe('DEAL_END')
+    // Donneur inchange en DEAL_END
+    expect(next.dealer).toBe(1)
+    // Numero de donne inchange en DEAL_END
+    expect(next.dealNumber).toBe(0)
     // Score joueur 1 : 8 + 2 (decompte 22 cartes) = 10
     expect(next.players[1].score).toBe(10)
     // Score joueur 0 : 10 + 0 = 10
@@ -438,5 +471,194 @@ describe('12. Victoire a 41', () => {
     expect(isGameOver([10, 41])).toBe(true)
     expect(isGameOver([40, 40])).toBe(false)
     expect(isGameOver([0, 0])).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 13. Validite de la table initiale
+// ---------------------------------------------------------------------------
+describe('13. Table initiale valide', () => {
+  it('doublon de valeur -> invalide', () => {
+    const table = [
+      makeCard(5, 'oros'),
+      makeCard(5, 'copas'),   // doublon de valeur
+      makeCard(1, 'espadas'),
+      makeCard(11, 'bastos'),
+    ]
+    expect(isTableValid(table)).toBe(false)
+  })
+
+  it('suite de 3 consecutives -> invalide', () => {
+    // 5-6-7 sont consecutifs dans l'ordre 1-2-3-4-5-6-7-10-11-12
+    const table = [
+      makeCard(5, 'oros'),
+      makeCard(6, 'copas'),
+      makeCard(7, 'espadas'),
+      makeCard(12, 'bastos'),
+    ]
+    expect(isTableValid(table)).toBe(false)
+  })
+
+  it('suite de 3 a cheval sur le saut 7->10 -> invalide', () => {
+    // 7-10-11 sont consecutifs (pas de 8/9 dans le jeu)
+    const table = [
+      makeCard(7, 'oros'),
+      makeCard(10, 'copas'),
+      makeCard(11, 'espadas'),
+      makeCard(2, 'bastos'),
+    ]
+    expect(isTableValid(table)).toBe(false)
+  })
+
+  it('table sans doublon ni suite de 3 -> valide', () => {
+    const table = [
+      makeCard(1, 'oros'),
+      makeCard(4, 'copas'),
+      makeCard(7, 'espadas'),
+      makeCard(11, 'bastos'),
+    ]
+    expect(isTableValid(table)).toBe(true)
+  })
+
+  it('suite de 2 toleree -> valide', () => {
+    // 5-6 consecutifs (suite de 2) : autorise
+    const table = [
+      makeCard(5, 'oros'),
+      makeCard(6, 'copas'),
+      makeCard(1, 'espadas'),
+      makeCard(11, 'bastos'),
+    ]
+    expect(isTableValid(table)).toBe(true)
+  })
+
+  it('la boucle de redistribution termine et produit toujours une table valide', () => {
+    // 300 donnes sur des seeds varies : aucune ne doit boucler a l'infini
+    // ni produire une table invalide.
+    for (let seed = 1; seed <= 300; seed++) {
+      const state = createInitialState(makeLcg(seed), 0)
+      expect(state.table.length).toBe(4)
+      expect(isTableValid(state.table)).toBe(true)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 14. Alternance du premier joueur entre donnes
+// ---------------------------------------------------------------------------
+describe('14. Alternance du premier joueur', () => {
+  it('le currentPlayer est toujours le non-donneur en debut de donne', () => {
+    const d0 = createInitialState(makeLcg(7), 0)
+    expect(d0.currentPlayer).toBe(1 - d0.dealer)
+    const d1 = createInitialState(makeLcg(7), 1)
+    expect(d1.currentPlayer).toBe(1 - d1.dealer)
+  })
+
+  it('apres CONTINUE_DEAL, le currentPlayer change vs la donne precedente', () => {
+    const rng = makeLcg(42)
+    const deal1 = createInitialState(rng, 0)   // donneur 0 -> currentPlayer 1
+
+    // Simule CONTINUE_DEAL : le donneur alterne, scores conserves.
+    const deal2 = startNewDeal(
+      {
+        scores: [deal1.players[0].score, deal1.players[1].score],
+        dealer: (1 - deal1.dealer) as 0 | 1,
+        dealNumber: deal1.dealNumber + 1,
+      },
+      rng,
+    )
+
+    expect(deal2.currentPlayer).toBe(1 - deal2.dealer)
+    expect(deal2.currentPlayer).not.toBe(deal1.currentPlayer)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 15. Chaîne de caídas (Ara Wahd / Ara Khamssa / Ara 7dach)
+// ---------------------------------------------------------------------------
+describe('15. Chaine de caidas', () => {
+  // Joueur 0 capture la carte 'value' que l'adversaire (1) vient de poser.
+  // `chain` = chaîne en cours dans l'état. Un 12 sur la table évite la missa.
+  function playCaida(
+    value: Value,
+    chain: GameState['caidaChain'],
+    capturedSuit: Card['suit'] = 'oros',
+    playedSuit: Card['suit'] = 'copas',
+  ): GameState {
+    const opponentCard = makeCard(value, capturedSuit)
+    const state = makeGameState({
+      currentPlayer: 0,
+      table: [opponentCard, makeCard(12, 'bastos')],
+      lastPlayed: [null, opponentCard],   // l'adversaire (1) vient de poser cette carte
+      caidaChain: chain,
+      players: [
+        makePlayerState({ hand: [makeCard(value, playedSuit), makeCard(2, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(3, 'bastos')] }),
+      ],
+    })
+    return applyAction(state, { type: 'PLAY_CARD', playerId: 0, card: makeCard(value, playedSuit) }, rngZero)
+  }
+
+  it('caida simple (chaine nulle) -> Ara Wahd, +1, niveau 1', () => {
+    const next = playCaida(5, null)
+    expect(next.players[0].score).toBe(1)
+    expect(next.caidaChain).toEqual({ level: 1, value: 5 })
+    expect(next.lastEvents).toContain('caida')
+  })
+
+  it('2e caida meme valeur -> Ara Khamssa, +5, niveau 2', () => {
+    const next = playCaida(5, { level: 1, value: 5 })
+    expect(next.players[0].score).toBe(5)
+    expect(next.caidaChain).toEqual({ level: 2, value: 5 })
+    expect(next.lastEvents).toContain('ara_khamssa')
+  })
+
+  it('3e caida meme valeur -> Ara 7dach, +11, niveau 3', () => {
+    const next = playCaida(5, { level: 2, value: 5 })
+    expect(next.players[0].score).toBe(11)
+    expect(next.caidaChain).toEqual({ level: 3, value: 5 })
+    expect(next.lastEvents).toContain('ara_7dach')
+  })
+
+  it('caida sur une valeur differente -> la chaine repart a Ara Wahd (+1)', () => {
+    // Chaine en cours sur la valeur 5, mais on enchaine une caida sur un 7.
+    const next = playCaida(7, { level: 2, value: 5 })
+    expect(next.players[0].score).toBe(1)
+    expect(next.caidaChain).toEqual({ level: 1, value: 7 })
+    expect(next.lastEvents).toContain('caida')
+  })
+
+  it('un coup sans caida reinitialise la chaine a null', () => {
+    // Chaine en cours, mais le joueur pose une carte qui ne capture rien.
+    const state = makeGameState({
+      currentPlayer: 0,
+      table: [makeCard(12, 'bastos')],
+      lastPlayed: [null, makeCard(5, 'oros')],
+      caidaChain: { level: 2, value: 5 },
+      players: [
+        makePlayerState({ hand: [makeCard(6, 'copas'), makeCard(2, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(3, 'bastos')] }),
+      ],
+    })
+    const next = applyAction(state, { type: 'PLAY_CARD', playerId: 0, card: makeCard(6, 'copas') }, rngZero)
+    expect(next.caidaChain).toBeNull()
+    expect(next.players[0].score).toBe(0)
+  })
+
+  it('capture sans caida (pas la derniere carte adverse) -> chaine null, pas de points', () => {
+    // Le 4 etait deja sur la table ; l'adversaire a pose un 7 (pas un 4).
+    const state = makeGameState({
+      currentPlayer: 0,
+      table: [makeCard(4, 'oros'), makeCard(12, 'bastos')],
+      lastPlayed: [null, makeCard(7, 'espadas')],
+      caidaChain: { level: 1, value: 11 },
+      players: [
+        makePlayerState({ hand: [makeCard(4, 'copas'), makeCard(2, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(3, 'bastos')] }),
+      ],
+    })
+    const next = applyAction(state, { type: 'PLAY_CARD', playerId: 0, card: makeCard(4, 'copas') }, rngZero)
+    expect(next.caidaChain).toBeNull()
+    expect(next.players[0].score).toBe(0)
+    expect(next.lastEvents).not.toContain('caida')
   })
 })

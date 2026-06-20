@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { Card, GameState, PlayerState, Value, Combination, PlayerId } from '../src/engine/types'
 import { applyAction } from '../src/engine/game'
-import { createInitialState } from '../src/engine/deal'
+import { createInitialState, startNewDeal } from '../src/engine/deal'
 import { getObservableState } from '../src/ai/observable'
 import { createMemory, updateMemory } from '../src/ai/memory'
 import { scoreMove, discardRisk, endgameAdjustment } from '../src/ai/evaluate'
@@ -49,6 +49,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     dealNumber: 0,
     isMabqach: false,
     lastCapture: null,
+    caidaChain: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -430,6 +431,20 @@ describe('12. Integration bot-vs-bot', () => {
     let moves = 0
 
     while (state.phase !== 'GAME_OVER' && moves < MAX_MOVES) {
+      // DEAL_END : lancer la donne suivante sans action du joueur
+      if (state.phase === 'DEAL_END') {
+        state = startNewDeal(
+          {
+            scores: [state.players[0].score, state.players[1].score],
+            dealer: (1 - state.dealer) as PlayerId,
+            dealNumber: state.dealNumber + 1,
+          },
+          rng,
+        )
+        moves++
+        continue
+      }
+
       const botId = state.currentPlayer as 0 | 1
       const diff = botId === 0 ? diffA : diffB
       const mem = botId === 0 ? memA : memB

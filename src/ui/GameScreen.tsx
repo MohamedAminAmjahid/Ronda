@@ -1,13 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import ReAnimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withSpring,
+  withSequence,
+  useReducedMotion,
+  Easing,
+} from 'react-native-reanimated'
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
+import type { PlayerId } from '../engine/types'
 import { RitualPickerScreen } from './RitualPickerScreen'
 import { CoinFlipScreen } from './CoinFlipScreen'
 import { CardDrawScreen } from './CardDrawScreen'
 import { RpsScreen } from './RpsScreen'
 import { TERMS } from './terms'
+import { initSounds, playSound, setMuted, isMuted } from './sounds'
 import type { Card, GameEvent } from '../engine/types'
 import type { RitualType } from './RitualPickerScreen'
 
@@ -22,6 +34,93 @@ const C = {
   ink:     '#1C2622',
   boneOff: 'rgba(244,236,216,0.35)',
 } as const
+
+// ── Indicateur "le bot réfléchit / joue" ─────────────────────────────────────
+
+export function BotThinking() {
+  // Alterne le libellé toutes les 800 ms tant que le bot réfléchit.
+  const [alt, setAlt] = useState(false)
+  useEffect(() => {
+    const id = setInterval(() => setAlt(a => !a), 800)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <Text style={styles.botThinking}>
+      {alt ? 'Le bot joue…' : 'Le bot réfléchit…'}
+    </Text>
+  )
+}
+
+// ── Overlay annonce "Donne N" ─────────────────────────────────────────────────
+
+function DealAnnounce({ dealNumber }: { dealNumber: number }) {
+  const opacity = useRef(new Animated.Value(0)).current
+
+  useEffect(() => {
+    opacity.setValue(0)
+    Animated.sequence([
+      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1000),
+      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start()
+  }, [])
+
+  return (
+    <Animated.View style={[styles.dealAnnounceRoot, { opacity }]} pointerEvents="none">
+      <Text style={styles.dealAnnounceLabel}>DONNE</Text>
+      <Text style={styles.dealAnnounceNum}>{dealNumber}</Text>
+    </Animated.View>
+  )
+}
+
+// ── Écran résultat de donne (Mab9ach) ────────────────────────────────────────
+
+export function DealEndScreen({
+  dealNumber,
+  scores,
+  deltas,
+  onContinue,
+  labels = ['Toi', 'Bot'],
+}: {
+  dealNumber: number
+  scores: [number, number]
+  deltas: [number, number]
+  onContinue: () => void
+  /** Libellés des deux camps (défaut 1v1 : Toi / Bot ; 2v2 : Équipe A / Équipe B). */
+  labels?: [string, string]
+}) {
+  const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`)
+  const deltaColor = (n: number) => (n > 0 ? C.table : n < 0 ? C.clay : C.boneOff)
+
+  return (
+    <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
+      <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 0, paddingHorizontal: 28 }]}>
+
+        <Text style={styles.dealEndLabel}>Donne {dealNumber}</Text>
+
+        <Text style={styles.dealEndAr}>{TERMS.mab9ach.ar}</Text>
+        <Text style={styles.dealEndLa}>{TERMS.mab9ach.la}</Text>
+
+        <View style={styles.dealEndRow}>
+          {([0, 1] as const).map((i) => (
+            <View key={i} style={styles.dealEndCell}>
+              <Text style={styles.dealEndPlayerName}>{labels[i]}</Text>
+              <Text style={[styles.dealEndDelta, { color: deltaColor(deltas[i]) }]}>
+                {fmt(deltas[i])}
+              </Text>
+              <Text style={styles.dealEndTotal}>{scores[i]} pts</Text>
+            </View>
+          ))}
+        </View>
+
+        <TouchableOpacity style={[styles.btnPrimary, { marginTop: 36 }]} onPress={onContinue}>
+          <Text style={styles.btnPrimaryTxt}>Continuer</Text>
+        </TouchableOpacity>
+
+      </View>
+    </SafeAreaView>
+  )
+}
 
 // ── Écran fin de partie ───────────────────────────────────────────────────────
 
@@ -44,8 +143,10 @@ function GameOver({ scores, onReplay }: { scores: [number, number]; onReplay: ()
 
 // ── Mapping événement → libellé ──────────────────────────────────────────────
 
-const EVENT_LABEL: Record<GameEvent, { ar: string; la: string }> = {
-  caida:  TERMS.araWahd,
+const EVENT_LABEL: Record<GameEvent, { ar: string; la: string; pts?: string }> = {
+  caida:       { ...TERMS.araWahd,    pts: '+1' },
+  ara_khamssa: { ...TERMS.araKhamssa, pts: '+5' },
+  ara_7dach:   { ...TERMS.ara7dach,   pts: '+11' },
   missa:  TERMS.missa,
   ronda:  TERMS.ronda,
   tringa: TERMS.tringa,
@@ -54,7 +155,7 @@ const EVENT_LABEL: Record<GameEvent, { ar: string; la: string }> = {
 
 // ── Overlay d'événement plein écran ──────────────────────────────────────────
 
-function EventOverlay({ events }: { events: readonly GameEvent[] }) {
+export function EventOverlay({ events }: { events: readonly GameEvent[] }) {
   const opacity = useRef(new Animated.Value(0)).current
   const scale   = useRef(new Animated.Value(0.82)).current
 
@@ -89,11 +190,215 @@ function EventOverlay({ events }: { events: readonly GameEvent[] }) {
               <Text style={[styles.overlayLa, !label.ar && styles.overlayLaAlone]}>
                 {label.la}
               </Text>
+              {label.pts ? (
+                <Text style={styles.overlayPts}>{label.pts}</Text>
+              ) : null}
             </View>
           )
         })}
       </Animated.View>
     </Animated.View>
+  )
+}
+
+// ── Animation de distribution ─────────────────────────────────────────────────
+// Chaque carte « part » de la pioche (centre de l'écran) et glisse vers sa
+// position finale. On approxime la position de départ par un offset par zone
+// (depuis le centre) — l'effet visuel prime sur la précision pixel.
+
+const DEAL_STAGGER = 150
+const FROM_PLAYER_Y = -210   // main joueur (bas) : la carte vient d'en haut (centre)
+const FROM_BOT_Y    = 175    // main bot (haut) : la carte vient d'en bas (centre)
+const FROM_TABLE_Y  = 46     // table (centre) : court trajet depuis la pioche
+const SPREAD_HAND   = 38     // éventail horizontal depuis le centre (main)
+const SPREAD_TABLE  = 44     // éventail horizontal depuis le centre (table)
+
+export function DealFly({
+  children,
+  startX,
+  startY,
+  delay,
+}: {
+  children: ReactNode
+  startX: number   // offset initial (centre pioche - position finale)
+  startY: number
+  delay: number
+}) {
+  const reduceMotion = useReducedMotion()
+  const tx = useSharedValue(reduceMotion ? 0 : startX)
+  const ty = useSharedValue(reduceMotion ? 0 : startY)
+  const op = useSharedValue(reduceMotion ? 1 : 0)
+
+  useEffect(() => {
+    // Son de distribution, calé sur le départ de la carte.
+    const sndTid = setTimeout(() => { void playSound('card_deal') }, delay)
+    if (reduceMotion) return () => clearTimeout(sndTid)
+    const spring = { damping: 16, stiffness: 130, mass: 0.7 }
+    tx.value = withDelay(delay, withSpring(0, spring))
+    ty.value = withDelay(delay, withSpring(0, spring))
+    op.value = withDelay(delay, withTiming(1, { duration: 180 }))
+    return () => clearTimeout(sndTid)
+  }, [])
+
+  const st = useAnimatedStyle(() => ({
+    opacity: op.value,
+    transform: [{ translateX: tx.value }, { translateY: ty.value }],
+  }))
+
+  return <ReAnimated.View style={st}>{children}</ReAnimated.View>
+}
+
+// ── Animation pose : glisse depuis la main vers la table (~250 ms) ────────────
+
+function PlayedCard({
+  children,
+  from,
+}: {
+  children: ReactNode
+  from: 'top' | 'bottom'   // côté d'origine (haut = bot, bas = joueur)
+}) {
+  const reduceMotion = useReducedMotion()
+  const start = from === 'bottom' ? 80 : -80
+  const ty = useSharedValue(reduceMotion ? 0 : start)
+  const op = useSharedValue(reduceMotion ? 1 : 0)
+
+  useEffect(() => {
+    if (reduceMotion) return
+    ty.value = withSpring(0, { damping: 15, stiffness: 150, mass: 0.6 })
+    op.value = withTiming(1, { duration: 140 })
+  }, [])
+
+  const st = useAnimatedStyle(() => ({
+    opacity: op.value,
+    transform: [{ translateY: ty.value }],
+  }))
+
+  return <ReAnimated.View style={st}>{children}</ReAnimated.View>
+}
+
+// ── Animation capture : aspiration séquentielle des cartes vers la pile ───────
+// Les cartes capturées disparaissent instantanément de state.table (le moteur
+// les retire). Pour les voir réellement s'envoler, on les ré-affiche EN PLACE
+// dans la rangée de table (opacity réduite) et chacune s'aspire l'une après
+// l'autre vers la pile du captureur. Pour 4 cartes : (4-1)*200 + 500 = 1100 ms.
+
+export const FLY_STAGGER = 300
+export const FLY_DURATION = 800
+const FLY_ZOOM = 150                       // phase de « bond » (zoom)
+const FLY_SUCK = FLY_DURATION - FLY_ZOOM   // phase d'aspiration (650 ms)
+
+export function FlyingCard({
+  card,
+  dir,
+  delay,
+}: {
+  card: Card
+  dir: number   // +1 = vers le bas (joueur), -1 = vers le haut (bot)
+  delay: number
+}) {
+  const reduceMotion = useReducedMotion()
+  const scale = useSharedValue(1)
+  const ty    = useSharedValue(0)
+  const op    = useSharedValue(0.5)   // marqueur « déjà capturée »
+
+  useEffect(() => {
+    if (reduceMotion) { scale.value = 0; op.value = 0; return }
+    const ease = Easing.in(Easing.cubic)
+    // La carte « bondit » (1 → 1.15) puis s'aspire (1.15 → 0).
+    scale.value = withDelay(delay, withSequence(
+      withTiming(1.15, { duration: FLY_ZOOM }),
+      withTiming(0,    { duration: FLY_SUCK, easing: ease }),
+    ))
+    // Glissement vers la pile + fondu pendant la phase d'aspiration.
+    ty.value = withDelay(delay + FLY_ZOOM, withTiming(180 * dir, { duration: FLY_SUCK, easing: ease }))
+    op.value = withDelay(delay + FLY_ZOOM, withTiming(0,         { duration: FLY_SUCK }))
+  }, [])
+
+  const st = useAnimatedStyle(() => ({
+    opacity: op.value,
+    transform: [
+      { translateY: ty.value },
+      { scale: scale.value },
+    ],
+  }))
+
+  return (
+    <ReAnimated.View style={st}>
+      <CardFace card={card} size="md" />
+    </ReAnimated.View>
+  )
+}
+
+// ── Mini pile de cartes capturées (dos empilés + chiffre) ─────────────────────
+
+function MiniPile({ count }: { count: number }) {
+  const reduceMotion = useReducedMotion()
+  const pop  = useSharedValue(1)
+  const prev = useRef(count)
+
+  useEffect(() => {
+    if (!reduceMotion && count > prev.current) {
+      pop.value = withSequence(
+        withTiming(1.18, { duration: 110 }),
+        withSpring(1, { damping: 9, stiffness: 170 }),
+      )
+    }
+    prev.current = count
+  }, [count])
+
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }))
+  const layers = Math.min(4, count)
+
+  return (
+    <View style={styles.pileCol}>
+      <ReAnimated.View style={[styles.pileBox, st]}>
+        {count === 0 ? (
+          <View style={styles.pileEmpty} />
+        ) : (
+          Array.from({ length: layers }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.pileCard,
+                // offset 0 = carte de devant (rendue en dernier → au-dessus)
+                { left: (layers - 1 - i) * 2.5, bottom: (layers - 1 - i) * 2.5 },
+              ]}
+            />
+          ))
+        )}
+      </ReAnimated.View>
+      <Text style={styles.pileNum}>{count}</Text>
+    </View>
+  )
+}
+
+// ── Pile de pioche : épaisseur ∝ cartes restantes ─────────────────────────────
+
+function DeckStack({ count }: { count: number }) {
+  // 0 carte → vide (effet Mab9ach fort). Sinon épaisseur croissante (max ~7).
+  const layers = count === 0 ? 0 : Math.min(7, Math.max(1, Math.round(count / 5)))
+
+  return (
+    <View style={styles.deckCol}>
+      <View style={styles.deckStack}>
+        {layers === 0 ? (
+          <View style={styles.deckEmpty} />
+        ) : (
+          Array.from({ length: layers }).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.deckLayer,
+                // offset 0 = carte de devant (au-dessus), épaisseur derrière
+                { right: (layers - 1 - i) * 1.6, bottom: (layers - 1 - i) * 1.6 },
+                i === layers - 1 && styles.deckTop,
+              ]}
+            />
+          ))
+        )}
+      </View>
+      <Text style={styles.deckCount}>{count}</Text>
+    </View>
   )
 }
 
@@ -104,20 +409,160 @@ interface GameScreenProps {
 }
 
 export function GameScreen({ onBack }: GameScreenProps) {
-  const { appPhase, view, startGame, playCard, declare, newGame } = useRondaGame()
+  const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useRondaGame()
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
   const [toastEvents, setToastEvents] = useState<readonly GameEvent[] | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // ── Préchargement des sons (une fois) ─────────────────────────────────────
+  useEffect(() => { void initSounds() }, [])
+
+  // Sourdine (état local pour re-render de l'icône ; persiste via le module sounds).
+  const [muted, setMutedState] = useState(isMuted())
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
+
+  // Délai avant l'écran de résultat de donne : on laisse 1,5 s pour voir la
+  // dernière carte posée / l'animation de capture avant d'afficher DealEndScreen.
+  const [showDealEnd, setShowDealEnd] = useState(false)
+  useEffect(() => {
+    if (!view.isDealEnd) {
+      setShowDealEnd(false)
+      return
+    }
+    const t = setTimeout(() => setShowDealEnd(true), 1500)
+    return () => clearTimeout(t)
+  }, [view.isDealEnd])
+
+  // ── Détection de distribution (manche) ────────────────────────────────────
+  // Incrémenter dealGen à chaque fois qu'une donne se produit :
+  // hand.length monte de <3 à 3 (re-donne) ou de 0 à 3 (première donne).
+  const [dealGen, setDealGen]  = useState(0)
+  const prevHandLen = useRef(-1)
+
+  // Son Mab9ach quand on entre dans la dernière redistribution.
+  const prevMabqach = useRef(false)
+  useEffect(() => {
+    const m = view.state.isMabqach
+    if (m && !prevMabqach.current) void playSound('mabqach')
+    prevMabqach.current = m
+  }, [view.state.isMabqach])
+
+  // ── Annonce "Donne N" ─────────────────────────────────────────────────────
+  // Déclenché quand dealNumber change (ou quand on entre en IN_GAME).
+  const [dealAnnouncing, setDealAnnouncing] = useState<number | null>(null)
+  const prevDealNumber = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (appPhase !== 'IN_GAME') {
+      prevDealNumber.current = null
+      return
+    }
+    const dn = view.state.dealNumber
+    if (prevDealNumber.current === dn) return
+    prevDealNumber.current = dn
+    setDealAnnouncing(dn + 1)   // 1-indexé pour l'affichage
+    const tid = setTimeout(() => setDealAnnouncing(null), 1500)
+    return () => clearTimeout(tid)
+  }, [view.state.dealNumber, appPhase])
+
   const { lastEvent } = view
+  const currHandLen = view.state.players[HUMAN_ID]?.hand?.length ?? 0
+
+  useEffect(() => {
+    const prev = prevHandLen.current
+    if (prev < 3 && currHandLen === 3) {
+      setDealGen(g => g + 1)
+    }
+    prevHandLen.current = currHandLen
+  }, [currHandLen])
+
+  // ── Détection de capture → animation d'aspiration ─────────────────────────
+  // On compare la table d'un coup au suivant : les cartes disparues lors d'une
+  // capture (même donne, même manche) s'envolent vers la pile du captureur.
+  const [flying, setFlying] = useState<{ cards: Card[]; by: PlayerId; id: number } | null>(null)
+  const prevTableRef = useRef<Card[]>([])
+  const prevRoundRef = useRef(-1)
+  const prevDealRef  = useRef(-1)
+  const flyId        = useRef(0)
+  const flyTimer     = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sndTimers    = useRef<ReturnType<typeof setTimeout>[]>([])
+
+  // Cartes posées sur la table AU MOMENT d'une nouvelle donne (pour ne faire
+  // voler depuis la pioche que ces 4 cartes-là, pas celles posées en cours de jeu).
+  // Mis à jour synchroniquement quand le numéro de donne change.
+  const lastDealNumRef = useRef(-1)
+  const dealtTableRef  = useRef<string[]>([])
+  if (view.state.dealNumber !== lastDealNumRef.current) {
+    lastDealNumRef.current = view.state.dealNumber
+    dealtTableRef.current  = view.state.table.map(c => `${c.value}-${c.suit}`)
+  }
+
+  useEffect(() => {
+    const gs = view.state
+    const cur = gs.table
+    const sameDeal  = gs.dealNumber  === prevDealRef.current
+    const sameRound = gs.roundNumber === prevRoundRef.current
+    const key = (c: Card) => `${c.value}-${c.suit}`
+    const curKeys  = new Set(cur.map(key))
+    const prevKeys = new Set(prevTableRef.current.map(key))
+    const removed = prevTableRef.current.filter(c => !curKeys.has(key(c)))
+    const added   = cur.filter(c => !prevKeys.has(key(c)))
+
+    // On ne réagit qu'aux coups en cours de jeu (pas distribution / fin de donne).
+    if (sameDeal && sameRound) {
+      if (removed.length > 0 && gs.lastCapture !== null) {
+        // Capture : gel du jeu + aspiration séquentielle + un son par carte.
+        flyId.current += 1
+        setFlying({ cards: removed, by: gs.lastCapture.playerId, id: flyId.current })
+        setCaptureAnimating(true)
+
+        if (flyTimer.current) clearTimeout(flyTimer.current)
+        const total = (removed.length - 1) * FLY_STAGGER + FLY_DURATION + 60
+        flyTimer.current = setTimeout(() => {
+          setFlying(null)
+          setCaptureAnimating(false)   // dégèle le jeu
+        }, total)
+
+        // Un « card_capture » par carte, calé sur le stagger de l'animation.
+        sndTimers.current.forEach(clearTimeout)
+        sndTimers.current = removed.map((_, i) =>
+          setTimeout(() => { void playSound('card_capture') }, i * FLY_STAGGER),
+        )
+      } else if (added.length > 0) {
+        // Pose simple (carte posée sur la table sans capturer).
+        void playSound('card_place')
+      }
+    }
+
+    prevTableRef.current = [...cur]
+    prevRoundRef.current = gs.roundNumber
+    prevDealRef.current  = gs.dealNumber
+  }, [view.state])
+
+  useEffect(() => () => {
+    if (flyTimer.current) clearTimeout(flyTimer.current)
+    sndTimers.current.forEach(clearTimeout)
+  }, [])
 
   useEffect(() => {
     if (!lastEvent) return
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToastEvents(lastEvent.events)
     toastTimer.current = setTimeout(() => setToastEvents(null), 1500)
+
+    // Sons d'annonce liés aux événements.
+    if (lastEvent.events.includes('caida')) {
+      void playSound('caida')
+    } else if (lastEvent.events.includes('ronda') || lastEvent.events.includes('tringa')) {
+      void playSound('announce')
+    }
+
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current)
     }
@@ -138,7 +583,7 @@ export function GameScreen({ onBack }: GameScreenProps) {
   }
 
   // ── Partie en cours ───────────────────────────────────────────────────────
-  const { state, isHumanTurn, canDeclare, isGameOver } = view
+  const { state, isHumanTurn, canDeclare, canContest, contestValue, isGameOver, isDealEnd, isBotThinking } = view
   const human = state.players[HUMAN_ID]
   const bot   = state.players[BOT_ID]
 
@@ -147,6 +592,23 @@ export function GameScreen({ onBack }: GameScreenProps) {
       <GameOver
         scores={[human.score, bot.score]}
         onReplay={() => { setSelectedRitual(null); newGame() }}
+      />
+    )
+  }
+
+  if (isDealEnd && showDealEnd) {
+    // Résultat du décompte de cartes uniquement (cartes capturées − 20),
+    // indépendant des points de ronda/caída/missa.
+    const deltas: [number, number] = [
+      human.captured.length - 20,
+      bot.captured.length - 20,
+    ]
+    return (
+      <DealEndScreen
+        dealNumber={state.dealNumber + 1}
+        scores={[human.score, bot.score]}
+        deltas={deltas}
+        onContinue={nextDeal}
       />
     )
   }
@@ -160,8 +622,14 @@ export function GameScreen({ onBack }: GameScreenProps) {
     ? (state.table.find(c => c.value === lastPlayedCard.value && c.suit === lastPlayedCard.suit) ?? null)
     : null
 
+  // Ordre du donneur : table (4) → bot (3) → joueur (3). À une redistribution
+  // (roundNumber ≥ 1), seules les mains sont distribuées (pas de cartes table).
+  const isFreshDeal = state.roundNumber === 0
+  const botBase    = isFreshDeal ? 4 * DEAL_STAGGER : 0
+  const playerBase = botBase + 3 * DEAL_STAGGER
+
   const handleCardPress = (card: Card) => {
-    if (isHumanTurn) playCard(card)
+    if (isHumanTurn && !flying) playCard(card)
   }
 
   const handleDeclare = () => {
@@ -178,73 +646,158 @@ export function GameScreen({ onBack }: GameScreenProps) {
 
       {/* ── 1. Barre de score ──────────────────────────────── */}
       <View style={styles.scorebar}>
-        <View>
-          <Text style={styles.sbName}>Toi</Text>
-          <Text style={styles.sbScore}>{human.score}</Text>
+        <View style={styles.scorebarInner}>
+          <View>
+            <Text style={styles.sbName}>Toi</Text>
+            <Text style={styles.sbScore}>{human.score}</Text>
+          </View>
+          <View style={styles.sbMid}>
+            <Text style={styles.sbDash}>—</Text>
+            <Text style={styles.sbTarget}>→ 41</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.sbName}>Bot</Text>
+            <Text style={styles.sbScore}>{bot.score}</Text>
+          </View>
         </View>
-        <View style={styles.sbMid}>
-          <Text style={styles.sbDash}>—</Text>
-          <Text style={styles.sbTarget}>→ 41</Text>
+        <TouchableOpacity
+          style={styles.muteBtn}
+          onPress={toggleMute}
+          accessibilityLabel={muted ? 'Activer le son' : 'Couper le son'}
+        >
+          <Text style={styles.muteIcon}>{muted ? '🔇' : '🔊'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── 2. Main adverse (dos) + pile capturée du bot ───── */}
+      <View style={styles.handRow}>
+        <View style={styles.rowSide} />
+        <View style={styles.botHand}>
+          {bot.hand.map((_, i) => {
+            const center = (bot.hand.length - 1) / 2
+            return (
+              <DealFly
+                key={`b-${dealGen}-${i}`}
+                startX={(center - i) * SPREAD_HAND}
+                startY={FROM_BOT_Y}
+                delay={botBase + i * DEAL_STAGGER}
+              >
+                <CardBack size="sm" />
+              </DealFly>
+            )
+          })}
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
-          <Text style={styles.sbName}>Bot</Text>
-          <Text style={styles.sbScore}>{bot.score}</Text>
+        <View style={[styles.rowSide, styles.rowSideEnd]}>
+          <MiniPile count={bot.captured.length} />
         </View>
       </View>
 
-      {/* ── 2. Main adverse (dos) ──────────────────────────── */}
-      <View style={styles.botHand}>
-        {bot.hand.map((_, i) => (
-          <CardBack key={i} size="sm" />
-        ))}
-      </View>
+      {/* ── Bannière Mab9ach ───────────────────────────────── */}
+      {state.isMabqach && (
+        <View style={styles.mabBanner}>
+          <Text style={styles.mabBannerAr}>{TERMS.mab9ach.ar}</Text>
+          <Text style={styles.mabBannerLa}>{TERMS.mab9ach.la}</Text>
+        </View>
+      )}
 
       {/* ── 3. Zone de table ───────────────────────────────── */}
       <View style={styles.tableZone}>
-        {state.table.length === 0 ? (
+        {state.table.length === 0 && !flying ? (
           <Text style={styles.tableEmpty}>Table vide</Text>
         ) : (
           <View style={styles.tableCards}>
-            {state.table.map((card, i) => (
-              <CardFace
-                key={`${card.value}-${card.suit}-${i}`}
+            {state.table.map((card) => {
+              const k = `${card.value}-${card.suit}`
+              const isLast =
+                lastOnTable !== null &&
+                card.value === lastOnTable.value &&
+                card.suit  === lastOnTable.suit
+              const face = <CardFace card={card} size="md" highlighted={isLast} />
+
+              // 1. La dernière carte posée glisse depuis la main du joueur concerné.
+              if (isLast) {
+                return (
+                  <PlayedCard key={`played-${k}`} from={lastPlayerId === HUMAN_ID ? 'bottom' : 'top'}>
+                    {face}
+                  </PlayedCard>
+                )
+              }
+              // 2. Les 4 cartes initiales de la donne volent depuis la pioche.
+              const di = dealtTableRef.current.indexOf(k)
+              if (di !== -1) {
+                const center = (dealtTableRef.current.length - 1) / 2
+                return (
+                  <DealFly
+                    key={`deal-${state.dealNumber}-${k}`}
+                    startX={(center - di) * SPREAD_TABLE}
+                    startY={FROM_TABLE_Y}
+                    delay={di * DEAL_STAGGER}
+                  >
+                    {face}
+                  </DealFly>
+                )
+              }
+              // 3. Carte ordinaire (posée en cours de jeu, désormais statique).
+              return <View key={`t-${k}`}>{face}</View>
+            })}
+
+            {/* Cartes capturées : maintenues en place puis aspirées vers la pile */}
+            {flying?.cards.map((card, i) => (
+              <FlyingCard
+                key={`fly-${flying.id}-${card.value}-${card.suit}`}
                 card={card}
-                size="md"
-                highlighted={
-                  lastOnTable !== null &&
-                  card.value === lastOnTable.value &&
-                  card.suit  === lastOnTable.suit
-                }
+                dir={flying.by === HUMAN_ID ? 1 : -1}
+                delay={i * FLY_STAGGER}
               />
             ))}
           </View>
         )}
-        <Text style={styles.deckLabel}>
-          Pioche : <Text style={styles.deckNum}>{state.deck.length}</Text>
-        </Text>
+
+        {/* Pile de pioche (bas-droite) */}
+        <View style={styles.tableFooter}>
+          <DeckStack count={state.deck.length} />
+        </View>
       </View>
+
+      {/* ── Indicateur bot (sous la table) ─────────────────── */}
+      {isBotThinking && <BotThinking />}
 
       {/* ── Spacer ─────────────────────────────────────────── */}
       <View style={{ flex: 1 }} />
 
       {/* ── 4. Tour / statut ───────────────────────────────── */}
-      {!isHumanTurn && (
+      {!isHumanTurn && !isBotThinking && (
         <View style={styles.statusBar}>
           <Text style={styles.statusTxt}>Tour du bot…</Text>
         </View>
       )}
 
-      {/* ── 5. Main du joueur ──────────────────────────────── */}
-      <View style={styles.playerHand}>
-        {human.hand.map((card) => (
-          <CardFace
-            key={`${card.value}-${card.suit}`}
-            card={card}
-            size="lg"
-            onPress={() => handleCardPress(card)}
-            disabled={!isHumanTurn}
-          />
-        ))}
+      {/* ── 5. Main du joueur + pile capturée du joueur ────── */}
+      <View style={styles.handRow}>
+        <View style={styles.rowSide} />
+        <View style={styles.playerHand}>
+          {human.hand.map((card, i) => {
+            const center = (human.hand.length - 1) / 2
+            return (
+              <DealFly
+                key={`h-${dealGen}-${card.value}-${card.suit}`}
+                startX={(center - i) * SPREAD_HAND}
+                startY={FROM_PLAYER_Y}
+                delay={playerBase + i * DEAL_STAGGER}
+              >
+                <CardFace
+                  card={card}
+                  size="lg"
+                  onPress={() => handleCardPress(card)}
+                  disabled={!isHumanTurn || !!flying}
+                />
+              </DealFly>
+            )
+          })}
+        </View>
+        <View style={[styles.rowSide, styles.rowSideEnd]}>
+          <MiniPile count={human.captured.length} />
+        </View>
       </View>
 
       {/* ── Overlay d'événement (par-dessus le jeu, ne bloque pas les taps) */}
@@ -252,22 +805,28 @@ export function GameScreen({ onBack }: GameScreenProps) {
         <EventOverlay key={lastEvent?.id ?? 0} events={toastEvents} />
       )}
 
+      {/* ── Overlay "Donne N" ─────────────────────────────── */}
+      {dealAnnouncing !== null && (
+        <DealAnnounce dealNumber={dealAnnouncing} />
+      )}
+
       {/* ── 6. Barre d'actions ─────────────────────────────── */}
       <View style={styles.actionBar}>
         <View style={styles.abLeft}>
-          {canDeclare && (
+          {canDeclare && !flying && (
             <TouchableOpacity style={styles.btnRonda} onPress={handleDeclare}>
               <Text style={styles.btnRondaAr}>{comboTerm.ar}</Text>
               <Text style={styles.btnRondaLa}>{comboTerm.la}</Text>
             </TouchableOpacity>
           )}
-          {/* Contre : étape 3 */}
+          {canContest && contestValue !== null && !flying && (
+            <TouchableOpacity style={styles.btnContre} onPress={() => contest(contestValue)}>
+              <Text style={styles.btnContreTxt}>Contre</Text>
+              <Text style={styles.btnContreSub}>{contestValue}</Text>
+            </TouchableOpacity>
+          )}
         </View>
-
-        <View style={styles.abRight}>
-          <Text style={styles.abPiocheLabel}>Pioche</Text>
-          <Text style={styles.abPiocheNum}>{state.deck.length}</Text>
-        </View>
+        {/* La pioche est désormais affichée en pile dans la zone de table. */}
       </View>
 
       </View>{/* /column */}
@@ -294,11 +853,28 @@ const styles = StyleSheet.create({
     backgroundColor: C.deep,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(201,162,39,0.1)',
+  },
+  scorebarInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  muteBtn: {
+    marginLeft: 14,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  muteIcon: {
+    fontSize: 16,
   },
   sbName: {
     fontFamily: 'Cairo_400Regular',
@@ -377,6 +953,111 @@ const styles = StyleSheet.create({
   deckNum: {
     fontFamily: 'Cairo_600SemiBold',
     color: 'rgba(244,236,216,0.6)',
+  },
+
+  // Rangée main + pile capturée (latérale)
+  handRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  rowSide: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  rowSideEnd: {
+    alignItems: 'flex-end',
+  },
+
+  // Mini pile de cartes capturées
+  pileCol: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  pileBox: {
+    width: 32,
+    height: 42,
+  },
+  pileCard: {
+    position: 'absolute',
+    width: 22,
+    height: 32,
+    borderRadius: 3,
+    backgroundColor: C.deep,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.55)',
+  },
+  pileEmpty: {
+    position: 'absolute',
+    left: 5,
+    bottom: 5,
+    width: 22,
+    height: 32,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(244,236,216,0.18)',
+  },
+  pileNum: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 12,
+    color: C.bone,
+  },
+
+  // Pile de pioche dans la table
+  tableFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    marginTop: 10,
+  },
+  deckCol: {
+    alignItems: 'center',
+    gap: 3,
+  },
+  deckStack: {
+    width: 36,
+    height: 46,
+  },
+  deckLayer: {
+    position: 'absolute',
+    width: 26,
+    height: 36,
+    borderRadius: 4,
+    backgroundColor: C.deep,
+    borderWidth: 1,
+    borderColor: 'rgba(244,236,216,0.18)',
+  },
+  deckTop: {
+    borderColor: C.brass,
+    backgroundColor: '#0B4D3A',
+  },
+  deckEmpty: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 26,
+    height: 36,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(244,236,216,0.16)',
+  },
+  deckCount: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 11,
+    color: 'rgba(244,236,216,0.6)',
+  },
+
+  // Indicateur "le bot réfléchit / joue" — discret, sous la table
+  botThinking: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 12,
+    color: C.boneOff,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 10,
   },
 
   // Status bar (tour bot)
@@ -484,6 +1165,12 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     color: C.brass,
   },
+  overlayPts: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 30,
+    color: C.bone,
+    marginTop: 8,
+  },
 
   // Bouton Ronda / Tringa
   btnRonda: {
@@ -505,6 +1192,139 @@ const styles = StyleSheet.create({
     color: 'rgba(28,38,34,0.6)',
     letterSpacing: 0.8,
     lineHeight: 12,
+  },
+
+  // Bouton Contre (clay)
+  btnContre: {
+    backgroundColor: C.clay,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  btnContreTxt: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 14,
+    color: C.bone,
+    letterSpacing: 0.5,
+    lineHeight: 18,
+  },
+  btnContreSub: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 9,
+    color: 'rgba(244,236,216,0.7)',
+    lineHeight: 12,
+  },
+
+  // Bannière Mab9ach en jeu
+  mabBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(201,162,39,0.13)',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: C.brass,
+  },
+  mabBannerAr: {
+    fontFamily: 'ReemKufi_700Bold',
+    fontSize: 15,
+    color: C.brass,
+  },
+  mabBannerLa: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 11,
+    color: C.boneOff,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+
+  // Overlay annonce "Donne N"
+  dealAnnounceRoot: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(9,64,47,0.91)',
+    zIndex: 60,
+  },
+  dealAnnounceLabel: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 11,
+    color: C.boneOff,
+    letterSpacing: 4,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  dealAnnounceNum: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 96,
+    color: C.brass,
+    lineHeight: 100,
+  },
+
+  // Écran résultat de donne
+  dealEndLabel: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 11,
+    color: C.boneOff,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 20,
+  },
+  dealEndAr: {
+    fontFamily: 'ReemKufi_700Bold',
+    fontSize: 64,
+    color: C.brass,
+    lineHeight: 72,
+    textAlign: 'center',
+  },
+  dealEndLa: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 12,
+    color: C.boneOff,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 32,
+  },
+  dealEndRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  dealEndCell: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderRadius: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    gap: 6,
+  },
+  dealEndPlayerName: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 10,
+    color: C.boneOff,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  dealEndDelta: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 48,
+    lineHeight: 54,
+  },
+  dealEndTotal: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 13,
+    color: C.boneOff,
   },
 
   // Game over

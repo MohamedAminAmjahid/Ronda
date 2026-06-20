@@ -1,6 +1,9 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Polygon } from 'react-native-svg'
+import { TERMS } from './terms'
+
+const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
@@ -36,12 +39,15 @@ function KhatamLogo() {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onPlayVsAi: () => void
+  onPlayVsAi:  () => void
+  onPlay2v2:   () => void
+  onRules:     () => void
+  onCredits:   () => void
 }
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlayVsAi }: Props) {
+export function MenuScreen({ onPlayVsAi, onPlay2v2, onRules, onCredits }: Props) {
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -51,7 +57,7 @@ export function MenuScreen({ onPlayVsAi }: Props) {
           <KhatamLogo />
           <View style={s.titleBlock}>
             <Text style={s.title}>RONDA</Text>
-            <Text style={s.titleSub}>جوندة</Text>
+            <Text style={s.titleSub}>{TERMS.ronda.ar}</Text>
           </View>
           <View style={s.divider} />
           <Text style={s.tagline}>Jeu de cartes marocain</Text>
@@ -65,6 +71,11 @@ export function MenuScreen({ onPlayVsAi }: Props) {
             <Text style={s.btnPrimaryTxt}>Jouer contre l'IA</Text>
           </TouchableOpacity>
 
+          {/* 2 contre 2 (toi + IA alliée contre 2 IA) */}
+          <TouchableOpacity style={s.btnSecondary} onPress={onPlay2v2}>
+            <Text style={s.btnSecondaryTxt}>2 contre 2</Text>
+          </TouchableOpacity>
+
           {/* Jouer avec un ami — désactivé (multijoueur à venir) */}
           <TouchableOpacity style={s.btnDisabled} disabled>
             <Text style={s.btnDisabledIcon}>🔒</Text>
@@ -72,13 +83,25 @@ export function MenuScreen({ onPlayVsAi }: Props) {
             <Text style={s.btnDisabledBadge}>Bientôt</Text>
           </TouchableOpacity>
 
-          {/* Emplacement réservé pour un 3ᵉ bouton */}
+          {/* Règles + Crédits — liens discrets */}
+          <View style={s.textLinks}>
+            <TouchableOpacity style={s.btnCredits} onPress={onRules}>
+              <Text style={s.btnCreditsTxt}>Règles</Text>
+            </TouchableOpacity>
+            <Text style={s.linkSep}>·</Text>
+            <TouchableOpacity style={s.btnCredits} onPress={onCredits}>
+              <Text style={s.btnCreditsTxt}>Crédits</Text>
+            </TouchableOpacity>
+          </View>
 
         </View>
 
         {/* ── Pied de page ─────────────────────────────────────── */}
         <View style={s.footer}>
           <Text style={s.footerTxt}>v1.0 — solo</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(LINKEDIN_URL)}>
+            <Text style={s.author}>Made by Amjahid Mohamed Amin</Text>
+          </TouchableOpacity>
         </View>
 
       </View>
@@ -163,6 +186,19 @@ const s = StyleSheet.create({
     color: C.ink,
     letterSpacing: 0.4,
   },
+  btnSecondary: {
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: C.brass,
+  },
+  btnSecondaryTxt: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 16,
+    color: C.brass,
+    letterSpacing: 0.4,
+  },
   btnDisabled: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -193,15 +229,45 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
+  textLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  linkSep: {
+    color: 'rgba(244,236,216,0.25)',
+    fontSize: 12,
+  },
+  btnCredits: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  btnCreditsTxt: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 12,
+    color: 'rgba(244,236,216,0.3)',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+
   // Pied
   footer: {
     alignItems: 'center',
     paddingBottom: 12,
+    gap: 6,
   },
   footerTxt: {
     fontSize: 10,
     color: 'rgba(244,236,216,0.2)',
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  author: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 12,
+    color: 'rgba(244,236,216,0.45)',
+    letterSpacing: 0.3,
+    textDecorationLine: 'underline',
   },
 })

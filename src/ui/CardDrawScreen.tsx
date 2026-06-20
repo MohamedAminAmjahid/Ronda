@@ -37,6 +37,9 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
   const [botCard,     setBotCard]     = useState<{ value: Value; suit: Suit } | null>(null)
   const [humanFaceUp, setHumanFaceUp] = useState(false)
   const [botFaceUp,   setBotFaceUp]   = useState(false)
+  // Numéro affiché seulement quand le flip est entièrement terminé (fin d'animation).
+  const [humanRevealed, setHumanRevealed] = useState(false)
+  const [botRevealed,   setBotRevealed]   = useState(false)
 
   const humanScaleX = useRef(new Animated.Value(1)).current
   const botScaleX   = useRef(new Animated.Value(1)).current
@@ -59,13 +62,17 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
     setBotCard(b)
     setHumanFaceUp(false)
     setBotFaceUp(false)
+    setHumanRevealed(false)
+    setBotRevealed(false)
     humanScaleX.setValue(1)
     botScaleX.setValue(1)
     setPhase('animating')
 
     flipOne(humanScaleX, setHumanFaceUp, () => {
+      setHumanRevealed(true)   // flip joueur terminé → on peut montrer le numéro
       setTimeout(() => {
         flipOne(botScaleX, setBotFaceUp, () => {
+          setBotRevealed(true) // flip bot terminé → on peut montrer le numéro
           setPhase(h.value === b.value ? 'tie' : 'revealed')
         })
       }, 250)
@@ -77,6 +84,8 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
     setBotCard(null)
     setHumanFaceUp(false)
     setBotFaceUp(false)
+    setHumanRevealed(false)
+    setBotRevealed(false)
     humanScaleX.setValue(1)
     botScaleX.setValue(1)
     setPhase('ready')
@@ -105,7 +114,7 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
                 ? <CardFace card={humanCard} size="lg" />
                 : <CardBack size="lg" />}
             </Animated.View>
-            {phase !== 'ready' && humanCard && (
+            {humanRevealed && humanCard && (
               <Text style={s.cardValue}>{humanCard.value}</Text>
             )}
           </View>
@@ -119,7 +128,7 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
                 ? <CardFace card={botCard} size="lg" />
                 : <CardBack size="lg" />}
             </Animated.View>
-            {phase !== 'ready' && botCard && (
+            {botRevealed && botCard && (
               <Text style={s.cardValue}>{botCard.value}</Text>
             )}
           </View>

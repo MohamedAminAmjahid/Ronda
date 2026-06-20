@@ -65,7 +65,14 @@ export type GamePhase =
   | 'GAME_OVER'
 
 /** Événements remarquables produits par la dernière action. */
-export type GameEvent = 'caida' | 'missa' | 'ronda' | 'tringa' | 'contre'
+export type GameEvent =
+  | 'caida'         // Ara Wahd  (caída niveau 1, +1)
+  | 'ara_khamssa'   // caída niveau 2 (+5)
+  | 'ara_7dach'     // caída niveau 3 (+11)
+  | 'missa'
+  | 'ronda'
+  | 'tringa'
+  | 'contre'
 
 export interface GameState {
   deck: readonly Card[]
@@ -82,6 +89,13 @@ export interface GameState {
   isMabqach: boolean
   /** Dernière capture : qui et quelle carte (pour caída) */
   lastCapture: { playerId: PlayerId; card: Card } | null
+  /**
+   * Chaîne de caídas en cours sur une même valeur (section 3.2).
+   * level 1 = Ara Wahd (+1), 2 = Ara Khamssa (+5), 3 = Ara 7dach (+11).
+   * null si aucune chaîne (reset dès qu'un coup ne capture pas la dernière
+   * carte adverse, ou capture une valeur différente).
+   */
+  caidaChain: { level: 1 | 2 | 3; value: Value } | null
   /** Dernière carte posée par chaque joueur (pour caída) */
   lastPlayed: readonly [Card | null, Card | null]
   /** Événements de la dernière action (vide si coup ordinaire). */

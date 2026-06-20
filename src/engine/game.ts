@@ -102,17 +102,40 @@ function applyPlayCard(
   const newLastPlayed: [Card | null, Card | null] = [state.lastPlayed[0], state.lastPlayed[1]]
   newLastPlayed[playerId] = card
 
+  // ── Chaîne de caídas (section 3.2) ──────────────────────────────────────
+  // Une caída (capture de la dernière carte adverse, même value+suit) peut
+  // s'enchaîner jusqu'au niveau 3 tant que c'est la MÊME valeur. Sinon reset.
+  let caidaLevel: 0 | 1 | 2 | 3 = 0
+  let newCaidaChain: GameState['caidaChain'] = null
+  if (captureResult !== null && captureResult.isCaida) {
+    const prev = state.caidaChain
+    if (prev !== null && prev.value === card.value && prev.level === 1) {
+      caidaLevel = 2                                  // Ara Khamssa
+    } else if (prev !== null && prev.value === card.value && prev.level === 2) {
+      caidaLevel = 3                                  // Ara 7dach
+    } else {
+      caidaLevel = 1                                  // Ara Wahd (nouvelle chaîne)
+    }
+    newCaidaChain = { level: caidaLevel, value: card.value }
+  }
+  // newCaidaChain reste null si ce coup n'est pas une caída → chaîne réinitialisée.
+
+  const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
+  const caidaEvents: GameEvent[] =
+    caidaLevel === 3 ? ['ara_7dach'] :
+    caidaLevel === 2 ? ['ara_khamssa'] :
+    caidaLevel === 1 ? ['caida'] : []
+
   let newState: GameState
 
   if (captureResult !== null) {
-    const { captured, tableAfter, isCaida, isMissa } = captureResult
+    const { captured, tableAfter, isMissa } = captureResult
 
-    let scoreBonus = 0
-    if (isCaida) scoreBonus += 1
+    let scoreBonus = caidaPoints
     if (isMissa) scoreBonus += 1
 
     const events: GameEvent[] = [
-      ...(isCaida ? (['caida'] as const) : []),
+      ...caidaEvents,
       ...(isMissa ? (['missa'] as const) : []),
     ]
 
@@ -135,6 +158,7 @@ function applyPlayCard(
       ],
       lastCapture: { playerId, card },
       lastPlayed: newLastPlayed,
+      caidaChain: newCaidaChain,
       lastEvents: events,
       eventSeq: events.length > 0 ? state.eventSeq + 1 : state.eventSeq,
     }
@@ -155,6 +179,7 @@ function applyPlayCard(
         playerId === 1 ? updatedPlayer : state.players[1],
       ],
       lastPlayed: newLastPlayed,
+      caidaChain: null,        // pas de capture → chaîne réinitialisée
       lastEvents: [],
       eventSeq: state.eventSeq,
     }

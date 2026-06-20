@@ -1,5 +1,4 @@
 import type { Card, GameState, PlayerId } from './types'
-import { startNewDeal } from './deal'
 import type { Rng } from './deck'
 
 /** Bonus Mab9ach pour le donneur selon la carte de la dernière prise. */
@@ -35,7 +34,7 @@ export function winner(scores: [number, number]): PlayerId | null {
  * - Calcule le bonus de décompte (>20 cartes).
  * - Retourne le nouvel état avec phase DEAL_END ou GAME_OVER.
  */
-export function applyEndOfDeal(state: GameState, rng: Rng): GameState {
+export function applyEndOfDeal(state: GameState, _rng: Rng): GameState {
   // 1. Donner les cartes restantes de la table au dernier captureur
   let players = state.players.map(p => ({ ...p })) as [
     ReturnType<typeof Object.assign>,
@@ -77,17 +76,17 @@ export function applyEndOfDeal(state: GameState, rng: Rng): GameState {
       table: [],
       players: [p0, p1],
       phase: 'GAME_OVER',
+      lastEvents: [],
     }
   }
 
-  // 4. Préparer la donne suivante (scores conservés, donneur alterné)
-  const nextDealer = (1 - state.dealer) as PlayerId
-  return startNewDeal(
-    {
-      scores: newScores,
-      dealer: nextDealer,
-      dealNumber: state.dealNumber + 1,
-    },
-    rng,
-  )
+  // 4. Pause en DEAL_END : l'UI affiche l'écran résultat ; c'est l'action
+  //    CONTINUE_DEAL (useRondaGame) qui appellera startNewDeal ensuite.
+  return {
+    ...state,
+    table: [],
+    players: [p0, p1],
+    phase: 'DEAL_END',
+    lastEvents: [],
+  }
 }
