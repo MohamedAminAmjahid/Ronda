@@ -10,6 +10,7 @@
     "colyseus.js": "^0.16.22",
     "expo": "~56.0.12",
     "expo-audio": "~56.0.12",
+    "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.18",
     "expo-device": "~56.0.4",
     "expo-font": "~56.0.7",

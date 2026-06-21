@@ -108,6 +108,16 @@ function clearContinueTimer(): void {
 function wireRoom(r: Room): void {
   room = r
 
+  // Le code de partie vient du schéma Colyseus (RondaRoom.state.code), qui se
+  // synchronise APRÈS le join. On le lit donc ici, et non au moment de connect()
+  // (où r.state.code est encore vide). En partie privée, aucun game_state n'arrive
+  // tant que l'adversaire n'a pas rejoint → c'est la seule source du code.
+  r.onStateChange((state: { code?: string }) => {
+    if (state?.code && state.code !== snapshot.roomCode) {
+      set({ roomCode: state.code })
+    }
+  })
+
   r.onMessage('game_state', (payload: ServerGameState) => {
     const patch: Partial<OnlineSnapshot> = {
       server: payload,

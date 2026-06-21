@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { useOnlineGame } from '../online/useOnlineGame'
+
+const GAME_URL = 'https://ronda-virid.vercel.app'
 
 const C = {
   table:   '#0E5C4A',
@@ -114,15 +117,17 @@ export function OnlineScreen({ onBack }: Props) {
           <View style={s.body}>
             <Text style={s.helloTxt}>Salut {pseudo} 👋</Text>
 
+            <Text style={s.label}>Adversaire aléatoire</Text>
             <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(pseudo)}>
               <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(pseudo)}>
-              <Text style={s.btnSecondaryTxt}>Créer une partie</Text>
-            </TouchableOpacity>
-
             <View style={s.divider} />
+
+            <Text style={s.label}>Avec un ami</Text>
+            <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(pseudo)}>
+              <Text style={s.btnSecondaryTxt}>Créer une partie (recevoir un code)</Text>
+            </TouchableOpacity>
 
             <Text style={s.label}>Rejoindre avec un code</Text>
             <View style={s.joinRow}>
@@ -169,18 +174,57 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
     return () => loop.stop()
   }, [])
 
+  const [copied, setCopied] = useState(false)
+
+  const shareCode = async () => {
+    if (!code) return
+    try {
+      await Share.share({
+        message: `Rejoins ma partie de Ronda ! 🎴\nCode : ${code}\nLien : ${GAME_URL}`,
+      })
+    } catch {
+      // partage annulé / indisponible — sans effet
+    }
+  }
+
+  const copyCode = async () => {
+    if (!code) return
+    try {
+      await Clipboard.setStringAsync(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // clipboard indisponible — sans effet
+    }
+  }
+
   return (
     <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
       <View style={[s.column, { alignItems: 'center', gap: 18 }]}>
         <Animated.Text style={[s.waitTxt, { opacity: pulse }]}>
           En attente d'un adversaire…
         </Animated.Text>
-        {code && (
-          <View style={s.codeBox}>
-            <Text style={s.codeLabel}>Code à partager</Text>
-            <Text style={s.codeValue}>{code}</Text>
-          </View>
+
+        {code ? (
+          <>
+            <View style={s.codeBox}>
+              <Text style={s.codeLabel}>Code à partager</Text>
+              <Text style={s.codeValue}>{code}</Text>
+            </View>
+            <View style={s.shareRow}>
+              <TouchableOpacity style={s.btnShare} onPress={shareCode}>
+                <Text style={s.btnShareTxt}>Partager</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.btnCopy} onPress={copyCode}>
+                <Text style={s.btnCopyTxt}>{copied ? 'Copié ✓' : 'Copier le code'}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          // Partie rapide (sans code) : on attend juste un adversaire.
+          <Text style={s.codeLabel}>Recherche d'un adversaire…</Text>
         )}
+
         <TouchableOpacity style={s.btnCancel} onPress={onCancel}>
           <Text style={s.btnCancelTxt}>Annuler</Text>
         </TouchableOpacity>
@@ -250,7 +294,17 @@ const s = StyleSheet.create({
     fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff,
     letterSpacing: 2, textTransform: 'uppercase',
   },
-  codeValue: { fontFamily: 'Cairo_600SemiBold', fontSize: 30, color: C.brass, letterSpacing: 3 },
+  codeValue: { fontFamily: 'Cairo_600SemiBold', fontSize: 34, color: C.brass, letterSpacing: 4 },
+  shareRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  btnShare: {
+    backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22,
+  },
+  btnShareTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink, letterSpacing: 0.3 },
+  btnCopy: {
+    borderRadius: 10, paddingVertical: 12, paddingHorizontal: 18,
+    borderWidth: 1.5, borderColor: C.brass,
+  },
+  btnCopyTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, letterSpacing: 0.3 },
   btnCancel: { paddingVertical: 10, paddingHorizontal: 20 },
   btnCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
 
