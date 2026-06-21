@@ -20,6 +20,7 @@ import { CardDrawScreen } from './CardDrawScreen'
 import { RpsScreen } from './RpsScreen'
 import { TERMS } from './terms'
 import { initSounds, playSound, setMuted, isMuted } from './sounds'
+import { ESCALIER_SEQUENCE } from '../engine/capture'
 import type { Card, GameEvent } from '../engine/types'
 import type { RitualType } from './RitualPickerScreen'
 
@@ -35,18 +36,30 @@ const C = {
   boneOff: 'rgba(244,236,216,0.35)',
 } as const
 
+/**
+ * Trie les cartes de la table selon l'ordre de l'escalier
+ * (1-2-3-4-5-6-7-10-11-12) — affichage seulement, le moteur reste inchangé.
+ */
+function sortTableCards(cards: readonly Card[]): Card[] {
+  return [...cards].sort(
+    (a, b) => ESCALIER_SEQUENCE.indexOf(a.value) - ESCALIER_SEQUENCE.indexOf(b.value),
+  )
+}
+
 // ── Indicateur "le bot réfléchit / joue" ─────────────────────────────────────
 
-export function BotThinking() {
-  // Alterne le libellé toutes les 800 ms tant que le bot réfléchit.
+export function BotThinking({ name }: { name?: string }) {
+  // Alterne le libellé toutes les 800 ms. `name` = pseudo adversaire (online) ;
+  // sinon « Le bot » (solo vs IA).
   const [alt, setAlt] = useState(false)
   useEffect(() => {
     const id = setInterval(() => setAlt(a => !a), 800)
     return () => clearInterval(id)
   }, [])
+  const who = name ?? 'Le bot'
   return (
     <Text style={styles.botThinking}>
-      {alt ? 'Le bot joue…' : 'Le bot réfléchit…'}
+      {alt ? `${who} joue…` : `${who} réfléchit…`}
     </Text>
   )
 }
@@ -733,7 +746,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
           <Text style={styles.tableEmpty}>Table vide</Text>
         ) : (
           <View style={styles.tableCards}>
-            {state.table.map((card) => {
+            {sortTableCards(state.table).map((card) => {
               const k = `${card.value}-${card.suit}`
               const isLast =
                 lastOnTable !== null &&
@@ -787,7 +800,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
       </View>
 
       {/* ── Indicateur bot (sous la table) ─────────────────── */}
-      {isBotThinking && <BotThinking />}
+      {isBotThinking && <BotThinking name={opponentName} />}
 
       {/* ── Spacer ─────────────────────────────────────────── */}
       <View style={{ flex: 1 }} />
@@ -795,7 +808,9 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
       {/* ── 4. Tour / statut ───────────────────────────────── */}
       {!isHumanTurn && !isBotThinking && (
         <View style={styles.statusBar}>
-          <Text style={styles.statusTxt}>Tour du bot…</Text>
+          <Text style={styles.statusTxt}>
+            {opponentName ? `Tour de ${opponentName}…` : 'Tour du bot…'}
+          </Text>
         </View>
       )}
 

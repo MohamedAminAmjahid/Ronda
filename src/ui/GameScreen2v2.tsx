@@ -20,6 +20,7 @@ import { CardDrawScreen } from './CardDrawScreen'
 import { RpsScreen } from './RpsScreen'
 import { TERMS } from './terms'
 import { initSounds, playSound, setMuted, isMuted } from './sounds'
+import { ESCALIER_SEQUENCE } from '../engine/capture'
 import type { Card, GameEvent, PlayerId } from '../engine/types'
 import type { RitualType } from './RitualPickerScreen'
 
@@ -35,6 +36,16 @@ const C = {
 } as const
 
 const DEAL_STAGGER = 130
+
+/**
+ * Trie les cartes de la table selon l'ordre de l'escalier
+ * (1-2-3-4-5-6-7-10-11-12) — affichage seulement, le moteur reste inchangé.
+ */
+function sortTableCards(cards: readonly Card[]): Card[] {
+  return [...cards].sort(
+    (a, b) => ESCALIER_SEQUENCE.indexOf(a.value) - ESCALIER_SEQUENCE.indexOf(b.value),
+  )
+}
 
 // ── Étoile khatam (marqueur équipe A) ─────────────────────────────────────────
 
@@ -270,7 +281,7 @@ export function GameScreen2v2({ onBack }: Props) {
       <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
         <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 24 }]}>
           <Text style={styles.gameOverTitle}>{won ? 'Bravo !' : 'Perdu.'}</Text>
-          <Text style={styles.gameOverScore}>Équipe A {teamScores[0]} — Équipe B {teamScores[1]}</Text>
+          <Text style={styles.gameOverScore}>Vous {teamScores[0]} — Adversaires {teamScores[1]}</Text>
           <TouchableOpacity style={styles.btnPrimary} onPress={() => { setSelectedRitual(null); newGame() }}>
             <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
           </TouchableOpacity>
@@ -287,7 +298,7 @@ export function GameScreen2v2({ onBack }: Props) {
         dealNumber={state.dealNumber + 1}
         scores={[teamScores[0], teamScores[1]]}
         deltas={deltas}
-        labels={['Équipe A', 'Équipe B']}
+        labels={['Vous', 'Adversaires']}
         onContinue={nextDeal}
       />
     )
@@ -315,7 +326,7 @@ export function GameScreen2v2({ onBack }: Props) {
         <View style={styles.scorebar}>
           <View style={styles.scorebarInner}>
             <View>
-              <Text style={styles.sbName}>Équipe A</Text>
+              <Text style={styles.sbName}>Vous</Text>
               <Text style={styles.sbScore}>{teamScores[0]}</Text>
             </View>
             <View style={styles.sbMid}>
@@ -323,7 +334,7 @@ export function GameScreen2v2({ onBack }: Props) {
               <Text style={styles.sbTarget}>→ 41</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.sbName}>Équipe B</Text>
+              <Text style={styles.sbName}>Adversaires</Text>
               <Text style={styles.sbScore}>{teamScores[1]}</Text>
             </View>
           </View>
@@ -358,7 +369,7 @@ export function GameScreen2v2({ onBack }: Props) {
                 <Text style={styles.tableEmpty}>Table vide</Text>
               ) : (
                 <View style={styles.tableCards}>
-                  {state.table.map((card) => {
+                  {sortTableCards(state.table).map((card) => {
                     const k = `${card.value}-${card.suit}`
                     const isLast =
                       lastOnTable !== null && card.value === lastOnTable.value && card.suit === lastOnTable.suit
