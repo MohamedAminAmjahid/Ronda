@@ -354,19 +354,19 @@ describe('8. Contre-ronda', () => {
 // ---------------------------------------------------------------------------
 describe('9. Mab9ach', () => {
   it('derniere prise Rey (12) -> +5 pour le donneur', () => {
-    expect(mabqachBonus(makeCard(12))).toBe(5)
+    expect(mabqachBonus(makeCard(12))).toEqual([5, 0])
   })
 
   it('derniere prise As (1) -> -5 pour le donneur', () => {
-    expect(mabqachBonus(makeCard(1))).toBe(-5)
+    expect(mabqachBonus(makeCard(1))).toEqual([-5, 0])
   })
 
-  it('aucune prise -> -5 pour le donneur', () => {
-    expect(mabqachBonus(null)).toBe(-5)
+  it('aucune prise -> +5 pour l\'adversaire (pas de malus au donneur)', () => {
+    expect(mabqachBonus(null)).toEqual([0, 5])
   })
 
-  it('autre valeur (ex. 7) -> 0', () => {
-    expect(mabqachBonus(makeCard(7))).toBe(0)
+  it('autre valeur (ex. 7) -> 0 pour les deux', () => {
+    expect(mabqachBonus(makeCard(7))).toEqual([0, 0])
   })
 })
 
@@ -436,6 +436,28 @@ describe('11. Multi-donnes', () => {
     expect(next.players[1].score).toBe(10)
     // Score joueur 0 : 10 + 0 = 10
     expect(next.players[0].score).toBe(10)
+  })
+
+  it('Mab9ach : le donneur ne prend pas la derniere -> +5 a l\'adversaire', () => {
+    // Donneur = 0, mais la derniere prise est de l'adversaire (joueur 1).
+    // => donneur ne prend rien en Mab9ach => +5 a l'adversaire (joueur 1).
+    const captured19 = Array.from({ length: 19 }, () => makeCard(1))
+    const state = makeGameState({
+      deck: [],
+      table: [],
+      phase: 'PLAYING',
+      dealer: 0,
+      isMabqach: true,
+      lastCapture: { playerId: 1, card: makeCard(7) }, // capture par l'adversaire
+      players: [
+        makePlayerState({ score: 0, captured: captured19 }),
+        makePlayerState({ score: 0, captured: captured19 }),
+      ],
+    })
+
+    const next = applyEndOfDeal(state, rngZero)
+    expect(next.players[1].score).toBe(5) // adversaire +5
+    expect(next.players[0].score).toBe(0) // donneur : aucun malus
   })
 })
 
@@ -531,13 +553,15 @@ describe('13. Table initiale valide', () => {
     expect(isTableValid(table)).toBe(true)
   })
 
-  it('la boucle de redistribution termine et produit toujours une table valide', () => {
-    // 300 donnes sur des seeds varies : aucune ne doit boucler a l'infini
-    // ni produire une table invalide.
+  it('distribution initiale : table vide, 4 cartes par joueur, pioche 32', () => {
+    // Nouvelle regle : la 1re distribution donne 4+4 en main et 0 sur la table.
     for (let seed = 1; seed <= 300; seed++) {
       const state = createInitialState(makeLcg(seed), 0)
-      expect(state.table.length).toBe(4)
-      expect(isTableValid(state.table)).toBe(true)
+      expect(state.table.length).toBe(0)
+      expect(state.players[0].hand.length).toBe(4)
+      expect(state.players[1].hand.length).toBe(4)
+      expect(state.deck.length).toBe(32)
+      expect(state.isMabqach).toBe(false)
     }
   })
 })
@@ -660,5 +684,43 @@ describe('15. Chaine de caidas', () => {
     expect(next.caidaChain).toBeNull()
     expect(next.players[0].score).toBe(0)
     expect(next.lastEvents).not.toContain('caida')
+  })
+
+  it('enchainement reel (sequentiel) : Ara Wahd puis Ara Khamssa via applyAction', () => {
+    // Reproduit le scenario complet, coup par coup, comme en partie :
+    //   1. P1 pose un 5 (appat)
+    //   2. P0 capture ce 5 -> Ara Wahd (+1), chaine {1,5}
+    //   3. P1 repose un 5 (appat, sans capture) -> la chaine doit SURVIVRE
+    //   4. P0 capture ce 5 -> Ara Khamssa (+5), chaine {2,5}
+    // Un 12 reste sur la table pour eviter la missa.
+    let st = makeGameState({
+      currentPlayer: 1,
+      dealer: 0,
+      table: [makeCard(12, 'bastos')],
+      lastPlayed: [null, null],
+      caidaChain: null,
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(5, 'espadas'), makeCard(2, 'oros')] }),
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(5, 'bastos'), makeCard(3, 'copas')] }),
+      ],
+    })
+
+    // 1. P1 pose son 5 (appat) — aucune capture
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+
+    // 2. P0 capture le 5 de P1 -> Ara Wahd
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
+    expect(st.caidaChain).toEqual({ level: 1, value: 5 })
+    expect(st.players[0].score).toBe(1)
+
+    // 3. P1 repose un 5 (appat) — pas de capture : la chaine doit etre PRESERVEE
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'bastos') }, rngZero)
+    expect(st.caidaChain).toEqual({ level: 1, value: 5 })
+
+    // 4. P0 capture le 5 -> Ara Khamssa (+5), niveau 2
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'espadas') }, rngZero)
+    expect(st.caidaChain).toEqual({ level: 2, value: 5 })
+    expect(st.players[0].score).toBe(6) // 1 (Ara Wahd) + 5 (Ara Khamssa)
+    expect(st.lastEvents).toContain('ara_khamssa')
   })
 })

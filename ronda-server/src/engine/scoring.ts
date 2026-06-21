@@ -1,12 +1,19 @@
 import type { Card, GameState, PlayerId } from './types'
 import type { Rng } from './deck'
 
-/** Bonus Mab9ach pour le donneur selon la carte de la dernière prise. */
-export function mabqachBonus(lastCaptureCard: Card | null): number {
-  if (lastCaptureCard === null) return -5      // aucune prise
-  if (lastCaptureCard.value === 12) return 5   // Rey
-  if (lastCaptureCard.value === 1) return -5   // As
-  return 0                                      // autre valeur
+/**
+ * Bonus Mab9ach selon la dernière prise du donneur.
+ * Retourne `[bonusDonneur, bonusAdversaire]` :
+ *  - Rey (12)        → [+5, 0]   (donneur)
+ *  - As (1)          → [-5, 0]   (donneur)
+ *  - aucune prise    → [0, +5]   (adversaire — pas de points négatifs au donneur)
+ *  - autre valeur    → [0, 0]
+ */
+export function mabqachBonus(lastCaptureCard: Card | null): [number, number] {
+  if (lastCaptureCard === null) return [0, 5]   // donneur ne prend rien → +5 adversaire
+  if (lastCaptureCard.value === 12) return [5, 0] // Rey → +5 donneur
+  if (lastCaptureCard.value === 1) return [-5, 0] // As → -5 donneur
+  return [0, 0]                                   // autre valeur
 }
 
 /** Bonus de décompte : +1 par carte au-dessus de 20. Égalité 20-20 → 0 pour les deux. */
@@ -54,14 +61,19 @@ export function applyEndOfDeal(state: GameState, _rng: Rng): GameState {
     }
   }
 
-  // 2. Bonus Mab9ach : s'applique au donneur
+  // 2. Bonus Mab9ach : crédité au donneur et/ou à l'adversaire selon la prise.
   const dealerCapture =
     state.lastCapture?.playerId === state.dealer
       ? state.lastCapture.card
       : null
-  const mab = mabqachBonus(dealerCapture)
-  if (state.dealer === 0) p0.score += mab
-  else p1.score += mab
+  const [mabDealer, mabOpponent] = mabqachBonus(dealerCapture)
+  if (state.dealer === 0) {
+    p0.score += mabDealer
+    p1.score += mabOpponent
+  } else {
+    p1.score += mabDealer
+    p0.score += mabOpponent
+  }
 
   // 3. Bonus de décompte
   const [bA, bB] = cardCountBonus(p0.captured.length, p1.captured.length)

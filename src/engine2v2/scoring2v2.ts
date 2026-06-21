@@ -24,10 +24,14 @@ export function applyEndOfDeal2v2(state: GameState2v2, _rng: Rng): GameState2v2 
     teams[t].captured = [...teams[t].captured, ...state.table]
   }
 
-  // 2. Bonus Mab9ach : sur la dernière prise du donneur, crédité à son équipe
+  // 2. Bonus Mab9ach : bonus donneur → équipe du donneur, bonus adversaire →
+  //    équipe adverse (donneur ne prend rien → +5 à l'équipe adverse).
   const dealerCapture =
     state.lastCapture?.playerId === state.dealer ? state.lastCapture.card : null
-  teams[teamOf(state.dealer)].score += mabqachBonus(dealerCapture)
+  const [mabDealer, mabOpponent] = mabqachBonus(dealerCapture)
+  const dealerTeam = teamOf(state.dealer)
+  teams[dealerTeam].score += mabDealer
+  teams[(1 - dealerTeam) as 0 | 1].score += mabOpponent
 
   // 3. Bonus de décompte (>20 cartes) par équipe
   const [bA, bB] = cardCountBonus(teams[0].captured.length, teams[1].captured.length)

@@ -15,7 +15,7 @@ import {
   resolveContest,
 } from './combinations'
 import { applyEndOfDeal } from './scoring'
-import { dealNextRound } from './deal'
+import { dealNextRound, CARDS_PER_REDEAL } from './deal'
 import type { Rng } from './deck'
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,9 @@ function advanceTurn(state: GameState, rng: Rng): GameState {
     return { ...state, currentPlayer: next }
   }
 
-  if (state.deck.length > 0) {
+  // On ne redistribue que si la pioche permet un tour complet (3 cartes × 2).
+  // Sinon la donne se termine (les ~2 dernières cartes restent non distribuées).
+  if (state.deck.length >= CARDS_PER_REDEAL) {
     return dealNextRound(state, rng)
   }
 
@@ -103,22 +105,27 @@ function applyPlayCard(
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (section 3.2) ──────────────────────────────────────
-  // Une caída (capture de la dernière carte adverse, même value+suit) peut
-  // s'enchaîner jusqu'au niveau 3 tant que c'est la MÊME valeur. Sinon reset.
+  // Une caída (capture de la dernière carte adverse, même value+suit) fait monter
+  // la chaîne tant que c'est la MÊME valeur. ENTRE deux caídas, l'appât — une carte
+  // de MÊME valeur posée SANS capturer — doit PRÉSERVER la chaîne : sinon Ara
+  // Khamssa / Ara 7dach ne se déclencheraient jamais en jeu réel (la pose de
+  // l'appât réinitialisait la chaîne). Tout autre coup brise la chaîne (null).
+  const prevChain = state.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState['caidaChain'] = null
   if (captureResult !== null && captureResult.isCaida) {
-    const prev = state.caidaChain
-    if (prev !== null && prev.value === card.value && prev.level === 1) {
+    if (prevChain !== null && prevChain.value === card.value && prevChain.level === 1) {
       caidaLevel = 2                                  // Ara Khamssa
-    } else if (prev !== null && prev.value === card.value && prev.level === 2) {
+    } else if (prevChain !== null && prevChain.value === card.value && prevChain.level === 2) {
       caidaLevel = 3                                  // Ara 7dach
     } else {
       caidaLevel = 1                                  // Ara Wahd (nouvelle chaîne)
     }
     newCaidaChain = { level: caidaLevel, value: card.value }
+  } else if (captureResult === null && prevChain !== null && prevChain.value === card.value) {
+    // Appât de même valeur posé sans capture → la chaîne se poursuit.
+    newCaidaChain = prevChain
   }
-  // newCaidaChain reste null si ce coup n'est pas une caída → chaîne réinitialisée.
 
   const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
   const caidaEvents: GameEvent[] =
@@ -179,7 +186,8 @@ function applyPlayCard(
         playerId === 1 ? updatedPlayer : state.players[1],
       ],
       lastPlayed: newLastPlayed,
-      caidaChain: null,        // pas de capture → chaîne réinitialisée
+      // newCaidaChain : préservée si appât de même valeur, sinon null.
+      caidaChain: newCaidaChain,
       lastEvents: [],
       eventSeq: state.eventSeq,
     }

@@ -107,14 +107,17 @@ function applyPlayCard2v2(
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (traverse les équipes dans le sens du jeu) ────────────
+  // L'appât de même valeur posé sans capture préserve la chaîne (cf. game.ts).
+  const prevChain = state.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState2v2['caidaChain'] = null
   if (captureResult !== null && captureResult.isCaida) {
-    const prev = state.caidaChain
-    if (prev !== null && prev.value === card.value && prev.level === 1) caidaLevel = 2
-    else if (prev !== null && prev.value === card.value && prev.level === 2) caidaLevel = 3
+    if (prevChain !== null && prevChain.value === card.value && prevChain.level === 1) caidaLevel = 2
+    else if (prevChain !== null && prevChain.value === card.value && prevChain.level === 2) caidaLevel = 3
     else caidaLevel = 1
     newCaidaChain = { level: caidaLevel, value: card.value }
+  } else if (captureResult === null && prevChain !== null && prevChain.value === card.value) {
+    newCaidaChain = prevChain
   }
   const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
   const caidaEvents: GameEvent[] =
@@ -159,7 +162,7 @@ function applyPlayCard2v2(
       table: [...state.table, card],
       players,
       lastPlayed: newLastPlayed,
-      caidaChain: null, // pas de capture → chaîne réinitialisée
+      caidaChain: newCaidaChain, // préservée si appât de même valeur, sinon null
       lastEvents: [],
       eventSeq: state.eventSeq,
     }

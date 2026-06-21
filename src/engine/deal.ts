@@ -4,6 +4,14 @@ import { detectCombination } from './combinations'
 import { ESCALIER_SEQUENCE } from './capture'
 
 /**
+ * Cartes nécessaires pour une redistribution complète (3 par joueur × 2 joueurs).
+ * En dessous de ce seuil, plus de redistribution possible → fin de donne, et la
+ * redistribution courante est la dernière (Mab9ach). Comme la pioche initiale
+ * (32) n'est pas multiple de 6, ~2 cartes restent non distribuées en fin de donne.
+ */
+export const CARDS_PER_REDEAL = 6
+
+/**
  * Valide les 4 cartes posées sur la table au DÉBUT d'une donne.
  * Deux contraintes (uniquement pour la distribution initiale) :
  *   1. Pas de doublon de valeur.
@@ -68,21 +76,15 @@ interface DealContext {
 export function startNewDeal(ctx: DealContext, rng: Rng): GameState {
   const { scores, dealer, dealNumber } = ctx
 
-  // Redistribue jusqu'à obtenir une table initiale valide (pas de doublon,
-  // pas de suite de 3+). Si invalide, on remet les 40 cartes et on remélange
-  // avec le RNG. La boucle termine car chaque shuffle fait avancer le RNG et
-  // les tables invalides sont rares (~quelques % des tirages).
-  let shuffled = shuffle(createDeck(), rng)
-  while (!isTableValid(shuffled.slice(6, 10))) {
-    shuffled = shuffle(createDeck(), rng)
-  }
+  // Distribution initiale : 4 cartes à chaque joueur, AUCUNE sur la table.
+  // Pioche restante = 40 - 8 = 32. (isTableValid ne s'applique pas : table vide.)
+  const shuffled = shuffle(createDeck(), rng)
 
   const nonDealer = (1 - dealer) as PlayerId
 
-  const nonDealerHand = shuffled.slice(0, 3)
-  const dealerHand = shuffled.slice(3, 6)
-  const table = shuffled.slice(6, 10)
-  const deck = shuffled.slice(10)
+  const nonDealerHand = shuffled.slice(0, 4)
+  const dealerHand = shuffled.slice(4, 8)
+  const deck = shuffled.slice(8)
 
   const players: [PlayerState, PlayerState] = [
     emptyPlayer(scores[0]),
@@ -101,14 +103,14 @@ export function startNewDeal(ctx: DealContext, rng: Rng): GameState {
 
   return {
     deck,
-    table,
+    table: [],
     players,
     currentPlayer: nonDealer,
     dealer,
     phase: 'PLAYING',
     roundNumber: 0,
     dealNumber,
-    isMabqach: deck.length === 0,
+    isMabqach: deck.length < CARDS_PER_REDEAL, // jamais vrai au début (32 cartes)
     lastCapture: null,
     caidaChain: null,
     lastPlayed: [null, null],
@@ -156,7 +158,9 @@ export function dealNextRound(state: GameState, rng: Rng): GameState {
     players,
     currentPlayer: (1 - state.dealer) as PlayerId,
     roundNumber: state.roundNumber + 1,
-    isMabqach: deck.length === 0,
+    // Dernière redistribution (Mab9ach) : la pioche restante ne permet plus
+    // un tour complet (3 cartes × 2 joueurs).
+    isMabqach: deck.length < CARDS_PER_REDEAL,
     lastPlayed: [null, null],
     caidaChain: null,   // la redistribution coupe toute chaîne de caída
   }
