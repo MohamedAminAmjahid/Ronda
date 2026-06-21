@@ -107,7 +107,8 @@ function applyPlayCard2v2(
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (traverse les équipes dans le sens du jeu) ────────────
-  // L'appât de même valeur posé sans capture préserve la chaîne (cf. game.ts).
+  // Règle « la carte joueuse reste sur la table » : les caídas s'enchaînent
+  // directement (cf. game.ts). Tout coup non-caída brise la chaîne.
   const prevChain = state.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState2v2['caidaChain'] = null
@@ -116,8 +117,6 @@ function applyPlayCard2v2(
     else if (prevChain !== null && prevChain.value === card.value && prevChain.level === 2) caidaLevel = 3
     else caidaLevel = 1
     newCaidaChain = { level: caidaLevel, value: card.value }
-  } else if (captureResult === null && prevChain !== null && prevChain.value === card.value) {
-    newCaidaChain = prevChain
   }
   const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
   const caidaEvents: GameEvent[] =
@@ -136,21 +135,28 @@ function applyPlayCard2v2(
   let newState: GameState2v2
 
   if (captureResult !== null) {
-    const { captured, tableAfter, isMissa } = captureResult
+    const { captured, tableAfter, isMissa, remainsOnTable } = captureResult
     const bonus = caidaPoints + (isMissa ? 1 : 0)
     const events: GameEvent[] = [...caidaEvents, ...(isMissa ? (['missa'] as const) : [])]
 
+    // Caída : la carte joueuse reste sur la table → pile d'équipe = cartes adverses
+    // seulement, table = tableAfter + carte joueuse. Sinon, carte joueuse dans la pile.
+    const newPile = remainsOnTable !== null
+      ? [...state.teams[team].captured, ...captured]
+      : [...state.teams[team].captured, card, ...captured]
+    const finalTable = remainsOnTable !== null ? [...tableAfter, remainsOnTable] : tableAfter
+
     const teams = withTeam(state.teams, team, {
-      captured: [...state.teams[team].captured, card, ...captured],
+      captured: newPile,
       score: state.teams[team].score + bonus,
     })
 
     newState = {
       ...state,
-      table: tableAfter,
+      table: finalTable,
       players,
       teams,
-      lastCapture: { playerId, card },
+      lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
       lastEvents: events,
@@ -162,7 +168,7 @@ function applyPlayCard2v2(
       table: [...state.table, card],
       players,
       lastPlayed: newLastPlayed,
-      caidaChain: newCaidaChain, // préservée si appât de même valeur, sinon null
+      caidaChain: newCaidaChain, // null (coup sans capture → chaîne brisée)
       lastEvents: [],
       eventSeq: state.eventSeq,
     }

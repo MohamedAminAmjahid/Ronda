@@ -176,11 +176,17 @@ describe('4. Missa (balayage)', () => {
     expect(result!.tableAfter).toHaveLength(1)
   })
 
-  it('caida + missa cumules sur le meme coup', () => {
+  it('caida : la carte joueuse reste sur la table -> pas de missa', () => {
+    // Nouvelle regle : sur une caida, la carte joueuse reste sur la table, donc
+    // la table n'est jamais videe -> isMissa = false. Seule la carte adverse est
+    // capturee ; la carte joueuse est renvoyee dans remainsOnTable.
     const opponentCard = makeCard(5, 'oros')
-    const result = resolveCapture(makeCard(5), [opponentCard], opponentCard)
+    const result = resolveCapture(makeCard(5, 'copas'), [opponentCard], opponentCard)
     expect(result!.isCaida).toBe(true)
-    expect(result!.isMissa).toBe(true)
+    expect(result!.isMissa).toBe(false)
+    expect(result!.captured).toEqual([opponentCard])
+    expect(result!.remainsOnTable).toEqual(makeCard(5, 'copas'))
+    expect(result!.tableAfter).toEqual([]) // la carte joueuse est ajoutee par applyPlayCard
   })
 })
 
@@ -305,6 +311,51 @@ describe('7. Conflit de combinaisons', () => {
     const after = applyAction(state, { type: 'DECLARE', playerId: 0, combination: rondaA }, rngZero)
     expect(after.players[0].score).toBe(2)
     expect(after.players[1].score).toBe(0)
+  })
+
+  it('Tringa(10) bat Ronda(12) — la tringa gagne quelle que soit la valeur', () => {
+    const tringa10: Combination = {
+      type: 'tringa', value: 10,
+      cards: [makeCard(10), makeCard(10, 'copas'), makeCard(10, 'espadas')],
+    }
+    const ronda12: Combination = {
+      type: 'ronda', value: 12, cards: [makeCard(12), makeCard(12, 'copas')],
+    }
+    const { winner, pointsA, pointsB } = resolveConflict(tringa10, ronda12)
+    expect(winner).toBe(0)   // la tringa (comboA) gagne
+    expect(pointsA).toBe(6)
+    expect(pointsB).toBe(0)
+  })
+
+  it('via DECLARE : le bot (player 1) declare Ronda(12) en 2e, le joueur garde sa Tringa(10)', () => {
+    // Scenario exact du bug : joueur 0 a deja declare une Tringa(10) (+5).
+    // Le bot (player 1) declare ensuite une Ronda(12) -> la Tringa doit gagner.
+    const tringa10: Combination = {
+      type: 'tringa', value: 10,
+      cards: [makeCard(10), makeCard(10, 'copas'), makeCard(10, 'espadas')],
+    }
+    const ronda12: Combination = {
+      type: 'ronda', value: 12, cards: [makeCard(12), makeCard(12, 'copas')],
+    }
+    const state = makeGameState({
+      players: [
+        makePlayerState({
+          hand: [makeCard(10), makeCard(10, 'copas'), makeCard(10, 'espadas')],
+          pendingCombo: tringa10,
+          declaredCombo: tringa10,
+          score: 5,
+        }),
+        makePlayerState({
+          hand: [makeCard(12), makeCard(12, 'copas'), makeCard(7)],
+          pendingCombo: ronda12,
+          score: 0,
+        }),
+      ],
+    })
+
+    const after = applyAction(state, { type: 'DECLARE', playerId: 1, combination: ronda12 }, rngZero)
+    expect(after.players[0].score).toBe(6) // Tringa du joueur : 5 + 1 = 6
+    expect(after.players[1].score).toBe(0) // bot : 0 (sa Ronda perd)
   })
 })
 
@@ -686,17 +737,17 @@ describe('15. Chaine de caidas', () => {
     expect(next.lastEvents).not.toContain('caida')
   })
 
-  it('enchainement reel (sequentiel) : Ara Wahd puis Ara Khamssa via applyAction', () => {
-    // Reproduit le scenario complet, coup par coup, comme en partie :
-    //   1. P1 pose un 5 (appat)
-    //   2. P0 capture ce 5 -> Ara Wahd (+1), chaine {1,5}
-    //   3. P1 repose un 5 (appat, sans capture) -> la chaine doit SURVIVRE
-    //   4. P0 capture ce 5 -> Ara Khamssa (+5), chaine {2,5}
-    // Un 12 reste sur la table pour eviter la missa.
+  it('scenario complet 4 tours : Ara Wahd -> Ara Khamssa -> Ara 7dach (la carte joueuse reste)', () => {
+    // Regle "la carte joueuse reste sur la table" : chaque caida laisse la carte
+    // qui capture sur la table, elle devient l'appat du tour suivant.
+    //   T1 : P0 pose 5o            -> table [5o]
+    //   T2 : P1 capture (5c)       -> Ara Wahd  (+1 P1) ; table [5c] ; pile P1 [5o]
+    //   T3 : P0 capture (5e)       -> Ara Khamssa (+5 P0); table [5e]; pile P0 [5c]
+    //   T4 : P1 capture (5b)       -> Ara 7dach  (+11 P1); table [5b]
     let st = makeGameState({
-      currentPlayer: 1,
-      dealer: 0,
-      table: [makeCard(12, 'bastos')],
+      currentPlayer: 0,
+      dealer: 1,
+      table: [],
       lastPlayed: [null, null],
       caidaChain: null,
       players: [
@@ -705,22 +756,32 @@ describe('15. Chaine de caidas', () => {
       ],
     })
 
-    // 1. P1 pose son 5 (appat) — aucune capture
-    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
-
-    // 2. P0 capture le 5 de P1 -> Ara Wahd
+    // T1 : P0 pose son 5 — aucune capture
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
-    expect(st.caidaChain).toEqual({ level: 1, value: 5 })
-    expect(st.players[0].score).toBe(1)
+    expect(st.table).toEqual([makeCard(5, 'oros')])
+    expect(st.caidaChain).toBeNull()
 
-    // 3. P1 repose un 5 (appat) — pas de capture : la chaine doit etre PRESERVEE
-    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'bastos') }, rngZero)
+    // T2 : P1 capture -> Ara Wahd. Son 5 reste sur la table, le 5 adverse part dans sa pile.
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 1, value: 5 })
+    expect(st.players[1].score).toBe(1)
+    expect(st.lastEvents).toContain('caida')
+    expect(st.table).toEqual([makeCard(5, 'copas')])
+    expect(st.players[1].captured).toEqual([makeCard(5, 'oros')])
 
-    // 4. P0 capture le 5 -> Ara Khamssa (+5), niveau 2
+    // T3 : P0 capture le 5 du bot -> Ara Khamssa (+5).
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'espadas') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 2, value: 5 })
-    expect(st.players[0].score).toBe(6) // 1 (Ara Wahd) + 5 (Ara Khamssa)
+    expect(st.players[0].score).toBe(5)
     expect(st.lastEvents).toContain('ara_khamssa')
+    expect(st.table).toEqual([makeCard(5, 'espadas')])
+    expect(st.players[0].captured).toEqual([makeCard(5, 'copas')])
+
+    // T4 : P1 capture -> Ara 7dach (+11). Total bot = 1 + 11 = 12.
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'bastos') }, rngZero)
+    expect(st.caidaChain).toEqual({ level: 3, value: 5 })
+    expect(st.players[1].score).toBe(12)
+    expect(st.lastEvents).toContain('ara_7dach')
+    expect(st.table).toEqual([makeCard(5, 'bastos')])
   })
 })

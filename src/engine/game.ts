@@ -105,11 +105,10 @@ function applyPlayCard(
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (section 3.2) ──────────────────────────────────────
-  // Une caída (capture de la dernière carte adverse, même value+suit) fait monter
-  // la chaîne tant que c'est la MÊME valeur. ENTRE deux caídas, l'appât — une carte
-  // de MÊME valeur posée SANS capturer — doit PRÉSERVER la chaîne : sinon Ara
-  // Khamssa / Ara 7dach ne se déclencheraient jamais en jeu réel (la pose de
-  // l'appât réinitialisait la chaîne). Tout autre coup brise la chaîne (null).
+  // Une caída fait monter la chaîne tant que c'est la MÊME valeur. Avec la règle
+  // « la carte joueuse reste sur la table », les caídas s'enchaînent directement
+  // (la carte restée devient l'appât du tour suivant) : aucun appât intermédiaire
+  // sans capture. Tout coup non-caída brise donc la chaîne (null).
   const prevChain = state.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState['caidaChain'] = null
@@ -122,9 +121,6 @@ function applyPlayCard(
       caidaLevel = 1                                  // Ara Wahd (nouvelle chaîne)
     }
     newCaidaChain = { level: caidaLevel, value: card.value }
-  } else if (captureResult === null && prevChain !== null && prevChain.value === card.value) {
-    // Appât de même valeur posé sans capture → la chaîne se poursuit.
-    newCaidaChain = prevChain
   }
 
   const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
@@ -136,7 +132,7 @@ function applyPlayCard(
   let newState: GameState
 
   if (captureResult !== null) {
-    const { captured, tableAfter, isMissa } = captureResult
+    const { captured, tableAfter, isMissa, remainsOnTable } = captureResult
 
     let scoreBonus = caidaPoints
     if (isMissa) scoreBonus += 1
@@ -146,10 +142,17 @@ function applyPlayCard(
       ...(isMissa ? (['missa'] as const) : []),
     ]
 
+    // Caída : la carte joueuse RESTE sur la table → pile = cartes adverses seulement,
+    // table = tableAfter + la carte joueuse. Sinon, la carte joueuse va dans la pile.
+    const newPile = remainsOnTable !== null
+      ? [...player.captured, ...captured]
+      : [...player.captured, card, ...captured]
+    const finalTable = remainsOnTable !== null ? [...tableAfter, remainsOnTable] : tableAfter
+
     const updatedPlayer: PlayerState = {
       ...player,
       hand: newHand,
-      captured: [...player.captured, card, ...captured],
+      captured: newPile,
       score: player.score + scoreBonus,
       lostComboRight: player.lostComboRight || lostRight,
       playedThisRound: newPlayedThisRound,
@@ -158,12 +161,13 @@ function applyPlayCard(
 
     newState = {
       ...state,
-      table: tableAfter,
+      table: finalTable,
       players: [
         playerId === 0 ? updatedPlayer : state.players[0],
         playerId === 1 ? updatedPlayer : state.players[1],
       ],
-      lastCapture: { playerId, card },
+      // Caída : la « prise » est la carte adverse capturée ; sinon la carte joueuse.
+      lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
       lastEvents: events,
@@ -186,8 +190,7 @@ function applyPlayCard(
         playerId === 1 ? updatedPlayer : state.players[1],
       ],
       lastPlayed: newLastPlayed,
-      // newCaidaChain : préservée si appât de même valeur, sinon null.
-      caidaChain: newCaidaChain,
+      caidaChain: newCaidaChain, // null (coup sans capture → chaîne brisée)
       lastEvents: [],
       eventSeq: state.eventSeq,
     }
@@ -223,9 +226,13 @@ function applyDeclare(
   const declareEvent: GameEvent = combination.type  // 'ronda' | 'tringa'
 
   if (opponentPlayer.declaredCombo !== null) {
+    // resolveConflict(comboA, comboB) : comboA = la combo du déclarant courant.
+    // Donc pointsA va TOUJOURS au déclarant et pointsB à l'adversaire, quel que
+    // soit playerId. (Bug corrigé : avant, un déclarant = joueur 1 récupérait à
+    // tort pointsB → une Ronda 12 du bot battait une Tringa 10 du joueur.)
     const { pointsA, pointsB } = resolveConflict(combination, opponentPlayer.declaredCombo)
-    const myPoints = playerId === 0 ? pointsA : pointsB
-    const opPoints = playerId === 0 ? pointsB : pointsA
+    const myPoints = pointsA
+    const opPoints = pointsB
     const opAlreadyMarked = basePoints(opponentPlayer.declaredCombo)
 
     let s = updatePlayer(state, playerId, {
