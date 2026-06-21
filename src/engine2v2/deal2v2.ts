@@ -68,6 +68,7 @@ export function startNewDeal2v2(ctx: DealContext2v2, rng: Rng): GameState2v2 {
     lastCapture: null,
     lastPlayed: [null, null, null, null],
     caidaChain: null,
+    pendingCaidaCard: null,
     lastEvents: [],
     eventSeq: 0,
   }
@@ -106,5 +107,6 @@ export function dealNextRound2v2(state: GameState2v2, rng: Rng): GameState2v2 {
     isMabqach: deck.length === 0,
     lastPlayed: [null, null, null, null],
     caidaChain: null, // la redistribution coupe toute chaîne de caída
+    pendingCaidaCard: null,
   }
 }

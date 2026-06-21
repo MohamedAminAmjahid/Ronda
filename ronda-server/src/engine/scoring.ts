@@ -88,6 +88,7 @@ export function applyEndOfDeal(state: GameState, _rng: Rng): GameState {
       table: [],
       players: [p0, p1],
       phase: 'GAME_OVER',
+      pendingCaidaCard: null,
       lastEvents: [],
     }
   }
@@ -99,6 +100,7 @@ export function applyEndOfDeal(state: GameState, _rng: Rng): GameState {
     table: [],
     players: [p0, p1],
     phase: 'DEAL_END',
+    pendingCaidaCard: null,
     lastEvents: [],
   }
 }

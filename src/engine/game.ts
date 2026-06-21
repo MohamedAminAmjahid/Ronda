@@ -86,8 +86,33 @@ function applyPlayCard(
   if (!cardInHand(state.players[playerId].hand, card)) throw new Error('Card not in hand')
 
   const opponent = (1 - playerId) as PlayerId
-  const lastPlayedByOpponent = state.lastPlayed[opponent]
-  const player = state.players[playerId]
+
+  // ── Étape 0 : carte laissée sur la table par une caída précédente ──────────
+  // La carte d'une caída n'y reste qu'UN tour. Si le coup courant n'est PAS une
+  // caída de même valeur, cette carte repart dans la pile de celui qui l'avait
+  // posée AVANT de traiter le nouveau coup.
+  const pending = state.pendingCaidaCard
+  const continuesChain = pending !== null && card.value === pending.card.value
+  let base = state
+  if (pending !== null && !continuesChain) {
+    const players: [PlayerState, PlayerState] = [
+      { ...state.players[0] },
+      { ...state.players[1] },
+    ]
+    players[pending.playerId] = {
+      ...players[pending.playerId],
+      captured: [...players[pending.playerId].captured, pending.card],
+    }
+    base = {
+      ...state,
+      table: state.table.filter(c => !sameCard(c, pending.card)),
+      players,
+      pendingCaidaCard: null,
+    }
+  }
+
+  const lastPlayedByOpponent = base.lastPlayed[opponent]
+  const player = base.players[playerId]
 
   const newHand = removeFromHand(player.hand, card)
 
@@ -100,16 +125,14 @@ function applyPlayCard(
   // Toutes les cartes jouées dans cette redistribution (pour la validation du contre)
   const newPlayedThisRound = [...player.playedThisRound, card]
 
-  const captureResult = resolveCapture(card, state.table, lastPlayedByOpponent)
-  const newLastPlayed: [Card | null, Card | null] = [state.lastPlayed[0], state.lastPlayed[1]]
+  const captureResult = resolveCapture(card, base.table, lastPlayedByOpponent)
+  const newLastPlayed: [Card | null, Card | null] = [base.lastPlayed[0], base.lastPlayed[1]]
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (section 3.2) ──────────────────────────────────────
-  // Une caída fait monter la chaîne tant que c'est la MÊME valeur. Avec la règle
-  // « la carte joueuse reste sur la table », les caídas s'enchaînent directement
-  // (la carte restée devient l'appât du tour suivant) : aucun appât intermédiaire
-  // sans capture. Tout coup non-caída brise donc la chaîne (null).
-  const prevChain = state.caidaChain
+  // Une caída fait monter la chaîne tant que c'est la MÊME valeur ; la carte
+  // joueuse reste 1 tour (pendingCaidaCard) et devient l'appât du tour suivant.
+  const prevChain = base.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState['caidaChain'] = null
   if (captureResult !== null && captureResult.isCaida) {
@@ -128,6 +151,10 @@ function applyPlayCard(
     caidaLevel === 3 ? ['ara_7dach'] :
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
+
+  // Carte laissée 1 tour si caída (sinon aucune).
+  const newPending: GameState['pendingCaidaCard'] =
+    captureResult !== null && captureResult.isCaida ? { card, playerId } : null
 
   let newState: GameState
 
@@ -160,18 +187,19 @@ function applyPlayCard(
     }
 
     newState = {
-      ...state,
+      ...base,
       table: finalTable,
       players: [
-        playerId === 0 ? updatedPlayer : state.players[0],
-        playerId === 1 ? updatedPlayer : state.players[1],
+        playerId === 0 ? updatedPlayer : base.players[0],
+        playerId === 1 ? updatedPlayer : base.players[1],
       ],
       // Caída : la « prise » est la carte adverse capturée ; sinon la carte joueuse.
       lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
+      pendingCaidaCard: newPending,
       lastEvents: events,
-      eventSeq: events.length > 0 ? state.eventSeq + 1 : state.eventSeq,
+      eventSeq: events.length > 0 ? base.eventSeq + 1 : base.eventSeq,
     }
   } else {
     const updatedPlayer: PlayerState = {
@@ -183,16 +211,17 @@ function applyPlayCard(
     }
 
     newState = {
-      ...state,
-      table: [...state.table, card],
+      ...base,
+      table: [...base.table, card],
       players: [
-        playerId === 0 ? updatedPlayer : state.players[0],
-        playerId === 1 ? updatedPlayer : state.players[1],
+        playerId === 0 ? updatedPlayer : base.players[0],
+        playerId === 1 ? updatedPlayer : base.players[1],
       ],
       lastPlayed: newLastPlayed,
-      caidaChain: newCaidaChain, // null (coup sans capture → chaîne brisée)
+      caidaChain: newCaidaChain,       // null (coup sans capture → chaîne brisée)
+      pendingCaidaCard: null,
       lastEvents: [],
-      eventSeq: state.eventSeq,
+      eventSeq: base.eventSeq,
     }
   }
 

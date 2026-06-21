@@ -1,6 +1,12 @@
-import { router } from 'expo-router'
+import { router, useLocalSearchParams } from 'expo-router'
 import { OnlineScreen } from '../ui/OnlineScreen'
 
 export default function OnlineRoute() {
-  return <OnlineScreen onBack={() => router.back()} />
+  const { mode } = useLocalSearchParams<{ mode?: string }>()
+  return (
+    <OnlineScreen
+      onBack={() => router.back()}
+      mode={mode === 'friend' ? 'friend' : 'quick'}
+    />
+  )
 }

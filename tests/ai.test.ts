@@ -50,6 +50,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     isMabqach: false,
     lastCapture: null,
     caidaChain: null,
+    pendingCaidaCard: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,

@@ -52,6 +52,7 @@ function makeGameState(overrides: Partial<GameState> = {}): GameState {
     isMabqach: false,
     lastCapture: null,
     caidaChain: null,
+    pendingCaidaCard: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -783,5 +784,35 @@ describe('15. Chaine de caidas', () => {
     expect(st.players[1].score).toBe(12)
     expect(st.lastEvents).toContain('ara_7dach')
     expect(st.table).toEqual([makeCard(5, 'bastos')])
+  })
+
+  it('caida non poursuivie : la carte restee repart dans la pile de son joueur', () => {
+    // T1 P0 pose 5o ; T2 P1 caida (Ara Wahd) -> 5c reste sur la table ;
+    // T3 P0 joue un 7 (pas une caida de meme valeur) -> le 5c repart dans la pile de P1.
+    let st = makeGameState({
+      currentPlayer: 0,
+      dealer: 1,
+      table: [],
+      lastPlayed: [null, null],
+      caidaChain: null,
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(7, 'espadas'), makeCard(2, 'oros')] }),
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(5, 'bastos'), makeCard(3, 'copas')] }),
+      ],
+    })
+
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+    expect(st.pendingCaidaCard).toEqual({ card: makeCard(5, 'copas'), playerId: 1 })
+    expect(st.players[1].score).toBe(1)
+    expect(st.table).toEqual([makeCard(5, 'copas')])
+
+    // T3 : P0 joue un 7 — pas de caida de meme valeur.
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(7, 'espadas') }, rngZero)
+    expect(st.pendingCaidaCard).toBeNull()
+    expect(st.caidaChain).toBeNull()
+    expect(st.table).toEqual([makeCard(7, 'espadas')])                    // le 5c a quitte la table
+    expect(st.players[1].captured).toEqual([makeCard(5, 'oros'), makeCard(5, 'copas')]) // 5c rendu a P1
+    expect(st.players[1].score).toBe(1)                                   // score inchange
   })
 })

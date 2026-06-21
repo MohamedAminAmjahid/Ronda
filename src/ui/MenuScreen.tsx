@@ -42,13 +42,14 @@ interface Props {
   onPlayVsAi:   () => void
   onPlay2v2:    () => void
   onPlayOnline: () => void
+  onPlayFriend: () => void
   onRules:      () => void
   onCredits:    () => void
 }
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onRules, onCredits }: Props) {
+export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, onRules, onCredits }: Props) {
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -77,9 +78,14 @@ export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onRules, onCre
             <Text style={s.btnSecondaryTxt}>2 contre 2</Text>
           </TouchableOpacity>
 
-          {/* Jouer en ligne (multijoueur Colyseus) */}
+          {/* Jouer en ligne — partie rapide (matchmaking) */}
           <TouchableOpacity style={s.btnSecondary} onPress={onPlayOnline}>
             <Text style={s.btnSecondaryTxt}>Jouer en ligne</Text>
+          </TouchableOpacity>
+
+          {/* Jouer avec un ami — créer / rejoindre par code */}
+          <TouchableOpacity style={s.btnSecondary} onPress={onPlayFriend}>
+            <Text style={s.btnSecondaryTxt}>Jouer avec un ami</Text>
           </TouchableOpacity>
 
           {/* Règles + Crédits — liens discrets */}

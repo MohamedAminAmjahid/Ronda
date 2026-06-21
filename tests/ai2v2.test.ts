@@ -59,6 +59,7 @@ function makeState(overrides: Partial<GameState2v2> = {}): GameState2v2 {
     lastCapture: null,
     lastPlayed: [null, null, null, null],
     caidaChain: null,
+    pendingCaidaCard: null,
     lastEvents: [],
     eventSeq: 0,
     ...overrides,

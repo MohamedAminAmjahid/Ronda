@@ -113,6 +113,7 @@ export function startNewDeal(ctx: DealContext, rng: Rng): GameState {
     isMabqach: deck.length < CARDS_PER_REDEAL, // jamais vrai au début (32 cartes)
     lastCapture: null,
     caidaChain: null,
+    pendingCaidaCard: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -162,6 +163,7 @@ export function dealNextRound(state: GameState, rng: Rng): GameState {
     // un tour complet (3 cartes × 2 joueurs).
     isMabqach: deck.length < CARDS_PER_REDEAL,
     lastPlayed: [null, null],
-    caidaChain: null,   // la redistribution coupe toute chaîne de caída
+    caidaChain: null,        // la redistribution coupe toute chaîne de caída
+    pendingCaidaCard: null,  // ... et toute carte de caída en attente
   }
 }

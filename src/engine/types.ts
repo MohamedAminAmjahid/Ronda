@@ -96,6 +96,13 @@ export interface GameState {
    * carte adverse, ou capture une valeur différente).
    */
   caidaChain: { level: 1 | 2 | 3; value: Value } | null
+  /**
+   * Carte laissée sur la table par une caída — elle n'y reste qu'UN tour.
+   * Au coup suivant : si c'est une caída de même valeur → Ara Khamssa (la nouvelle
+   * carte devient la pendingCaidaCard) ; sinon la carte repart dans la pile de
+   * `playerId` avant de traiter le coup. null si aucune caída en attente.
+   */
+  pendingCaidaCard: { card: Card; playerId: PlayerId } | null
   /** Dernière carte posée par chaque joueur (pour caída) */
   lastPlayed: readonly [Card | null, Card | null]
   /** Événements de la dernière action (vide si coup ordinaire). */

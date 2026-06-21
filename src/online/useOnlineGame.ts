@@ -41,6 +41,7 @@ function emptyState(): GameState {
     isMabqach: false,
     lastCapture: null,
     caidaChain: null,
+    pendingCaidaCard: null,
     lastPlayed: [null, null],
     lastEvents: [],
     eventSeq: 0,
@@ -92,6 +93,7 @@ function buildGameState(s: ServerGameState): GameState {
       ? { playerId: (s.lastCapture.playerId === mine ? 0 : 1) as PlayerId, card: s.lastCapture.card }
       : null,
     caidaChain: null,
+    pendingCaidaCard: null,
     lastPlayed: [s.lastPlayed[mine], s.lastPlayed[opp]],
     lastEvents: s.lastEvents ?? [],
     eventSeq: s.eventSeq ?? 0,

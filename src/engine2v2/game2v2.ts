@@ -86,7 +86,26 @@ function applyPlayCard2v2(
   if (state.currentPlayer !== playerId) throw new Error('Not your turn')
   if (!cardInHand(state.players[playerId].hand, card)) throw new Error('Card not in hand')
 
-  const player = state.players[playerId]
+  // ── Étape 0 : carte laissée sur la table par une caída précédente ──────────
+  // La carte d'une caída n'y reste qu'UN tour. Si le coup courant n'est PAS une
+  // caída de même valeur, elle repart dans la pile de l'ÉQUIPE de celui qui
+  // l'avait posée AVANT de traiter le nouveau coup.
+  const pending = state.pendingCaidaCard
+  const continuesChain = pending !== null && card.value === pending.card.value
+  let base = state
+  if (pending !== null && !continuesChain) {
+    const pTeam = teamOf(pending.playerId)
+    base = {
+      ...state,
+      table: state.table.filter((c) => !sameCard(c, pending.card)),
+      teams: withTeam(state.teams, pTeam, {
+        captured: [...state.teams[pTeam].captured, pending.card],
+      }),
+      pendingCaidaCard: null,
+    }
+  }
+
+  const player = base.players[playerId]
   const newHand = removeFromHand(player.hand, card)
 
   const wasPartOfCombo =
@@ -95,21 +114,21 @@ function applyPlayCard2v2(
   const newPlayedThisRound = [...player.playedThisRound, card]
 
   // Caída : on compare à la dernière carte posée par le joueur PRÉCÉDENT (sens du jeu).
-  const lastPlayedByPrev = state.lastPlayed[prevPlayer(playerId)]
-  const captureResult = resolveCapture(card, state.table, lastPlayedByPrev)
+  const lastPlayedByPrev = base.lastPlayed[prevPlayer(playerId)]
+  const captureResult = resolveCapture(card, base.table, lastPlayedByPrev)
 
   const newLastPlayed: [Card | null, Card | null, Card | null, Card | null] = [
-    state.lastPlayed[0],
-    state.lastPlayed[1],
-    state.lastPlayed[2],
-    state.lastPlayed[3],
+    base.lastPlayed[0],
+    base.lastPlayed[1],
+    base.lastPlayed[2],
+    base.lastPlayed[3],
   ]
   newLastPlayed[playerId] = card
 
   // ── Chaîne de caídas (traverse les équipes dans le sens du jeu) ────────────
-  // Règle « la carte joueuse reste sur la table » : les caídas s'enchaînent
-  // directement (cf. game.ts). Tout coup non-caída brise la chaîne.
-  const prevChain = state.caidaChain
+  // Règle « la carte joueuse reste 1 tour » : les caídas s'enchaînent directement
+  // (cf. game.ts). Tout coup non-caída brise la chaîne.
+  const prevChain = base.caidaChain
   let caidaLevel: 0 | 1 | 2 | 3 = 0
   let newCaidaChain: GameState2v2['caidaChain'] = null
   if (captureResult !== null && captureResult.isCaida) {
@@ -124,8 +143,12 @@ function applyPlayCard2v2(
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
 
+  // Carte laissée 1 tour si caída (sinon aucune).
+  const newPending: GameState2v2['pendingCaidaCard'] =
+    captureResult !== null && captureResult.isCaida ? { card, playerId } : null
+
   const team = teamOf(playerId)
-  const players = withPlayer(state.players, playerId, {
+  const players = withPlayer(base.players, playerId, {
     hand: newHand,
     lostComboRight: player.lostComboRight || lostRight,
     playedThisRound: newPlayedThisRound,
@@ -142,35 +165,37 @@ function applyPlayCard2v2(
     // Caída : la carte joueuse reste sur la table → pile d'équipe = cartes adverses
     // seulement, table = tableAfter + carte joueuse. Sinon, carte joueuse dans la pile.
     const newPile = remainsOnTable !== null
-      ? [...state.teams[team].captured, ...captured]
-      : [...state.teams[team].captured, card, ...captured]
+      ? [...base.teams[team].captured, ...captured]
+      : [...base.teams[team].captured, card, ...captured]
     const finalTable = remainsOnTable !== null ? [...tableAfter, remainsOnTable] : tableAfter
 
-    const teams = withTeam(state.teams, team, {
+    const teams = withTeam(base.teams, team, {
       captured: newPile,
-      score: state.teams[team].score + bonus,
+      score: base.teams[team].score + bonus,
     })
 
     newState = {
-      ...state,
+      ...base,
       table: finalTable,
       players,
       teams,
       lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
+      pendingCaidaCard: newPending,
       lastEvents: events,
-      eventSeq: events.length > 0 ? state.eventSeq + 1 : state.eventSeq,
+      eventSeq: events.length > 0 ? base.eventSeq + 1 : base.eventSeq,
     }
   } else {
     newState = {
-      ...state,
-      table: [...state.table, card],
+      ...base,
+      table: [...base.table, card],
       players,
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain, // null (coup sans capture → chaîne brisée)
+      pendingCaidaCard: null,
       lastEvents: [],
-      eventSeq: state.eventSeq,
+      eventSeq: base.eventSeq,
     }
   }
 

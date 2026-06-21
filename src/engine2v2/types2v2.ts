@@ -48,6 +48,8 @@ export interface GameState2v2 {
   lastCapture: { playerId: PlayerId2v2; card: Card } | null
   lastPlayed: readonly [Card | null, Card | null, Card | null, Card | null]
   caidaChain: CaidaChain | null
+  /** Carte laissée par une caída (reste 1 tour) — cf. GameState 1v1. */
+  pendingCaidaCard: { card: Card; playerId: PlayerId2v2 } | null
   lastEvents: readonly GameEvent[]
   eventSeq: number
 }

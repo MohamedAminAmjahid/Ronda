@@ -45,6 +45,7 @@ export function applyEndOfDeal2v2(state: GameState2v2, _rng: Rng): GameState2v2 
     table: [],
     teams,
     phase: isGameOver(newScores) ? 'GAME_OVER' : 'DEAL_END',
+    pendingCaidaCard: null,
     lastEvents: [],
   }
 }

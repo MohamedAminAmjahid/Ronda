@@ -23,9 +23,11 @@ const sanitize = (s: string) => s.replace(/\s/g, '').slice(0, 16)
 
 interface Props {
   onBack: () => void
+  /** 'friend' : n'affiche que « Créer une partie » + « Rejoindre avec un code ». */
+  mode?: 'quick' | 'friend'
 }
 
-export function OnlineScreen({ onBack }: Props) {
+export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
 
@@ -82,7 +84,7 @@ export function OnlineScreen({ onBack }: Props) {
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
             <Text style={s.backTxt}>← Menu</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Jouer en ligne</Text>
+          <Text style={s.title}>{mode === 'friend' ? 'Jouer avec un ami' : 'Jouer en ligne'}</Text>
         </View>
 
         {error && (
@@ -117,12 +119,15 @@ export function OnlineScreen({ onBack }: Props) {
           <View style={s.body}>
             <Text style={s.helloTxt}>Salut {pseudo} 👋</Text>
 
-            <Text style={s.label}>Adversaire aléatoire</Text>
-            <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(pseudo)}>
-              <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
-            </TouchableOpacity>
-
-            <View style={s.divider} />
+            {mode !== 'friend' && (
+              <>
+                <Text style={s.label}>Adversaire aléatoire</Text>
+                <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(pseudo)}>
+                  <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
+                </TouchableOpacity>
+                <View style={s.divider} />
+              </>
+            )}
 
             <Text style={s.label}>Avec un ami</Text>
             <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(pseudo)}>
