@@ -142,11 +142,13 @@ function BotHand({
 
 interface Props {
   onBack: () => void
+  /** Source de l'état. Par défaut le hook solo ; l'online injecte useOnlineGame2v2. */
+  useGame2v2?: typeof useRonda2v2Game
 }
 
-export function GameScreen2v2({ onBack }: Props) {
+export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } =
-    useRonda2v2Game()
+    useGame2v2()
 
   const [showContest, setShowContest] = useState(false)
 

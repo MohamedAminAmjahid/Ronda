@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { router, type Href } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { useOnlineGame } from '../online/useOnlineGame'
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
+
+/** Navigue vers le lobby 2v2 (création si pas de code, sinon jonction par code). */
+function goLobby2v2(pseudo: string, code?: string): void {
+  const q = code
+    ? `?pseudo=${encodeURIComponent(pseudo)}&code=${encodeURIComponent(code)}`
+    : `?pseudo=${encodeURIComponent(pseudo)}`
+  router.push(`/lobby2v2${q}` as Href)
+}
 
 const C = {
   table:   '#0E5C4A',
@@ -131,26 +140,36 @@ export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
 
             <Text style={s.label}>Avec un ami</Text>
             <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(pseudo)}>
-              <Text style={s.btnSecondaryTxt}>Créer une partie (recevoir un code)</Text>
+              <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(pseudo)}>
+              <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
             </TouchableOpacity>
 
             <Text style={s.label}>Rejoindre avec un code</Text>
+            <TextInput
+              style={s.input}
+              value={codeInput}
+              onChangeText={(t) => setCodeInput(t.toUpperCase().replace(/\s/g, ''))}
+              placeholder="RONDA-XXXX"
+              placeholderTextColor={C.boneOff}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
             <View style={s.joinRow}>
-              <TextInput
-                style={[s.input, s.codeInput]}
-                value={codeInput}
-                onChangeText={(t) => setCodeInput(t.toUpperCase().replace(/\s/g, ''))}
-                placeholder="RONDA-XXXX"
-                placeholderTextColor={C.boneOff}
-                autoCapitalize="characters"
-                autoCorrect={false}
-              />
               <TouchableOpacity
-                style={[s.btnJoin, codeInput.length < 6 && s.btnDisabled]}
+                style={[s.btnJoin, s.joinFlex, codeInput.length < 6 && s.btnDisabled]}
                 disabled={codeInput.length < 6}
                 onPress={() => game.connectByCode(pseudo, codeInput)}
               >
-                <Text style={s.btnJoinTxt}>OK</Text>
+                <Text style={s.btnJoinTxt}>Rejoindre 1v1</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnJoin, s.joinFlex, codeInput.length < 6 && s.btnDisabled]}
+                disabled={codeInput.length < 6}
+                onPress={() => goLobby2v2(pseudo, codeInput)}
+              >
+                <Text style={s.btnJoinTxt}>Rejoindre 2v2</Text>
               </TouchableOpacity>
             </View>
 
@@ -276,6 +295,7 @@ const s = StyleSheet.create({
     height: 1, backgroundColor: 'rgba(244,236,216,0.12)', marginVertical: 6,
   },
   joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  joinFlex: { flex: 1, alignItems: 'center' },
   codeInput: { flex: 1, letterSpacing: 2 },
   btnJoin: {
     backgroundColor: C.brass, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14,

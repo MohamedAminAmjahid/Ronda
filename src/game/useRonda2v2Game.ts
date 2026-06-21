@@ -49,7 +49,7 @@ export interface GameView2v2 {
   /** L'humain peut déclarer sa combo (bouton Ronda / Tringa visible). */
   canDeclare: boolean
   /** Adversaires ayant révélé une paire contestable cette manche (vide si aucun). */
-  contestTargets: readonly { player: PlayerId2v2; value: Value }[]
+  contestTargets: { player: PlayerId2v2; value: Value }[]
   isGameOver: boolean
   /** La donne est terminée, décompte effectué — afficher l'écran résultat. */
   isDealEnd: boolean

@@ -27,10 +27,15 @@ export function createPrivate(pseudo: string): Promise<Room> {
   return getClient().create('ronda', { pseudo, private: true })
 }
 
-/** Rejoint par code : résout code→roomId via HTTP puis joinById. */
+/** Rejoint par code : résout code→roomId via HTTP puis joinById (tout type de room). */
 export async function joinByCode(pseudo: string, code: string): Promise<Room> {
   const res = await fetch(`${httpBase()}/room/${encodeURIComponent(code.trim().toUpperCase())}`)
   if (!res.ok) throw new Error('Code de partie introuvable.')
   const { roomId } = (await res.json()) as { roomId: string }
   return getClient().joinById(roomId, { pseudo })
+}
+
+/** Crée un lobby 2v2 (l'hôte reçoit un code à partager). */
+export function createLobby2v2(pseudo: string): Promise<Room> {
+  return getClient().create('ronda2v2', { pseudo })
 }

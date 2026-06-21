@@ -6,6 +6,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport'
 import { initDatabase } from './db/database'
 import { getStats, getLeaderboard, getRecentGames } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
+import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { resolveCode } from './rooms/registry'
 
 const PORT = Number(process.env.PORT ?? 2567)
@@ -36,6 +37,7 @@ const httpServer = http.createServer(app)
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) })
 
 gameServer.define('ronda', RondaRoom)
+gameServer.define('ronda2v2', LobbyRoom2v2)
 
 gameServer.listen(PORT)
 console.log(`[ronda-server] écoute sur :${PORT}`)
