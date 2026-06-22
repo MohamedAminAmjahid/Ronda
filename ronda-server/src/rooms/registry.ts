@@ -14,18 +14,17 @@ const codeToRoom = new Map<string, RoomEntry>()
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // sans I/O/0/1 (ambigus)
 
-/** Génère un code unique de la forme RONDA-XXXX. */
+/** Génère un code unique de 6 caractères alphanumériques (ex. AB3X7K). */
 export function generateCode(): string {
   for (let attempt = 0; attempt < 50; attempt++) {
-    let suffix = ''
-    for (let i = 0; i < 4; i++) {
-      suffix += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
+    let code = ''
+    for (let i = 0; i < 6; i++) {
+      code += ALPHABET[Math.floor(Math.random() * ALPHABET.length)]
     }
-    const code = `RONDA-${suffix}`
     if (!codeToRoom.has(code)) return code
   }
   // Repli extrêmement improbable.
-  return `RONDA-${Date.now().toString(36).toUpperCase().slice(-4)}`
+  return Date.now().toString(36).toUpperCase().slice(-6)
 }
 
 export function registerCode(code: string, roomId: string, type: RoomType): void {

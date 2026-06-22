@@ -36,7 +36,8 @@ interface Props {
   initialCode?: string
 }
 
-const normalizeCode = (s: string) => s.toUpperCase().replace(/\s/g, '').slice(0, 10)
+const CODE_LENGTH = 6
+const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH)
 
 export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
@@ -54,9 +55,9 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Détection auto du type de room dès que le code est complet (RONDA-XXXX = 10 car.).
+  // Détection auto du type de room dès que le code est complet (6 caractères).
   useEffect(() => {
-    if (codeInput.length !== 10) {
+    if (codeInput.length !== CODE_LENGTH) {
       setLookupError(null)
       resolvedRef.current = null
       return
@@ -146,7 +147,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             style={s.input}
             value={codeInput}
             onChangeText={(t) => setCodeInput(normalizeCode(t))}
-            placeholder="RONDA-XXXX"
+            placeholder="AB3X7K"
             placeholderTextColor={C.boneOff}
             autoCapitalize="characters"
             autoCorrect={false}

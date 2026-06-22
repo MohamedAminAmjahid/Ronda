@@ -16,7 +16,7 @@ const C = {
 } as const
 
 /**
- * Point d'entrée d'un lien de partage : /join?code=RONDA-XXXX.
+ * Point d'entrée d'un lien de partage : /join?code=AB3X7K.
  * Détecte automatiquement le type de room et redirige vers la partie 1v1
  * (/online) ou le lobby 2v2 (/lobby2v2), avec le code pré-rempli.
  */
