@@ -114,6 +114,20 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
     const slot = this.state.slots.get(client.sessionId)
     if (slot) slot.connected = false
 
+    // Départ VOLONTAIRE pendant une partie en cours → l'équipe adverse gagne tout de suite.
+    if (consented && this.state.phase === 'PLAYING' && this.engine) {
+      const seat = this.seatOf(client.sessionId)
+      if (seat !== null) {
+        const winnerTeam = (1 - teamOf(seat)) as 0 | 1
+        this.engine.teams[winnerTeam].score = Math.max(41, this.engine.teams[winnerTeam].score)
+        this.engine.phase = 'GAME_OVER'
+        this.state.phase = 'GAME_OVER'
+        this.sendGameStateToAll() // l'équipe adverse voit l'écran de fin (Bravo)
+        this.finishGame(winnerTeam) // record + broadcast game_over { winnerTeam }
+      }
+      return
+    }
+
     if (consented || this.state.phase !== 'PLAYING') {
       // En lobby : on retire le joueur (et on réattribue l'admin si besoin).
       if (this.state.phase === 'WAITING') {
@@ -341,11 +355,17 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
 
   // ── Fin de partie ─────────────────────────────────────────────────────────
 
-  private finishGame(): void {
+  /**
+   * Termine la partie : enregistrement DB + diffusion `game_over`.
+   * `forcedWinnerTeam` force l'équipe gagnante (cas forfait : départ volontaire),
+   * sinon l'équipe gagnante est déduite des scores (≥ 41).
+   */
+  private finishGame(forcedWinnerTeam?: 0 | 1): void {
     if (!this.engine || this.recorded) return
     this.recorded = true
     const scores: [number, number] = [this.engine.teams[0].score, this.engine.teams[1].score]
-    const winnerTeam = scores[0] >= 41 ? 0 : scores[1] >= 41 ? 1 : null
+    const winnerTeam: 0 | 1 | null =
+      forcedWinnerTeam !== undefined ? forcedWinnerTeam : scores[0] >= 41 ? 0 : scores[1] >= 41 ? 1 : null
     const winnerPseudo =
       winnerTeam === null ? null : `${this.pseudoBySeat[SEATS_OF_TEAM[winnerTeam][0]]} & ${this.pseudoBySeat[SEATS_OF_TEAM[winnerTeam][1]]}`
 
@@ -357,7 +377,13 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
       duration_seconds: Math.round((Date.now() - this.startedAt) / 1000),
     })
 
-    this.broadcast('game_over', { aborted: false, winnerTeam, winnerPseudo, scores })
+    this.broadcast('game_over', {
+      aborted: false,
+      winnerTeam,
+      winnerPseudo,
+      scores,
+      reason: forcedWinnerTeam !== undefined ? 'opponent_forfeit' : undefined,
+    })
   }
 
   // ── Synchronisation de l'état de jeu (par client) ──────────────────────────

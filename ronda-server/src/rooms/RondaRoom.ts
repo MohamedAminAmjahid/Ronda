@@ -142,6 +142,18 @@ export class RondaRoom extends Room<RondaState> {
     const ps = this.state.players.get(client.sessionId)
     if (ps) ps.connected = false
 
+    // Départ VOLONTAIRE pendant une partie en cours → l'adversaire gagne tout de suite.
+    if (consented && this.state.phase === 'PLAYING') {
+      const opponentSeat = (1 - seat) as PlayerId
+      this.engine.players[opponentSeat].score = Math.max(41, this.engine.players[opponentSeat].score)
+      this.engine.phase = 'GAME_OVER'
+      this.state.phase = 'GAME_OVER'
+      this.syncPublic()
+      this.sendPrivateStateToAll() // l'adversaire voit l'écran de fin (Bravo)
+      this.finishGame(opponentSeat) // record + broadcast game_over { winnerSeat: opponentSeat }
+      return
+    }
+
     // En lobby / partie finie / abandonnée : départ définitif, rien à attendre.
     if (
       consented ||
@@ -269,12 +281,18 @@ export class RondaRoom extends Room<RondaState> {
     }
   }
 
-  private finishGame(): void {
+  /**
+   * Termine la partie : enregistrement DB + diffusion `game_over`.
+   * `forcedWinner` force le vainqueur (cas forfait : départ volontaire d'un joueur),
+   * sinon le vainqueur est déduit des scores (≥ 41).
+   */
+  private finishGame(forcedWinner?: PlayerId): void {
     if (this.recorded) return
     this.recorded = true
 
     const scores: [number, number] = [this.engine.players[0].score, this.engine.players[1].score]
-    const winnerSeat: PlayerId | null = scores[0] >= 41 ? 0 : scores[1] >= 41 ? 1 : null
+    const winnerSeat: PlayerId | null =
+      forcedWinner !== undefined ? forcedWinner : scores[0] >= 41 ? 0 : scores[1] >= 41 ? 1 : null
     const winnerPseudo = winnerSeat === null ? null : this.pseudoBySeat[winnerSeat]
 
     recordGame({
@@ -290,6 +308,7 @@ export class RondaRoom extends Room<RondaState> {
       winnerSeat,
       winnerPseudo,
       scores,
+      reason: forcedWinner !== undefined ? 'opponent_forfeit' : undefined,
       stats: {
         [this.pseudoBySeat[0]]: getStats(this.pseudoBySeat[0]),
         [this.pseudoBySeat[1]]: getStats(this.pseudoBySeat[1]),
