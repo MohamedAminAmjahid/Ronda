@@ -79,6 +79,15 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeInput, username])
 
+  // Invitation générique : partage le lien de téléchargement de l'app (sans room).
+  const inviteFriend = async () => {
+    try {
+      await Share.share({ message: `Joue à la Ronda avec moi ! 🎴 Télécharge ici : ${GAME_URL}` })
+    } catch {
+      // partage annulé / indisponible — sans effet
+    }
+  }
+
   // ── Partie en cours → GameScreen (mode online) ─────────────────────────────
   if (connectionStatus === 'playing') {
     return (
@@ -123,6 +132,17 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
 
         <View style={s.body}>
           <Text style={s.helloTxt}>Salut {username} 👋</Text>
+
+          {mode === 'friend' && (
+            <>
+              <Text style={s.label}>Inviter</Text>
+              <TouchableOpacity style={s.btnPrimary} onPress={inviteFriend}>
+                <Text style={s.btnPrimaryTxt}>Inviter un ami</Text>
+              </TouchableOpacity>
+              <Text style={s.hint}>Partage le lien de l'app à un ami.</Text>
+              <View style={s.divider} />
+            </>
+          )}
 
           {mode !== 'friend' && (
             <>

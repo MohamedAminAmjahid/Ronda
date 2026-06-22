@@ -45,8 +45,7 @@ function KhatamLogo() {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onPlayVsAi:   () => void
-  onPlay2v2:    () => void
+  onPlay:       () => void
   onPlayOnline: () => void
   onPlayFriend: () => void
   onRules:      () => void
@@ -55,7 +54,7 @@ interface Props {
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, onRules, onCredits }: Props) {
+export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onRules, onCredits }: Props) {
   const { username, gold, setUsername } = useProfile()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -203,14 +202,9 @@ export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, 
         {/* ── Actions ──────────────────────────────────────────── */}
         <View style={s.actions}>
 
-          {/* Jouer contre l'IA */}
-          <TouchableOpacity style={s.btnPrimary} onPress={onPlayVsAi}>
-            <Text style={s.btnPrimaryTxt}>Jouer contre l'IA</Text>
-          </TouchableOpacity>
-
-          {/* 2 contre 2 (toi + IA alliée contre 2 IA) */}
-          <TouchableOpacity style={s.btnSecondary} onPress={onPlay2v2}>
-            <Text style={s.btnSecondaryTxt}>2 contre 2</Text>
+          {/* Jouer (vs IA) — ouvre le choix 1v1 / 2v2 */}
+          <TouchableOpacity style={s.btnPrimary} onPress={onPlay}>
+            <Text style={s.btnPrimaryTxt}>Jouer</Text>
           </TouchableOpacity>
 
           {/* Jouer en ligne — partie rapide (matchmaking) */}
