@@ -76,7 +76,7 @@ function LobbyView({ lobby, onBack }: { lobby: ReturnType<typeof useLobby2v2>; o
   const shareCode = async () => {
     if (!code) return
     try {
-      await Share.share({ message: `Rejoins ma partie de Ronda 2v2 ! 🎴\nCode : ${code}\nLien : ${GAME_URL}` })
+      await Share.share({ message: `Rejoins ma partie de Ronda 2v2 ! 🎴\nCode : ${code}\nLien : ${GAME_URL}/join?code=${code}` })
     } catch { /* annulé */ }
   }
   const copyCode = async () => {

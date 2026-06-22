@@ -32,14 +32,18 @@ interface Props {
   onBack: () => void
   /** 'friend' : n'affiche que « Créer une partie » + « Rejoindre avec un code ». */
   mode?: 'quick' | 'friend'
+  /** Code pré-rempli (lien de partage /join?code=…) → connexion auto au montage. */
+  initialCode?: string
 }
 
-export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
+const normalizeCode = (s: string) => s.toUpperCase().replace(/\s/g, '').slice(0, 10)
+
+export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
   const { username } = useProfile()
 
-  const [codeInput, setCodeInput] = useState('')
+  const [codeInput, setCodeInput] = useState(() => normalizeCode(initialCode ?? ''))
   const [lookupError, setLookupError] = useState<string | null>(null)
   const [joining, setJoining] = useState(false)
   const resolvedRef = useRef<string | null>(null) // dernier code résolu (évite doublons)
@@ -141,7 +145,7 @@ export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
           <TextInput
             style={s.input}
             value={codeInput}
-            onChangeText={(t) => setCodeInput(t.toUpperCase().replace(/\s/g, '').slice(0, 10))}
+            onChangeText={(t) => setCodeInput(normalizeCode(t))}
             placeholder="RONDA-XXXX"
             placeholderTextColor={C.boneOff}
             autoCapitalize="characters"
@@ -182,7 +186,7 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
     if (!code) return
     try {
       await Share.share({
-        message: `Rejoins ma partie de Ronda ! 🎴\nCode : ${code}\nLien : ${GAME_URL}`,
+        message: `Rejoins ma partie de Ronda ! 🎴\nCode : ${code}\nLien : ${GAME_URL}/join?code=${code}`,
       })
     } catch {
       // partage annulé / indisponible — sans effet
