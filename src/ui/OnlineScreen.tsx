@@ -82,6 +82,7 @@ export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
           onBack={() => { game.newGame(); onBack() }}
           useGame={useOnlineGame}
           opponentName={game.opponentName ?? undefined}
+          online
         />
         {opponentDisconnected && (
           <View style={s.discOverlay} pointerEvents="none">

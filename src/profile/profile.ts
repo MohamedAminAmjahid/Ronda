@@ -6,12 +6,22 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // Le store est pur côté UI : on s'abonne via subscribeProfile et on lit getProfile().
 
 const STORAGE_KEY = 'ronda_profile'
+const ACTIVE_ROOM_KEY = 'ronda_active_room'
 const STARTING_GOLD = 200
 const MAX_USERNAME = 16
 
 export interface Profile {
   username: string
   gold: number
+}
+
+/** Partie en ligne en cours, persistée pour permettre la reconnexion. */
+export interface ActiveRoom {
+  roomId: string
+  roomType: 'ronda' | 'ronda2v2'
+  code: string
+  /** Jeton Colyseus (room.reconnectionToken) requis par client.reconnect(). */
+  reconnectionToken: string
 }
 
 type Listener = (profile: Profile) => void
@@ -104,4 +114,53 @@ export function subscribeProfile(cb: Listener): () => void {
   return () => {
     listeners.delete(cb)
   }
+}
+
+// ── Partie en cours (reconnexion) ──────────────────────────────────────────────
+
+let activeRoom: ActiveRoom | null = null
+let activeRoomLoaded = false
+
+function sameRoom(a: ActiveRoom | null, b: ActiveRoom | null): boolean {
+  if (a === b) return true
+  if (!a || !b) return false
+  return (
+    a.roomId === b.roomId &&
+    a.roomType === b.roomType &&
+    a.code === b.code &&
+    a.reconnectionToken === b.reconnectionToken
+  )
+}
+
+/** Charge la partie en cours persistée (idempotent). */
+export async function loadActiveRoom(): Promise<ActiveRoom | null> {
+  if (activeRoomLoaded) return activeRoom
+  try {
+    const raw = await AsyncStorage.getItem(ACTIVE_ROOM_KEY)
+    activeRoom = raw ? (JSON.parse(raw) as ActiveRoom) : null
+  } catch {
+    activeRoom = null
+  }
+  activeRoomLoaded = true
+  return activeRoom
+}
+
+export function getActiveRoom(): ActiveRoom | null {
+  return activeRoom
+}
+
+/** Mémorise la partie en cours (au démarrage d'une partie). No-op si inchangé. */
+export function setActiveRoom(room: ActiveRoom): void {
+  activeRoomLoaded = true
+  if (sameRoom(activeRoom, room)) return
+  activeRoom = room
+  void AsyncStorage.setItem(ACTIVE_ROOM_KEY, JSON.stringify(room)).catch(() => {})
+}
+
+/** Efface la partie en cours (fin normale ou départ volontaire). */
+export function clearActiveRoom(): void {
+  activeRoomLoaded = true
+  if (activeRoom === null) return
+  activeRoom = null
+  void AsyncStorage.removeItem(ACTIVE_ROOM_KEY).catch(() => {})
 }

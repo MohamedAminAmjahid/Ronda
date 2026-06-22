@@ -1,6 +1,7 @@
 import type { Room } from 'colyseus.js'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
-import { joinOrCreate, createPrivate, joinByCode } from './client'
+import { joinOrCreate, createPrivate, joinByCode, getClient } from './client'
+import { setActiveRoom, clearActiveRoom } from '../profile/profile'
 
 // ── Types des messages serveur ─────────────────────────────────────────────────
 
@@ -127,8 +128,16 @@ function wireRoom(r: Room): void {
     if (payload.phase === 'PLAYING') {
       patch.status = 'playing'
       patch.dealEnd = null
+      // Partie en cours → mémorise pour reconnexion après sortie accidentelle.
+      setActiveRoom({
+        roomId: r.roomId,
+        roomType: 'ronda',
+        code: payload.code,
+        reconnectionToken: r.reconnectionToken,
+      })
     } else if (payload.phase === 'GAME_OVER') {
       patch.status = 'playing' // GameScreen affiche l'écran fin de partie depuis phase
+      clearActiveRoom() // fin normale → plus rien à reprendre
     }
     set(patch)
   })
@@ -141,6 +150,7 @@ function wireRoom(r: Room): void {
   })
 
   r.onMessage('game_over', (payload: GameOverPayload) => {
+    clearActiveRoom()
     set({ gameOver: payload })
     if (payload.aborted) set({ status: 'disconnected', error: 'Partie annulée (adversaire absent).' })
   })
@@ -186,12 +196,27 @@ export function connectByCode(pseudo: string, code: string): Promise<void> {
   return connect(() => joinByCode(pseudo, code))
 }
 
+/** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */
+export async function reconnect(reconnectionToken: string): Promise<void> {
+  reset()
+  set({ status: 'connecting', error: null })
+  try {
+    const r = await getClient().reconnect(reconnectionToken)
+    wireRoom(r)
+    set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
+  } catch (e) {
+    set({ status: 'disconnected', error: (e as Error).message || 'Reconnexion impossible.' })
+    throw e
+  }
+}
+
 export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
 
 export function leave(): void {
   clearContinueTimer()
+  clearActiveRoom() // départ volontaire → pas de reprise (l'adversaire gagne côté serveur)
   room?.leave()
   room = null
   reset()

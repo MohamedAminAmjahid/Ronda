@@ -1,7 +1,8 @@
 import type { Room } from 'colyseus.js'
 import type { Card, Combination, GameEvent, Value } from '../engine/types'
 import type { PlayerId2v2 } from '../engine2v2/types2v2'
-import { createLobby2v2, joinByCode } from './client'
+import { createLobby2v2, joinByCode, getClient } from './client'
+import { setActiveRoom, clearActiveRoom } from '../profile/profile'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -125,6 +126,17 @@ function wireRoom(r: Room): void {
 
   r.onMessage('game_state', (payload: Server2v2GameState) => {
     set({ game: payload, status: 'playing' })
+    if (payload.phase === 'GAME_OVER') {
+      clearActiveRoom()
+    } else {
+      // Partie en cours → mémorise pour reconnexion après sortie accidentelle.
+      setActiveRoom({
+        roomId: r.roomId,
+        roomType: 'ronda2v2',
+        code: snapshot.code ?? '',
+        reconnectionToken: r.reconnectionToken,
+      })
+    }
   })
 
   r.onMessage('deal_end', () => {
@@ -133,6 +145,7 @@ function wireRoom(r: Room): void {
   })
 
   r.onMessage('game_over', (payload: Lobby2v2Snapshot['gameOver']) => {
+    clearActiveRoom()
     set({ gameOver: payload })
     if (payload?.aborted) set({ status: 'disconnected', error: 'Partie annulée.' })
   })
@@ -164,6 +177,20 @@ async function connect(factory: () => Promise<Room>): Promise<void> {
 export function connectLobby(pseudo: string, code?: string): Promise<void> {
   return connect(() => (code ? joinByCode(pseudo, code) : createLobby2v2(pseudo)))
 }
+
+/** Reconnexion à un lobby/partie 2v2 via le jeton Colyseus. */
+export async function reconnectLobby(reconnectionToken: string): Promise<void> {
+  reset()
+  set({ status: 'connecting', error: null })
+  try {
+    const r = await getClient().reconnect(reconnectionToken)
+    wireRoom(r)
+    set({ status: 'lobby', mySessionId: r.sessionId, code: (r.state as LobbyStateLike)?.code ?? null })
+  } catch (e) {
+    set({ status: 'disconnected', error: (e as Error).message || 'Reconnexion impossible.' })
+    throw e
+  }
+}
 export function chooseTeam(team: 0 | 1): void {
   room?.send('choose_team', { team })
 }
@@ -175,6 +202,7 @@ export function send(type: string, payload?: unknown): void {
 }
 export function leave(): void {
   clearContinueTimer()
+  clearActiveRoom() // départ volontaire → pas de reprise
   room?.leave()
   room = null
   reset()

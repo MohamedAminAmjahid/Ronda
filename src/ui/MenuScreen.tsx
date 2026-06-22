@@ -1,9 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Polygon } from 'react-native-svg'
+import { router, type Href } from 'expo-router'
 import { TERMS } from './terms'
 import { useProfile } from '../profile/useProfile'
+import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
+import { reconnect as reconnect1v1 } from '../online/store'
+import { reconnectLobby } from '../online/lobby2v2'
 
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
@@ -63,6 +67,43 @@ export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, 
     setEditing(false)
   }
 
+  // ── Reconnexion à une partie en cours ──────────────────────────────────────
+  const [resumeRoom, setResumeRoom] = useState<ActiveRoom | null>(null)
+  const [resuming, setResuming] = useState(false)
+  const [resumeError, setResumeError] = useState<string | null>(null)
+
+  useEffect(() => {
+    void loadActiveRoom().then((r) => { if (r) setResumeRoom(r) })
+  }, [])
+
+  const onResume = async () => {
+    if (!resumeRoom || resuming) return
+    setResuming(true)
+    setResumeError(null)
+    try {
+      if (resumeRoom.roomType === 'ronda2v2') {
+        await reconnectLobby(resumeRoom.reconnectionToken)
+        setResumeRoom(null)
+        router.push('/lobby2v2?reconnect=1' as Href)
+      } else {
+        await reconnect1v1(resumeRoom.reconnectionToken)
+        setResumeRoom(null)
+        router.push('/online' as Href)
+      }
+    } catch {
+      clearActiveRoom()
+      setResumeError('Reconnexion impossible — la partie a peut-être expiré.')
+    } finally {
+      setResuming(false)
+    }
+  }
+
+  const onForfeit = () => {
+    clearActiveRoom()
+    setResumeRoom(null)
+    setResumeError(null)
+  }
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -107,6 +148,43 @@ export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, 
                   <Text style={s.modalSaveTxt}>Sauvegarder</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Modale de reconnexion ────────────────────────────── */}
+        <Modal visible={resumeRoom !== null} transparent animationType="fade" onRequestClose={onForfeit}>
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>Partie en cours</Text>
+              {resumeError ? (
+                <>
+                  <Text style={s.resumeText}>{resumeError}</Text>
+                  <View style={s.modalActions}>
+                    <TouchableOpacity style={s.modalSave} onPress={onForfeit}>
+                      <Text style={s.modalSaveTxt}>OK</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={s.resumeText}>
+                    Tu as une partie en cours{resumeRoom?.code ? ` (code : ${resumeRoom.code})` : ''}. Veux-tu reprendre ?
+                  </Text>
+                  <View style={s.modalActions}>
+                    <TouchableOpacity style={s.modalCancel} onPress={onForfeit} disabled={resuming}>
+                      <Text style={s.modalCancelTxt}>Abandonner</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.modalSave, resuming && s.btnDisabledOpacity]}
+                      onPress={onResume}
+                      disabled={resuming}
+                    >
+                      <Text style={s.modalSaveTxt}>{resuming ? 'Connexion…' : 'Reprendre'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </Modal>
@@ -261,6 +339,7 @@ const s = StyleSheet.create({
     borderColor: 'rgba(201,162,39,0.25)',
   },
   modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

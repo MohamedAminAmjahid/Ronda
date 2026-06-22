@@ -24,21 +24,24 @@ interface Props {
   onBack: () => void
   pseudo: string
   code?: string
+  /** true = on vient de se reconnecter ; la room est déjà câblée, ne pas reconnecter. */
+  reconnect?: boolean
 }
 
-export function Lobby2v2Screen({ onBack, pseudo, code }: Props) {
+export function Lobby2v2Screen({ onBack, pseudo, code, reconnect = false }: Props) {
   const lobby = useLobby2v2()
 
   // Connexion au montage ; déconnexion au démontage.
+  // En reconnexion, la room est déjà établie par le store → on ne (re)connecte pas.
   useEffect(() => {
-    void connectLobby(pseudo, code)
+    if (!reconnect) void connectLobby(pseudo, code)
     return () => { leave() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ── Partie démarrée → écran de jeu 2v2 en ligne ───────────────────────────
   if (lobby.status === 'playing') {
-    return <GameScreen2v2 useGame2v2={useOnlineGame2v2} onBack={() => { leave(); onBack() }} />
+    return <GameScreen2v2 useGame2v2={useOnlineGame2v2} onBack={() => { leave(); onBack() }} online />
   }
 
   if (lobby.status === 'connecting' || lobby.status === 'idle') {

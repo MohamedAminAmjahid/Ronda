@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Polygon } from 'react-native-svg'
 import { useRonda2v2Game, HUMAN_ID_2V2 } from '../game/useRonda2v2Game'
@@ -146,13 +146,21 @@ interface Props {
   onBack: () => void
   /** Source de l'état. Par défaut le hook solo ; l'online injecte useOnlineGame2v2. */
   useGame2v2?: typeof useRonda2v2Game
+  /** true = partie en ligne → quitter demande confirmation (l'équipe adverse gagne). */
+  online?: boolean
 }
 
-export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
+export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = false }: Props) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } =
     useGame2v2()
 
   const [showContest, setShowContest] = useState(false)
+  const [confirmQuit, setConfirmQuit] = useState(false)
+
+  const handleQuit = () => {
+    if (online) setConfirmQuit(true)
+    else onBack()
+  }
 
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
   const [toastEvents, setToastEvents] = useState<readonly GameEvent[] | null>(null)
@@ -323,6 +331,9 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
 
         {/* ── Barre de score équipe ────────────────────────── */}
         <View style={styles.scorebar}>
+          <TouchableOpacity style={styles.quitBtn} onPress={handleQuit} accessibilityLabel="Quitter la partie">
+            <Text style={styles.quitTxt}>✕</Text>
+          </TouchableOpacity>
           <View style={styles.scorebarInner}>
             <View>
               <Text style={styles.sbName}>Vous</Text>
@@ -342,6 +353,24 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
             <Text style={styles.muteIcon}>{muted ? '🔇' : '🔊'}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Confirmation de départ (mode en ligne uniquement) */}
+        <Modal visible={confirmQuit} transparent animationType="fade" onRequestClose={() => setConfirmQuit(false)}>
+          <View style={styles.quitBackdrop}>
+            <View style={styles.quitCard}>
+              <Text style={styles.quitCardTitle}>Quitter la partie ?</Text>
+              <Text style={styles.quitCardText}>Si tu quittes, l'équipe adverse gagne automatiquement. Continuer ?</Text>
+              <View style={styles.quitActions}>
+                <TouchableOpacity style={styles.quitStay} onPress={() => setConfirmQuit(false)}>
+                  <Text style={styles.quitStayTxt}>Rester</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.quitLeave} onPress={() => { setConfirmQuit(false); onBack() }}>
+                  <Text style={styles.quitLeaveTxt}>Quitter</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* ── Coéquipier (haut, joueur 2) ──────────────────── */}
         <View style={styles.topZone}>
@@ -491,6 +520,17 @@ const styles = StyleSheet.create({
   sbDash: { fontSize: 18, color: 'rgba(244,236,216,0.12)' },
   sbTarget: { fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.brass, letterSpacing: 0.5 },
   muteBtn: { marginLeft: 14, width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' },
+  quitBtn: { marginRight: 12, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.18)' },
+  quitTxt: { fontSize: 15, color: 'rgba(244,236,216,0.7)', fontWeight: '600' },
+  quitBackdrop: { flex: 1, backgroundColor: 'rgba(9,64,47,0.85)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  quitCard: { width: '100%', maxWidth: 360, backgroundColor: C.deep, borderRadius: 16, padding: 22, gap: 12, borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)' },
+  quitCardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone },
+  quitCardText: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, lineHeight: 21 },
+  quitActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 4 },
+  quitStay: { paddingVertical: 12, paddingHorizontal: 18 },
+  quitStayTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
+  quitLeave: { backgroundColor: C.clay, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 20 },
+  quitLeaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
   muteIcon: { fontSize: 16 },
 
   topZone: { alignItems: 'center', paddingTop: 12, gap: 6 },
