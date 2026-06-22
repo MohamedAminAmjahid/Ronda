@@ -39,3 +39,16 @@ export async function joinByCode(pseudo: string, code: string): Promise<Room> {
 export function createLobby2v2(pseudo: string): Promise<Room> {
   return getClient().create('ronda2v2', { pseudo })
 }
+
+export type RoomType = 'ronda' | 'ronda2v2'
+
+/** Détecte le type de room associé à un code (pour router 1v1 vs lobby 2v2). */
+export async function roomTypeByCode(
+  code: string,
+): Promise<{ type: RoomType; roomId: string }> {
+  const res = await fetch(
+    `${httpBase()}/room/${encodeURIComponent(code.trim().toUpperCase())}/type`,
+  )
+  if (!res.ok) throw new Error('Code de partie introuvable.')
+  return (await res.json()) as { type: RoomType; roomId: string }
+}

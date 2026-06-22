@@ -93,7 +93,7 @@ export class RondaRoom extends Room<RondaState> {
     const code = generateCode()
     this.state.code = code
     this.setMetadata({ code })
-    registerCode(code, this.roomId)
+    registerCode(code, this.roomId, 'ronda')
 
     // Rooms créées par code = privées (non proposées au matchmaking rapide).
     if (options?.private) this.setPrivate(true)

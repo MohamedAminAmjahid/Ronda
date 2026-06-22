@@ -5,6 +5,7 @@ import { Svg, Polygon } from 'react-native-svg'
 import { useRonda2v2Game, HUMAN_ID_2V2 } from '../game/useRonda2v2Game'
 import { teamOf, prevPlayer, type PlayerId2v2 } from '../engine2v2/types2v2'
 import { CardFace, CardBack } from './components/Card'
+import { GoldBadge } from './components/GoldBadge'
 import {
   DealFly,
   FlyingCard,
@@ -336,6 +337,7 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
               <Text style={styles.sbScore}>{teamScores[1]}</Text>
             </View>
           </View>
+          <GoldBadge style={{ marginLeft: 12 }} />
           <TouchableOpacity style={styles.muteBtn} onPress={toggleMute}>
             <Text style={styles.muteIcon}>{muted ? '🔇' : '🔊'}</Text>
           </TouchableOpacity>

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen2v2 } from './GameScreen2v2'
+import { GoldBadge } from './components/GoldBadge'
 import { useLobby2v2 } from '../online/useLobby2v2'
 import { useOnlineGame2v2 } from '../online/useOnlineGame2v2'
 import { connectLobby, leave } from '../online/lobby2v2'
@@ -110,9 +111,12 @@ function LobbyView({ lobby, onBack }: { lobby: ReturnType<typeof useLobby2v2>; o
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
         <View style={s.header}>
-          <TouchableOpacity onPress={() => { lobby.leave(); onBack() }} style={s.backBtn}>
-            <Text style={s.backTxt}>← Quitter</Text>
-          </TouchableOpacity>
+          <View style={s.headerTop}>
+            <TouchableOpacity onPress={() => { lobby.leave(); onBack() }} style={s.backBtn}>
+              <Text style={s.backTxt}>← Quitter</Text>
+            </TouchableOpacity>
+            <GoldBadge />
+          </View>
           <Text style={s.title}>2 contre 2</Text>
         </View>
 
@@ -168,6 +172,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 460, paddingHorizontal: 24 },
   header: { paddingTop: 16, paddingBottom: 16, alignItems: 'center', gap: 6 },
+  headerTop: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 4 },
   backTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
   title: { fontFamily: 'Cairo_600SemiBold', fontSize: 26, color: C.bone, letterSpacing: 1, textTransform: 'uppercase' },

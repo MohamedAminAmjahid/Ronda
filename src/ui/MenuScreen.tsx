@@ -1,7 +1,9 @@
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
+import { useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, TextInput } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Polygon } from 'react-native-svg'
 import { TERMS } from './terms'
+import { useProfile } from '../profile/useProfile'
 
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
@@ -50,9 +52,64 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onPlayVsAi, onPlay2v2, onPlayOnline, onPlayFriend, onRules, onCredits }: Props) {
+  const { username, gold, setUsername } = useProfile()
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+
+  const openEditor = () => { setDraft(username); setEditing(true) }
+  const saveUsername = () => {
+    const clean = draft.trim()
+    if (clean.length >= 2) setUsername(clean)
+    setEditing(false)
+  }
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
+
+        {/* ── Barre de profil ──────────────────────────────────── */}
+        <TouchableOpacity style={s.profileBar} onPress={openEditor} activeOpacity={0.7}>
+          <View style={s.profileNameWrap}>
+            <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
+            <Text style={s.profileEdit}>✎</Text>
+          </View>
+          <View style={s.goldPill}>
+            <Text style={s.goldCoin}>🪙</Text>
+            <Text style={s.goldAmount}>{gold}</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ── Modale d'édition du pseudo ───────────────────────── */}
+        <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>Ton pseudo</Text>
+              <TextInput
+                style={s.modalInput}
+                value={draft}
+                onChangeText={(t) => setDraft(t.slice(0, 16))}
+                placeholder="Pseudo"
+                placeholderTextColor={C.boneOff}
+                maxLength={16}
+                autoFocus
+                autoCorrect={false}
+              />
+              <Text style={s.modalHint}>16 caractères max.</Text>
+              <View style={s.modalActions}>
+                <TouchableOpacity style={s.modalCancel} onPress={() => setEditing(false)}>
+                  <Text style={s.modalCancelTxt}>Annuler</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.modalSave, draft.trim().length < 2 && s.btnDisabledOpacity]}
+                  disabled={draft.trim().length < 2}
+                  onPress={saveUsername}
+                >
+                  <Text style={s.modalSaveTxt}>Sauvegarder</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {/* ── Identité ─────────────────────────────────────────── */}
         <View style={s.hero}>
@@ -128,6 +185,99 @@ const s = StyleSheet.create({
     maxWidth: 430,
     paddingHorizontal: 28,
   },
+
+  // Barre de profil
+  profileBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  profileNameWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  profileName: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 15,
+    color: C.bone,
+    letterSpacing: 0.3,
+  },
+  profileEdit: {
+    fontSize: 12,
+    color: C.boneOff,
+  },
+  goldPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.35)',
+  },
+  goldCoin: { fontSize: 14 },
+  goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
+
+  // Modale d'édition du pseudo
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(9,64,47,0.85)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: C.deep,
+    borderRadius: 16,
+    padding: 22,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.3)',
+  },
+  modalTitle: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 13,
+    color: C.boneOff,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  modalInput: {
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 16,
+    color: C.bone,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.25)',
+  },
+  modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
+  modalCancel: { paddingVertical: 12, paddingHorizontal: 16 },
+  modalCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
+  modalSave: {
+    backgroundColor: C.brass,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+  },
+  modalSaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
+  btnDisabledOpacity: { opacity: 0.4 },
 
   // Identité
   hero: {

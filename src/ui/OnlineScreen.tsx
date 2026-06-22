@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { useOnlineGame } from '../online/useOnlineGame'
+import { useProfile } from '../profile/useProfile'
+import { roomTypeByCode } from '../online/client'
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
 
@@ -27,9 +28,6 @@ const C = {
   boneOff: 'rgba(244,236,216,0.45)',
 } as const
 
-const PSEUDO_KEY = 'ronda_pseudo'
-const sanitize = (s: string) => s.replace(/\s/g, '').slice(0, 16)
-
 interface Props {
   onBack: () => void
   /** 'friend' : n'affiche que « Créer une partie » + « Rejoindre avec un code ». */
@@ -39,15 +37,12 @@ interface Props {
 export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
+  const { username } = useProfile()
 
-  const [pseudo, setPseudo] = useState('')
-  const [step, setStep] = useState<'pseudo' | 'choice'>('pseudo')
   const [codeInput, setCodeInput] = useState('')
-
-  // Pré-remplissage du pseudo depuis AsyncStorage.
-  useEffect(() => {
-    AsyncStorage.getItem(PSEUDO_KEY).then((v) => { if (v) setPseudo(sanitize(v)) })
-  }, [])
+  const [lookupError, setLookupError] = useState<string | null>(null)
+  const [joining, setJoining] = useState(false)
+  const resolvedRef = useRef<string | null>(null) // dernier code résolu (évite doublons)
 
   // Nettoyage : quitter la room si l'écran est démonté en cours de connexion.
   useEffect(() => {
@@ -55,11 +50,29 @@ export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const confirmPseudo = () => {
-    if (pseudo.length < 2) return
-    void AsyncStorage.setItem(PSEUDO_KEY, pseudo)
-    setStep('choice')
-  }
+  // Détection auto du type de room dès que le code est complet (RONDA-XXXX = 10 car.).
+  useEffect(() => {
+    if (codeInput.length !== 10) {
+      setLookupError(null)
+      resolvedRef.current = null
+      return
+    }
+    if (resolvedRef.current === codeInput) return
+    resolvedRef.current = codeInput
+    setJoining(true)
+    setLookupError(null)
+    roomTypeByCode(codeInput)
+      .then(({ type }) => {
+        if (type === 'ronda2v2') goLobby2v2(username, codeInput)
+        else game.connectByCode(username, codeInput)
+      })
+      .catch(() => {
+        setJoining(false)
+        setLookupError('Code de partie introuvable.')
+        resolvedRef.current = null
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [codeInput, username])
 
   // ── Partie en cours → GameScreen (mode online) ─────────────────────────────
   if (connectionStatus === 'playing') {
@@ -102,82 +115,46 @@ export function OnlineScreen({ onBack, mode = 'quick' }: Props) {
           </View>
         )}
 
-        {step === 'pseudo' ? (
-          <View style={s.body}>
-            <Text style={s.label}>Ton pseudo</Text>
-            <TextInput
-              style={s.input}
-              value={pseudo}
-              onChangeText={(t) => setPseudo(sanitize(t))}
-              placeholder="Pseudo"
-              placeholderTextColor={C.boneOff}
-              maxLength={16}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <Text style={s.hint}>Sans espace, 16 caractères max.</Text>
-            <TouchableOpacity
-              style={[s.btnPrimary, pseudo.length < 2 && s.btnDisabled]}
-              disabled={pseudo.length < 2}
-              onPress={confirmPseudo}
-            >
-              <Text style={s.btnPrimaryTxt}>Continuer</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={s.body}>
-            <Text style={s.helloTxt}>Salut {pseudo} 👋</Text>
+        <View style={s.body}>
+          <Text style={s.helloTxt}>Salut {username} 👋</Text>
 
-            {mode !== 'friend' && (
-              <>
-                <Text style={s.label}>Adversaire aléatoire</Text>
-                <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(pseudo)}>
-                  <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
-                </TouchableOpacity>
-                <View style={s.divider} />
-              </>
-            )}
-
-            <Text style={s.label}>Avec un ami</Text>
-            <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(pseudo)}>
-              <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(pseudo)}>
-              <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
-            </TouchableOpacity>
-
-            <Text style={s.label}>Rejoindre avec un code</Text>
-            <TextInput
-              style={s.input}
-              value={codeInput}
-              onChangeText={(t) => setCodeInput(t.toUpperCase().replace(/\s/g, ''))}
-              placeholder="RONDA-XXXX"
-              placeholderTextColor={C.boneOff}
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-            <View style={s.joinRow}>
-              <TouchableOpacity
-                style={[s.btnJoin, s.joinFlex, codeInput.length < 6 && s.btnDisabled]}
-                disabled={codeInput.length < 6}
-                onPress={() => game.connectByCode(pseudo, codeInput)}
-              >
-                <Text style={s.btnJoinTxt}>Rejoindre 1v1</Text>
+          {mode !== 'friend' && (
+            <>
+              <Text style={s.label}>Adversaire aléatoire</Text>
+              <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(username)}>
+                <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.btnJoin, s.joinFlex, codeInput.length < 6 && s.btnDisabled]}
-                disabled={codeInput.length < 6}
-                onPress={() => goLobby2v2(pseudo, codeInput)}
-              >
-                <Text style={s.btnJoinTxt}>Rejoindre 2v2</Text>
-              </TouchableOpacity>
-            </View>
+              <View style={s.divider} />
+            </>
+          )}
 
-            <TouchableOpacity style={s.changePseudo} onPress={() => setStep('pseudo')}>
-              <Text style={s.changePseudoTxt}>Changer de pseudo</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+          <Text style={s.label}>Avec un ami</Text>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(username)}>
+            <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(username)}>
+            <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
+          </TouchableOpacity>
+
+          <Text style={s.label}>Rejoindre avec un code</Text>
+          <TextInput
+            style={s.input}
+            value={codeInput}
+            onChangeText={(t) => setCodeInput(t.toUpperCase().replace(/\s/g, '').slice(0, 10))}
+            placeholder="RONDA-XXXX"
+            placeholderTextColor={C.boneOff}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            editable={!joining}
+          />
+          {joining ? (
+            <Text style={s.hint}>Connexion à la partie…</Text>
+          ) : lookupError ? (
+            <Text style={s.lookupErr}>{lookupError}</Text>
+          ) : (
+            <Text style={s.hint}>Le type de partie est détecté automatiquement.</Text>
+          )}
+        </View>
       </View>
     </SafeAreaView>
   )
@@ -290,19 +267,10 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.brass,
   },
   btnSecondaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.4 },
-  btnDisabled: { opacity: 0.4 },
   divider: {
     height: 1, backgroundColor: 'rgba(244,236,216,0.12)', marginVertical: 6,
   },
-  joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  joinFlex: { flex: 1, alignItems: 'center' },
-  codeInput: { flex: 1, letterSpacing: 2 },
-  btnJoin: {
-    backgroundColor: C.brass, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 14,
-  },
-  btnJoinTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink },
-  changePseudo: { alignSelf: 'center', paddingVertical: 10 },
-  changePseudoTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, textDecorationLine: 'underline' },
+  lookupErr: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.clay, marginTop: -8 },
 
   errorBox: {
     backgroundColor: 'rgba(181,83,42,0.18)', borderRadius: 10, padding: 12, marginBottom: 14,

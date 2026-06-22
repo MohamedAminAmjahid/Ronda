@@ -7,7 +7,7 @@ import { initDatabase } from './db/database'
 import { getStats, getLeaderboard, getRecentGames } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
-import { resolveCode } from './rooms/registry'
+import { resolveCode, resolveCodeEntry } from './rooms/registry'
 
 const PORT = Number(process.env.PORT ?? 2567)
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*'
@@ -30,6 +30,13 @@ app.get('/room/:code', (req, res) => {
   const roomId = resolveCode(req.params.code)
   if (!roomId) return res.status(404).json({ error: 'Code de partie inconnu.' })
   return res.json({ roomId })
+})
+
+// Détection du type de room par code (1v1 'ronda' ou 2v2 'ronda2v2').
+app.get('/room/:code/type', (req, res) => {
+  const entry = resolveCodeEntry(req.params.code)
+  if (!entry) return res.status(404).json({ error: 'Code de partie inconnu.' })
+  return res.json({ type: entry.type, roomId: entry.roomId })
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ import ReAnimated, {
 } from 'react-native-reanimated'
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
+import { GoldBadge } from './components/GoldBadge'
 import type { PlayerId } from '../engine/types'
 import { RitualPickerScreen } from './RitualPickerScreen'
 import { CoinFlipScreen } from './CoinFlipScreen'
@@ -769,6 +770,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
             <Text style={styles.sbScore}>{bot.score}</Text>
           </View>
         </View>
+        <GoldBadge style={{ marginLeft: 14 }} />
         <TouchableOpacity
           style={styles.muteBtn}
           onPress={toggleMute}

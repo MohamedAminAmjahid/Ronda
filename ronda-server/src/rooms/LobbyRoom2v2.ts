@@ -73,7 +73,7 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
     this.state.code = code
     this.setMetadata({ code })
     this.setPrivate(true)
-    registerCode(code, this.roomId)
+    registerCode(code, this.roomId, 'ronda2v2')
 
     this.onMessage('choose_team', (client, msg: { team: 0 | 1 }) => {
       if (this.state.phase !== 'WAITING') return
