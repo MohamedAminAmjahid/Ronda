@@ -4,7 +4,7 @@ import { applyAction } from '../src/engine/game'
 import { createInitialState, startNewDeal } from '../src/engine/deal'
 import { getObservableState } from '../src/ai/observable'
 import { createMemory, updateMemory } from '../src/ai/memory'
-import { scoreMove, discardRisk, endgameAdjustment } from '../src/ai/evaluate'
+import { scoreMove, discardRisk, endgameAdjustment, comboProtectionPenalty } from '../src/ai/evaluate'
 import { chooseAction } from '../src/ai/bot'
 import type { Difficulty } from '../src/ai/bot'
 import { resolveCapture } from '../src/engine/capture'
@@ -258,6 +258,71 @@ describe('6. Ronda : declaration vs dissimulation', () => {
     const action = chooseAction(obs, 0, 'medium', mem)
     // Avec pHigherRonda > 0.25, le bot doit dissimuler -> PLAY_CARD
     expect(action.type).toBe('PLAY_CARD')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 6bis. Protection de combo : ne pas casser une ronda dissimulee
+// ---------------------------------------------------------------------------
+describe('6bis. Protection de combo dissimule', () => {
+  it('medium : en dissimulant une ronda, ne joue pas une carte de la combo', () => {
+    const ronda: Combination = {
+      type: 'ronda', value: 1, cards: [makeCard(1), makeCard(1, 'copas')],
+    }
+    const state = makeGameState({
+      players: [
+        makePlayerState({
+          hand: [makeCard(1), makeCard(1, 'copas'), makeCard(7)],
+          pendingCombo: ronda,
+        }),
+        makePlayerState({ hand: [makeCard(2)] }),
+      ],
+    })
+    const { obs, mem } = makeObsAndMemory(state, 0)
+    // Memoire fraiche -> dissimule la ronda de 1 (pHigherRonda > seuil)
+    const action = chooseAction(obs, 0, 'medium', mem)
+    expect(action.type).toBe('PLAY_CARD')
+    if (action.type === 'PLAY_CARD') {
+      // Doit jouer la carte hors-combo (le 7), pas l'un des deux 1.
+      expect(action.card.value).toBe(7)
+    }
+  })
+
+  it('comboProtectionPenalty : penalise uniquement les cartes de la combo non declaree', () => {
+    const ronda: Combination = {
+      type: 'ronda', value: 1, cards: [makeCard(1), makeCard(1, 'copas')],
+    }
+    const state = makeGameState({
+      players: [
+        makePlayerState({
+          hand: [makeCard(1), makeCard(1, 'copas'), makeCard(7)],
+          pendingCombo: ronda,
+        }),
+        makePlayerState({ hand: [makeCard(2)] }),
+      ],
+    })
+    const { obs } = makeObsAndMemory(state, 0)
+    expect(comboProtectionPenalty(makeCard(1), obs)).toBeGreaterThan(0)
+    expect(comboProtectionPenalty(makeCard(1, 'copas'), obs)).toBeGreaterThan(0)
+    expect(comboProtectionPenalty(makeCard(7), obs)).toBe(0)
+  })
+
+  it('comboProtectionPenalty : nulle si la combo est deja declaree', () => {
+    const ronda: Combination = {
+      type: 'ronda', value: 1, cards: [makeCard(1), makeCard(1, 'copas')],
+    }
+    const state = makeGameState({
+      players: [
+        makePlayerState({
+          hand: [makeCard(1), makeCard(1, 'copas'), makeCard(7)],
+          pendingCombo: ronda,
+          declaredCombo: ronda,
+        }),
+        makePlayerState({ hand: [makeCard(2)] }),
+      ],
+    })
+    const { obs } = makeObsAndMemory(state, 0)
+    expect(comboProtectionPenalty(makeCard(1), obs)).toBe(0)
   })
 })
 

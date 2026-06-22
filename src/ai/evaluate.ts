@@ -35,7 +35,28 @@ export function scoreMove(
     score += endgameAdjustment(card, null, obs)
   }
 
+  score -= comboProtectionPenalty(card, obs)
+
   return score
+}
+
+/**
+ * Pénalité pour ne pas casser une combinaison qu'on détient encore mais qu'on
+ * n'a pas (encore) déclarée. Si le bot a décidé de dissimuler sa ronda (§2 de
+ * AI-STRATEGY.md), jouer l'une de ses cartes détruit définitivement le droit de
+ * la déclarer plus tard : on évite donc de poser une carte de la combo tant
+ * qu'on a un autre choix. La pénalité reste modérée pour qu'une caída/missa
+ * franche puisse tout de même justifier de la casser.
+ */
+export function comboProtectionPenalty(card: Card, obs: ObservableState): number {
+  const combo = obs.self.pendingCombo
+  if (combo === null || obs.self.declaredCombo !== null || obs.self.lostComboRight) {
+    return 0
+  }
+  const isComboCard = combo.cards.some(
+    c => c.value === card.value && c.suit === card.suit,
+  )
+  return isComboCard ? 2.0 : 0
 }
 
 /**
