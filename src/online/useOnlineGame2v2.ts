@@ -76,7 +76,7 @@ function buildState(g: Server2v2GameState): GameState2v2 {
         pendingCombo: null,
         declaredCombo: pub?.declaredCombo ?? null,
         lostComboRight: false,
-        playedThisRound: [],
+        playedThisRound: pub?.playedThisRound ?? [],
       }
     }
   }
@@ -119,10 +119,33 @@ function buildState(g: Server2v2GameState): GameState2v2 {
 export function useOnlineGame2v2() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   const [isCaptureAnimating, setCaptureAnimating] = useState(false)
+  // Valeurs déjà contestées par l'humain, clé incluant la manche pour expirer
+  // automatiquement à la redistribution (pas de reset explicite nécessaire).
+  const [contested, setContested] = useState<ReadonlySet<string>>(new Set())
 
   const gs = snap.game ? buildState(snap.game) : emptyState()
   const me = gs.players[0]
   const isHumanTurn = gs.currentPlayer === 0 && gs.phase === 'PLAYING'
+  const roundKey = `${gs.dealNumber}:${gs.roundNumber}`
+
+  // Cibles de contre : adversaires (locaux 1 et 3) ayant révélé ≥2 cartes de même
+  // valeur cette manche, non déjà déclarées ni déjà contestées par l'humain.
+  // Mêmes données publiques que le solo (playedThisRound), envoyées par le serveur.
+  const contestTargets: { player: PlayerId2v2; value: Value }[] = []
+  if (isHumanTurn) {
+    for (const adv of [1, 3] as PlayerId2v2[]) {
+      const counts = new Map<Value, number>()
+      for (const c of gs.players[adv].playedThisRound) {
+        counts.set(c.value, (counts.get(c.value) ?? 0) + 1)
+      }
+      for (const [value, n] of counts) {
+        if (n < 2) continue
+        if (gs.players[adv].declaredCombo?.value === value) continue
+        if (contested.has(`${roundKey}:${adv}:${value}`)) continue
+        contestTargets.push({ player: adv, value })
+      }
+    }
+  }
 
   const view: GameView2v2 = {
     state: gs,
@@ -131,7 +154,7 @@ export function useOnlineGame2v2() {
     teamScores: [gs.teams[0].score, gs.teams[1].score],
     teamCapturedCount: [gs.teams[0].captured.length, gs.teams[1].captured.length],
     canDeclare: me.pendingCombo !== null && me.declaredCombo === null && !me.lostComboRight,
-    contestTargets: [], // contre en ligne 2v2 : v2 (le serveur valide déjà)
+    contestTargets,
     isGameOver: gs.phase === 'GAME_OVER',
     isDealEnd: gs.phase === 'DEAL_END',
     isBotThinking: false,
@@ -145,9 +168,12 @@ export function useOnlineGame2v2() {
     (accusedPlayer: PlayerId2v2, accusedValue: Value) => {
       const my = snap.game?.seat ?? 0
       const { toServer } = seatMaps(my)
+      setContested((prev) =>
+        new Set(prev).add(`${roundKey}:${accusedPlayer}:${accusedValue}`),
+      )
       send('contest', { accusedPlayer: toServer[accusedPlayer], accusedValue })
     },
-    [snap.game?.seat],
+    [snap.game?.seat, roundKey],
   )
   const nextDeal = useCallback(() => send('continue_deal'), [])
   const startGame = useCallback((_firstDealer: PlayerId2v2) => {}, [])

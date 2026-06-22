@@ -30,7 +30,7 @@ export interface Server2v2GameState {
   lastEvents: GameEvent[]
   eventSeq: number
   teams: [{ score: number; capturedCount: number }, { score: number; capturedCount: number }]
-  players: { seat: PlayerId2v2; pseudo: string; isBot: boolean; team: 0 | 1; handCount: number; declaredCombo: Combination | null }[]
+  players: { seat: PlayerId2v2; pseudo: string; isBot: boolean; team: 0 | 1; handCount: number; declaredCombo: Combination | null; playedThisRound: Card[] }[]
   you: {
     hand: Card[]
     pendingCombo: Combination | null

@@ -390,6 +390,7 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
         team: teamOf(p),
         handCount: e.players[p].hand.length,
         declaredCombo: e.players[p].declaredCombo,
+        playedThisRound: e.players[p].playedThisRound,
       })),
       you: {
         hand: e.players[seat].hand,
