@@ -11,6 +11,7 @@ import {
   EventOverlay,
   BotThinking,
   DealEndScreen,
+  GameOverScreen,
   FLY_STAGGER,
   FLY_DURATION,
 } from './GameScreen'
@@ -278,17 +279,12 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game }: Props) {
 
   // Fin de partie.
   if (isGameOver) {
-    const won = teamScores[0] >= 41
     return (
-      <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
-        <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 24 }]}>
-          <Text style={styles.gameOverTitle}>{won ? 'Bravo !' : 'Perdu.'}</Text>
-          <Text style={styles.gameOverScore}>Vous {teamScores[0]} — Adversaires {teamScores[1]}</Text>
-          <TouchableOpacity style={styles.btnPrimary} onPress={() => { setSelectedRitual(null); newGame() }}>
-            <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+      <GameOverScreen
+        won={teamScores[0] >= 41}
+        scoreText={`Vous ${teamScores[0]} — Adversaires ${teamScores[1]}`}
+        onReplay={() => { setSelectedRitual(null); newGame() }}
+      />
     )
   }
 
@@ -573,8 +569,6 @@ const styles = StyleSheet.create({
   contestCancel: { paddingHorizontal: 12, paddingVertical: 8 },
   contestCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff },
 
-  gameOverTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 40, color: C.bone },
-  gameOverScore: { fontFamily: 'Cairo_400Regular', fontSize: 18, color: C.boneOff },
   btnPrimary: { backgroundColor: C.brass, borderRadius: 10, paddingHorizontal: 28, paddingVertical: 14 },
   btnPrimaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, letterSpacing: 0.5 },
 })

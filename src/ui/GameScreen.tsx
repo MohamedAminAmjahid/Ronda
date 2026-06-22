@@ -7,6 +7,7 @@ import ReAnimated, {
   withTiming,
   withSpring,
   withSequence,
+  withDelay,
   useReducedMotion,
 } from 'react-native-reanimated'
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
@@ -82,18 +83,26 @@ function DealerToken() {
 
 function DealAnnounce({ dealNumber, starterText }: { dealNumber: number; starterText: string }) {
   const opacity = useRef(new Animated.Value(0)).current
+  const scale = useRef(new Animated.Value(0.85)).current
 
   useEffect(() => {
     opacity.setValue(0)
-    Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(1000),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+    scale.setValue(0.85)
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.delay(1000),
+        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]),
+      Animated.spring(scale, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
     ]).start()
   }, [])
 
   return (
-    <Animated.View style={[styles.dealAnnounceRoot, { opacity }]} pointerEvents="none">
+    <Animated.View
+      style={[styles.dealAnnounceRoot, { opacity, transform: [{ scale }] }]}
+      pointerEvents="none"
+    >
       <Text style={styles.dealAnnounceLabel}>DONNE</Text>
       <Text style={styles.dealAnnounceNum}>{dealNumber}</Text>
       <Text style={styles.dealAnnounceStarter}>{starterText}</Text>
@@ -152,20 +161,64 @@ export function DealEndScreen({
 
 // ── Écran fin de partie ───────────────────────────────────────────────────────
 
-function GameOver({ scores, onReplay }: { scores: [number, number]; onReplay: () => void }) {
-  const won = scores[HUMAN_ID] >= 41
+/**
+ * Écran fin de partie animé, réutilisable 1v1 et 2v2.
+ * Rebond d'entrée sur le titre (plus prononcé si victoire), puis fondu du corps.
+ */
+export function GameOverScreen({
+  won,
+  scoreText,
+  onReplay,
+}: {
+  won: boolean
+  scoreText: string
+  onReplay: () => void
+}) {
+  const reduceMotion = useReducedMotion()
+  const titleScale = useSharedValue(reduceMotion ? 1 : 0.4)
+  const titleOpacity = useSharedValue(reduceMotion ? 1 : 0)
+  const bodyOpacity = useSharedValue(reduceMotion ? 1 : 0)
+
+  useEffect(() => {
+    if (reduceMotion) return
+    titleOpacity.value = withTiming(1, { duration: 220 })
+    titleScale.value = withSequence(
+      withSpring(won ? 1.2 : 1.08, { damping: 7, stiffness: 140, mass: 0.6 }),
+      withSpring(1, { damping: 11, stiffness: 160 }),
+    )
+    bodyOpacity.value = withDelay(180, withTiming(1, { duration: 320 }))
+  }, [reduceMotion, won])
+
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: titleOpacity.value,
+    transform: [{ scale: titleScale.value }],
+  }))
+  const bodyStyle = useAnimatedStyle(() => ({ opacity: bodyOpacity.value }))
+
   return (
     <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
       <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 24 }]}>
-        <Text style={styles.gameOverTitle}>{won ? 'Bravo !' : 'Perdu.'}</Text>
-        <Text style={styles.gameOverScore}>
-          Toi {scores[HUMAN_ID]} — Bot {scores[BOT_ID]}
-        </Text>
-        <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
-          <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
-        </TouchableOpacity>
+        <ReAnimated.Text style={[styles.gameOverTitle, titleStyle]}>
+          {won ? 'Bravo !' : 'Perdu.'}
+        </ReAnimated.Text>
+        <ReAnimated.View style={[{ alignItems: 'center', gap: 24 }, bodyStyle]}>
+          <Text style={styles.gameOverScore}>{scoreText}</Text>
+          <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
+            <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
+          </TouchableOpacity>
+        </ReAnimated.View>
       </View>
     </SafeAreaView>
+  )
+}
+
+function GameOver({ scores, onReplay }: { scores: [number, number]; onReplay: () => void }) {
+  return (
+    <GameOverScreen
+      won={scores[HUMAN_ID] >= 41}
+      scoreText={`Toi ${scores[HUMAN_ID]} — Bot ${scores[BOT_ID]}`}
+      onReplay={onReplay}
+    />
   )
 }
 
