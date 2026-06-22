@@ -151,6 +151,9 @@ export class RondaRoom extends Room<RondaState> {
       this.syncPublic()
       this.sendPrivateStateToAll() // l'adversaire voit l'écran de fin (Bravo)
       this.finishGame(opponentSeat) // record + broadcast game_over { winnerSeat: opponentSeat }
+      // Ferme la room ensuite — petit délai pour laisser les messages atteindre
+      // le vainqueur avant la fermeture des sockets.
+      this.clock.setTimeout(() => this.disconnect(), 800)
       return
     }
 

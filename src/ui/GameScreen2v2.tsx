@@ -157,10 +157,7 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
   const [showContest, setShowContest] = useState(false)
   const [confirmQuit, setConfirmQuit] = useState(false)
 
-  const handleQuit = () => {
-    if (online) setConfirmQuit(true)
-    else onBack()
-  }
+  const handleQuit = () => setConfirmQuit(true)
 
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
   const [toastEvents, setToastEvents] = useState<readonly GameEvent[] | null>(null)
@@ -359,7 +356,11 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
           <View style={styles.quitBackdrop}>
             <View style={styles.quitCard}>
               <Text style={styles.quitCardTitle}>Quitter la partie ?</Text>
-              <Text style={styles.quitCardText}>Si tu quittes, l'équipe adverse gagne automatiquement. Continuer ?</Text>
+              <Text style={styles.quitCardText}>
+                {online
+                  ? "Si tu quittes, l'équipe adverse gagne automatiquement. Continuer ?"
+                  : 'Veux-tu vraiment quitter la partie en cours ?'}
+              </Text>
               <View style={styles.quitActions}>
                 <TouchableOpacity style={styles.quitStay} onPress={() => setConfirmQuit(false)}>
                   <Text style={styles.quitStayTxt}>Rester</Text>
@@ -529,8 +530,8 @@ const styles = StyleSheet.create({
   quitActions: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 4 },
   quitStay: { paddingVertical: 12, paddingHorizontal: 18 },
   quitStayTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
-  quitLeave: { backgroundColor: C.clay, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 20 },
-  quitLeaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
+  quitLeave: { backgroundColor: 'rgba(231,76,60,0.15)', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22, borderWidth: 1.5, borderColor: '#E74C3C' },
+  quitLeaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: '#E74C3C' },
   muteIcon: { fontSize: 16 },
 
   topZone: { alignItems: 'center', paddingTop: 12, gap: 6 },

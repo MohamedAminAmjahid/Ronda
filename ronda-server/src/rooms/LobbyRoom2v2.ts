@@ -124,6 +124,8 @@ export class LobbyRoom2v2 extends Room<LobbyState> {
         this.state.phase = 'GAME_OVER'
         this.sendGameStateToAll() // l'équipe adverse voit l'écran de fin (Bravo)
         this.finishGame(winnerTeam) // record + broadcast game_over { winnerTeam }
+        // Ferme la room ensuite — petit délai pour laisser les messages arriver.
+        this.clock.setTimeout(() => this.disconnect(), 800)
       }
       return
     }
