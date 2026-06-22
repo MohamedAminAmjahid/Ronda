@@ -143,9 +143,17 @@ function applyPlayCard2v2(
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
 
-  // Carte laissée 1 tour si caída (sinon aucune).
+  // Carte laissée 1 tour si caída — MAIS seulement si :
+  //  1. le joueur SUIVANT (sens du jeu) peut continuer la chaîne : il a encore
+  //     une carte de même valeur en main ;
+  //  2. le joueur courant a encore des cartes après le coup (sinon la manche se
+  //     termine et aucune suite n'est possible → la carte va directement en pile).
+  const isCaida = captureResult !== null && captureResult.isCaida
+  const nextCanContinue = base.players[nextPlayer(playerId)].hand.some((c) => c.value === card.value)
+  const cardRemains = isCaida && nextCanContinue && newHand.length > 0
+
   const newPending: GameState2v2['pendingCaidaCard'] =
-    captureResult !== null && captureResult.isCaida ? { card, playerId } : null
+    cardRemains ? { card, playerId } : null
 
   const team = teamOf(playerId)
   const players = withPlayer(base.players, playerId, {
@@ -158,16 +166,17 @@ function applyPlayCard2v2(
   let newState: GameState2v2
 
   if (captureResult !== null) {
-    const { captured, tableAfter, isMissa, remainsOnTable } = captureResult
+    const { captured, tableAfter, isMissa } = captureResult
     const bonus = caidaPoints + (isMissa ? 1 : 0)
     const events: GameEvent[] = [...caidaEvents, ...(isMissa ? (['missa'] as const) : [])]
 
-    // Caída : la carte joueuse reste sur la table → pile d'équipe = cartes adverses
-    // seulement, table = tableAfter + carte joueuse. Sinon, carte joueuse dans la pile.
-    const newPile = remainsOnTable !== null
+    // Carte joueuse maintenue sur la table (caída avec suite possible) → pile
+    // d'équipe = cartes capturées seulement, table = tableAfter + carte joueuse.
+    // Sinon, la carte joueuse va dans la pile.
+    const newPile = cardRemains
       ? [...base.teams[team].captured, ...captured]
       : [...base.teams[team].captured, card, ...captured]
-    const finalTable = remainsOnTable !== null ? [...tableAfter, remainsOnTable] : tableAfter
+    const finalTable = cardRemains ? [...tableAfter, card] : tableAfter
 
     const teams = withTeam(base.teams, team, {
       captured: newPile,
@@ -179,7 +188,7 @@ function applyPlayCard2v2(
       table: finalTable,
       players,
       teams,
-      lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
+      lastCapture: { playerId, card: cardRemains ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
       pendingCaidaCard: newPending,

@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Animated, Easing, Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import ReAnimated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withDelay,
   withSpring,
   withSequence,
   useReducedMotion,
-  Easing,
 } from 'react-native-reanimated'
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
@@ -35,6 +33,12 @@ const C = {
   ink:     '#1C2622',
   boneOff: 'rgba(244,236,216,0.35)',
 } as const
+
+// Sur web, l'Animated natif de React Native (transform/opacity) est plus fluide
+// que Reanimated. Le pilote natif n'existe pas sur web → useNativeDriver seulement
+// sur mobile.
+const IS_WEB = Platform.OS === 'web'
+const USE_NATIVE_DRIVER = !IS_WEB
 
 /**
  * Trie les cartes de la table selon l'ordre de l'escalier
@@ -249,27 +253,40 @@ export function DealFly({
   delay: number
 }) {
   const reduceMotion = useReducedMotion()
-  const tx = useSharedValue(reduceMotion ? 0 : startX)
-  const ty = useSharedValue(reduceMotion ? 0 : startY)
-  const op = useSharedValue(reduceMotion ? 1 : 0)
+  const tx = useRef(new Animated.Value(reduceMotion ? 0 : startX)).current
+  const ty = useRef(new Animated.Value(reduceMotion ? 0 : startY)).current
+  const op = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current
 
   useEffect(() => {
     // Son de distribution, calé sur le départ de la carte.
     const sndTid = setTimeout(() => { void playSound('card_deal') }, delay)
     if (reduceMotion) return () => clearTimeout(sndTid)
-    const spring = { damping: 16, stiffness: 130, mass: 0.7 }
-    tx.value = withDelay(delay, withSpring(0, spring))
-    ty.value = withDelay(delay, withSpring(0, spring))
-    op.value = withDelay(delay, withTiming(1, { duration: 180 }))
+
+    if (IS_WEB) {
+      // Web : une seule valeur animée (translateY) + timing → plus fluide
+      // qu'un double spring X+Y.
+      Animated.parallel([
+        Animated.timing(ty, { toValue: 0, duration: 260, delay, easing: Easing.out(Easing.quad), useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(op, { toValue: 1, duration: 180, delay, useNativeDriver: USE_NATIVE_DRIVER }),
+      ]).start()
+    } else {
+      // Mobile natif : spring X+Y (effet « éventail » depuis la pioche).
+      const spring = { useNativeDriver: USE_NATIVE_DRIVER, damping: 16, stiffness: 130, mass: 0.7, delay }
+      Animated.parallel([
+        Animated.spring(tx, { toValue: 0, ...spring }),
+        Animated.spring(ty, { toValue: 0, ...spring }),
+        Animated.timing(op, { toValue: 1, duration: 180, delay, useNativeDriver: USE_NATIVE_DRIVER }),
+      ]).start()
+    }
     return () => clearTimeout(sndTid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const st = useAnimatedStyle(() => ({
-    opacity: op.value,
-    transform: [{ translateX: tx.value }, { translateY: ty.value }],
-  }))
+  const transform = IS_WEB
+    ? [{ translateY: ty }]
+    : [{ translateX: tx }, { translateY: ty }]
 
-  return <ReAnimated.View style={st}>{children}</ReAnimated.View>
+  return <Animated.View style={{ opacity: op, transform }}>{children}</Animated.View>
 }
 
 // ── Animation pose : glisse depuis la main vers la table (~250 ms) ────────────
@@ -306,10 +323,12 @@ function PlayedCard({
 // dans la rangée de table (opacity réduite) et chacune s'aspire l'une après
 // l'autre vers la pile du captureur. Pour 4 cartes : (4-1)*200 + 500 = 1100 ms.
 
-export const FLY_STAGGER = 300
-export const FLY_DURATION = 800
+// Sur web, on raccourcit le stagger et la durée : les animations longues
+// amplifient le lag. Mobile natif garde des valeurs plus généreuses.
+export const FLY_STAGGER = IS_WEB ? 200 : 300
+export const FLY_DURATION = IS_WEB ? 500 : 800
 const FLY_ZOOM = 150                       // phase de « bond » (zoom)
-const FLY_SUCK = FLY_DURATION - FLY_ZOOM   // phase d'aspiration (650 ms)
+const FLY_SUCK = FLY_DURATION - FLY_ZOOM   // phase d'aspiration
 
 export function FlyingCard({
   card,
@@ -321,35 +340,28 @@ export function FlyingCard({
   delay: number
 }) {
   const reduceMotion = useReducedMotion()
-  const scale = useSharedValue(1)
-  const ty    = useSharedValue(0)
-  const op    = useSharedValue(0.5)   // marqueur « déjà capturée »
+  const scale = useRef(new Animated.Value(1)).current
+  const ty    = useRef(new Animated.Value(0)).current
+  const op    = useRef(new Animated.Value(0.5)).current   // marqueur « déjà capturée »
 
   useEffect(() => {
-    if (reduceMotion) { scale.value = 0; op.value = 0; return }
+    if (reduceMotion) { scale.setValue(0); op.setValue(0); return }
     const ease = Easing.in(Easing.cubic)
     // La carte « bondit » (1 → 1.15) puis s'aspire (1.15 → 0).
-    scale.value = withDelay(delay, withSequence(
-      withTiming(1.15, { duration: FLY_ZOOM }),
-      withTiming(0,    { duration: FLY_SUCK, easing: ease }),
-    ))
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.15, duration: FLY_ZOOM, delay, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(scale, { toValue: 0,    duration: FLY_SUCK, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }),
+    ]).start()
     // Glissement vers la pile + fondu pendant la phase d'aspiration.
-    ty.value = withDelay(delay + FLY_ZOOM, withTiming(180 * dir, { duration: FLY_SUCK, easing: ease }))
-    op.value = withDelay(delay + FLY_ZOOM, withTiming(0,         { duration: FLY_SUCK }))
+    Animated.timing(ty, { toValue: 180 * dir, duration: FLY_SUCK, delay: delay + FLY_ZOOM, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }).start()
+    Animated.timing(op, { toValue: 0,         duration: FLY_SUCK, delay: delay + FLY_ZOOM, useNativeDriver: USE_NATIVE_DRIVER }).start()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const st = useAnimatedStyle(() => ({
-    opacity: op.value,
-    transform: [
-      { translateY: ty.value },
-      { scale: scale.value },
-    ],
-  }))
-
   return (
-    <ReAnimated.View style={st}>
+    <Animated.View style={{ opacity: op, transform: [{ translateY: ty }, { scale }] }}>
       <CardFace card={card} size="md" />
-    </ReAnimated.View>
+    </Animated.View>
   )
 }
 
@@ -602,6 +614,10 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
     }
   }, [lastEvent?.id])
 
+  // Tri des cartes de table mémoïsé : ne se recalcule que si la table change,
+  // pas à chaque re-render (animations, états transitoires…).
+  const sortedTable = useMemo(() => sortTableCards(view.state.table), [view.state.table])
+
   // ── Sélection du rituel (avant la partie) ─────────────────────────────────
   if (appPhase === 'RITUAL_PICKER') {
     if (!selectedRitual) {
@@ -746,7 +762,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName }: Gam
           <Text style={styles.tableEmpty}>Table vide</Text>
         ) : (
           <View style={styles.tableCards}>
-            {sortTableCards(state.table).map((card) => {
+            {sortedTable.map((card) => {
               const k = `${card.value}-${card.suit}`
               const isLast =
                 lastOnTable !== null &&

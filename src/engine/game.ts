@@ -152,14 +152,22 @@ function applyPlayCard(
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
 
-  // Carte laissée 1 tour si caída (sinon aucune).
+  // Carte laissée 1 tour si caída — MAIS seulement si :
+  //  1. l'adversaire peut continuer la chaîne (il a encore une carte de même
+  //     valeur en main) ;
+  //  2. le joueur courant a encore des cartes après le coup (sinon la manche se
+  //     termine et aucune suite n'est possible → la carte va directement en pile).
+  const isCaida = captureResult !== null && captureResult.isCaida
+  const opponentCanContinue = base.players[opponent].hand.some(c => c.value === card.value)
+  const cardRemains = isCaida && opponentCanContinue && newHand.length > 0
+
   const newPending: GameState['pendingCaidaCard'] =
-    captureResult !== null && captureResult.isCaida ? { card, playerId } : null
+    cardRemains ? { card, playerId } : null
 
   let newState: GameState
 
   if (captureResult !== null) {
-    const { captured, tableAfter, isMissa, remainsOnTable } = captureResult
+    const { captured, tableAfter, isMissa } = captureResult
 
     let scoreBonus = caidaPoints
     if (isMissa) scoreBonus += 1
@@ -169,12 +177,13 @@ function applyPlayCard(
       ...(isMissa ? (['missa'] as const) : []),
     ]
 
-    // Caída : la carte joueuse RESTE sur la table → pile = cartes adverses seulement,
-    // table = tableAfter + la carte joueuse. Sinon, la carte joueuse va dans la pile.
-    const newPile = remainsOnTable !== null
+    // Carte joueuse maintenue sur la table (caída avec suite possible) → pile =
+    // cartes capturées seulement, table = tableAfter + carte joueuse. Sinon, la
+    // carte joueuse va dans la pile.
+    const newPile = cardRemains
       ? [...player.captured, ...captured]
       : [...player.captured, card, ...captured]
-    const finalTable = remainsOnTable !== null ? [...tableAfter, remainsOnTable] : tableAfter
+    const finalTable = cardRemains ? [...tableAfter, card] : tableAfter
 
     const updatedPlayer: PlayerState = {
       ...player,
@@ -194,7 +203,7 @@ function applyPlayCard(
         playerId === 1 ? updatedPlayer : base.players[1],
       ],
       // Caída : la « prise » est la carte adverse capturée ; sinon la carte joueuse.
-      lastCapture: { playerId, card: remainsOnTable !== null ? captured[0] : card },
+      lastCapture: { playerId, card: cardRemains ? captured[0] : card },
       lastPlayed: newLastPlayed,
       caidaChain: newCaidaChain,
       pendingCaidaCard: newPending,

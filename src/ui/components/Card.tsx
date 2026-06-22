@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { View, Image, TouchableOpacity, StyleSheet } from 'react-native'
 import { Svg, Polygon } from 'react-native-svg'
 import type { Card as CardType } from '../../engine/types'
@@ -24,7 +25,7 @@ export type CardFaceProps = {
   disabled?:   boolean
 }
 
-export function CardFace({
+export const CardFace = memo(function CardFace({
   card,
   size = 'lg',
   selected    = false,
@@ -66,7 +67,7 @@ export function CardFace({
     )
   }
   return face
-}
+})
 
 // ── Dos de carte (khatam) ────────────────────────────────────────────────────
 
@@ -81,7 +82,7 @@ function KhatamStar({ size }: { size: number }) {
   )
 }
 
-export function CardBack({ size = 'lg' }: { size?: CardSize }) {
+export const CardBack = memo(function CardBack({ size = 'lg' }: { size?: CardSize }) {
   const dim    = DIM[size]
   const starSz = Math.round(dim.w * 0.6)
   return (
@@ -89,7 +90,7 @@ export function CardBack({ size = 'lg' }: { size?: CardSize }) {
       <KhatamStar size={starSz} />
     </View>
   )
-}
+})
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 

@@ -59,19 +59,9 @@ export function resolveCapture(
     lastPlayedByOpponent.value === captured[0].value &&
     lastPlayedByOpponent.suit  === captured[0].suit
 
-  // Caída : la carte joueuse RESTE sur la table (nouvel appât) ; seule la carte
-  // adverse part dans la pile. Pas d'escalier ni de missa sur une caída.
-  if (isCaida) {
-    return {
-      captured,                 // uniquement la carte adverse capturée
-      tableAfter: tableArr,     // table sans la carte adverse (la carte joueuse est rajoutée par applyPlayCard)
-      isCaida: true,
-      isMissa: false,
-      remainsOnTable: playedCard,
-    }
-  }
-
-  // Capture normale : escalier (valeurs croissantes consécutives).
+  // Escalier (valeurs croissantes consécutives) — s'applique TOUJOURS, y compris
+  // après une caída : si la table contient les valeurs suivantes (ex. caída sur 2
+  // alors qu'un 3 est sur la table), ces cartes sont capturées normalement.
   let next = nextValue(playedCard.value)
   while (next !== null) {
     const idx = tableArr.findIndex(c => c.value === next)
@@ -79,6 +69,19 @@ export function resolveCapture(
     captured.push(tableArr[idx])
     tableArr.splice(idx, 1)
     next = nextValue(next)
+  }
+
+  // Caída : la carte joueuse RESTE sur la table (nouvel appât) ; les cartes
+  // capturées (carte adverse + escalier) partent dans la pile. Pas de missa
+  // (la table n'est jamais vide puisque la carte joueuse y reste).
+  if (isCaida) {
+    return {
+      captured,                 // carte adverse capturée + escalier éventuel
+      tableAfter: tableArr,     // table sans les cartes capturées (la carte joueuse est rajoutée par applyPlayCard)
+      isCaida: true,
+      isMissa: false,
+      remainsOnTable: playedCard,
+    }
   }
 
   const isMissa = tableArr.length === 0

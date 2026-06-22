@@ -744,7 +744,7 @@ describe('15. Chaine de caidas', () => {
     //   T1 : P0 pose 5o            -> table [5o]
     //   T2 : P1 capture (5c)       -> Ara Wahd  (+1 P1) ; table [5c] ; pile P1 [5o]
     //   T3 : P0 capture (5e)       -> Ara Khamssa (+5 P0); table [5e]; pile P0 [5c]
-    //   T4 : P1 capture (5b)       -> Ara 7dach  (+11 P1); table [5b]
+    //   T4 : P1 capture (5b)       -> Ara 7dach  (+11 P1); table [] (chaine finie)
     let st = makeGameState({
       currentPlayer: 0,
       dealer: 1,
@@ -779,15 +779,19 @@ describe('15. Chaine de caidas', () => {
     expect(st.players[0].captured).toEqual([makeCard(5, 'copas')])
 
     // T4 : P1 capture -> Ara 7dach (+11). Total bot = 1 + 11 = 12.
+    // Les quatre 5 sont desormais joues : P0 n'a plus de 5 en main → la chaine ne
+    // peut plus continuer, donc le 5b ne reste PAS sur la table (il va en pile).
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'bastos') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 3, value: 5 })
     expect(st.players[1].score).toBe(12)
     expect(st.lastEvents).toContain('ara_7dach')
-    expect(st.table).toEqual([makeCard(5, 'bastos')])
+    expect(st.table).toEqual([])
+    expect(st.pendingCaidaCard).toBeNull()
   })
 
   it('caida non poursuivie : la carte restee repart dans la pile de son joueur', () => {
-    // T1 P0 pose 5o ; T2 P1 caida (Ara Wahd) -> 5c reste sur la table ;
+    // T1 P0 pose 5o ; T2 P1 caida (Ara Wahd) -> 5c reste sur la table (P0 a encore
+    // un 5 en main, donc la chaine PEUT continuer) ;
     // T3 P0 joue un 7 (pas une caida de meme valeur) -> le 5c repart dans la pile de P1.
     let st = makeGameState({
       currentPlayer: 0,
@@ -796,7 +800,7 @@ describe('15. Chaine de caidas', () => {
       lastPlayed: [null, null],
       caidaChain: null,
       players: [
-        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(7, 'espadas'), makeCard(2, 'oros')] }),
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(7, 'espadas'), makeCard(5, 'espadas')] }),
         makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(5, 'bastos'), makeCard(3, 'copas')] }),
       ],
     })
@@ -814,5 +818,76 @@ describe('15. Chaine de caidas', () => {
     expect(st.table).toEqual([makeCard(7, 'espadas')])                    // le 5c a quitte la table
     expect(st.players[1].captured).toEqual([makeCard(5, 'oros'), makeCard(5, 'copas')]) // 5c rendu a P1
     expect(st.players[1].score).toBe(1)                                   // score inchange
+  })
+
+  it('correction 1 : la carte ne reste PAS si l\'adversaire n\'a aucun 5 en main', () => {
+    // P0 pose 5o puis n'a plus de 5 ; P1 caida (Ara Wahd). Comme P0 ne peut pas
+    // poursuivre la chaine, le 5c va directement en pile (pas sur la table).
+    let st = makeGameState({
+      currentPlayer: 0,
+      dealer: 1,
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(2, 'oros')] }),
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(3, 'copas')] }),
+      ],
+    })
+
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+
+    expect(st.lastEvents).toContain('caida')
+    expect(st.players[1].score).toBe(1)
+    expect(st.caidaChain).toEqual({ level: 1, value: 5 })
+    expect(st.pendingCaidaCard).toBeNull()             // pas d'appat laisse
+    expect(st.table).toEqual([])                        // 5c parti en pile, pas sur la table
+    expect(st.players[1].captured).toEqual([makeCard(5, 'copas'), makeCard(5, 'oros')])
+  })
+
+  it('correction 2 : la carte ne reste PAS si la main du capteur est vide apres le coup', () => {
+    // P1 fait une caida avec sa derniere carte. Meme si P0 a encore un 5, la
+    // manche va se terminer cote P1 → le 5c va en pile, pas sur la table.
+    let st = makeGameState({
+      currentPlayer: 0,
+      dealer: 1,
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(5, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(5, 'copas')] }),   // une seule carte
+      ],
+    })
+
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+
+    expect(st.lastEvents).toContain('caida')
+    expect(st.players[1].score).toBe(1)
+    expect(st.pendingCaidaCard).toBeNull()             // main vide → aucun appat
+    expect(st.table).toEqual([])
+    expect(st.players[1].captured).toEqual([makeCard(5, 'copas'), makeCard(5, 'oros')])
+  })
+
+  it('correction 3 : escalier applique apres une caida (caida sur 2, 3 sur la table)', () => {
+    // Table = [3b]. P0 pose 2o (pas de capture). P1 pose 2c -> caida sur 2o ; le 3b
+    // est consecutif (escalier) donc capture aussi. Le 2c reste sur la table (P0 a
+    // encore un 2). Pile P1 = [2o, 3b].
+    let st = makeGameState({
+      currentPlayer: 0,
+      dealer: 1,
+      table: [makeCard(3, 'bastos')],
+      players: [
+        makePlayerState({ hand: [makeCard(2, 'oros'), makeCard(2, 'espadas'), makeCard(6, 'oros')] }),
+        makePlayerState({ hand: [makeCard(2, 'copas'), makeCard(6, 'copas')] }),
+      ],
+    })
+
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(2, 'oros') }, rngZero)
+    expect(st.table).toEqual([makeCard(3, 'bastos'), makeCard(2, 'oros')])  // pas de capture
+
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(2, 'copas') }, rngZero)
+    expect(st.lastEvents).toContain('caida')
+    expect(st.players[1].score).toBe(1)
+    // Le 2c reste (appat), le 2o (caida) + 3b (escalier) partent dans la pile de P1.
+    expect(st.pendingCaidaCard).toEqual({ card: makeCard(2, 'copas'), playerId: 1 })
+    expect(st.table).toEqual([makeCard(2, 'copas')])
+    expect(st.players[1].captured).toEqual([makeCard(2, 'oros'), makeCard(3, 'bastos')])
   })
 })

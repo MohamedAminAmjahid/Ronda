@@ -207,6 +207,75 @@ describe('2v2 — Chaîne de caídas inter-équipes', () => {
     expect(st.teams[0].score).toBe(1)
     expect(st.lastEvents).toContain('caida')
   })
+
+  // playerId capture la carte posée par prevPlayer(playerId). nextPlayer(playerId)
+  // est le joueur qui pourrait poursuivre la chaîne.
+  type Players4 = [PlayerState2v2, PlayerState2v2, PlayerState2v2, PlayerState2v2]
+
+  it('correction 1 : la carte reste si le joueur suivant a la même valeur en main', () => {
+    const lastPlayed: [Card | null, Card | null, Card | null, Card | null] =
+      [null, null, makeCard(5, 'oros'), null] // prevPlayer(1) = 2
+    const players: Players4 = [
+      makePlayer({ hand: [makeCard(5, 'espadas'), makeCard(11, 'bastos')] }), // P0 = nextPlayer(1) a un 5
+      makePlayer({ hand: [makeCard(5, 'copas'), makeCard(11, 'copas')] }),    // P1 capture
+      makePlayer({ hand: [makeCard(11, 'espadas')] }),
+      makePlayer({ hand: [makeCard(11, 'oros')] }),
+    ]
+    const st = applyAction2v2(
+      makeState({ currentPlayer: 1, table: [makeCard(5, 'oros'), makeCard(12, 'bastos')], lastPlayed, players }),
+      { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero,
+    )
+    expect(st.lastEvents).toContain('caida')
+    expect(st.teams[1].score).toBe(1)
+    expect(st.pendingCaidaCard).toEqual({ card: makeCard(5, 'copas'), playerId: 1 })
+    expect(st.table).toEqual([makeCard(12, 'bastos'), makeCard(5, 'copas')]) // 5c reste (appat)
+    expect(st.teams[1].captured).toEqual([makeCard(5, 'oros')])
+  })
+
+  it('correction 1 : la carte ne reste PAS si le joueur suivant n\'a pas la valeur', () => {
+    const lastPlayed: [Card | null, Card | null, Card | null, Card | null] =
+      [null, null, makeCard(5, 'oros'), null]
+    const players: Players4 = [
+      makePlayer({ hand: [makeCard(11, 'espadas')] }),                       // P0 = nextPlayer(1) sans 5
+      makePlayer({ hand: [makeCard(5, 'copas'), makeCard(11, 'copas')] }),   // P1 capture
+      makePlayer({ hand: [makeCard(11, 'bastos')] }),
+      makePlayer({ hand: [makeCard(11, 'oros')] }),
+    ]
+    const st = applyAction2v2(
+      makeState({ currentPlayer: 1, table: [makeCard(5, 'oros'), makeCard(12, 'bastos')], lastPlayed, players }),
+      { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero,
+    )
+    expect(st.lastEvents).toContain('caida')
+    expect(st.teams[1].score).toBe(1)
+    expect(st.pendingCaidaCard).toBeNull()
+    expect(st.table).toEqual([makeCard(12, 'bastos')])                       // 5c parti en pile
+    expect(st.teams[1].captured).toEqual([makeCard(5, 'copas'), makeCard(5, 'oros')])
+  })
+
+  it('correction 3 : escalier appliqué après une caída (2v2)', () => {
+    const lastPlayed: [Card | null, Card | null, Card | null, Card | null] =
+      [null, null, makeCard(2, 'oros'), null]
+    const players: Players4 = [
+      makePlayer({ hand: [makeCard(2, 'espadas'), makeCard(11, 'bastos')] }), // P0 = nextPlayer(1) a un 2
+      makePlayer({ hand: [makeCard(2, 'copas'), makeCard(11, 'copas')] }),    // P1 capture
+      makePlayer({ hand: [makeCard(11, 'espadas')] }),
+      makePlayer({ hand: [makeCard(11, 'oros')] }),
+    ]
+    // Table : 2o (appât) + 3b (consécutif → escalier) + 12 (évite missa).
+    const st = applyAction2v2(
+      makeState({
+        currentPlayer: 1,
+        table: [makeCard(2, 'oros'), makeCard(3, 'bastos'), makeCard(12, 'bastos')],
+        lastPlayed, players,
+      }),
+      { type: 'PLAY_CARD', playerId: 1, card: makeCard(2, 'copas') }, rngZero,
+    )
+    expect(st.lastEvents).toContain('caida')
+    expect(st.pendingCaidaCard).toEqual({ card: makeCard(2, 'copas'), playerId: 1 })
+    expect(st.table).toEqual([makeCard(12, 'bastos'), makeCard(2, 'copas')]) // 2c reste
+    // 2o (caída) + 3b (escalier) → pile équipe B.
+    expect(st.teams[1].captured).toEqual([makeCard(2, 'oros'), makeCard(3, 'bastos')])
+  })
 })
 
 // ---------------------------------------------------------------------------
