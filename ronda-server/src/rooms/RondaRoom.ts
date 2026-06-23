@@ -51,7 +51,7 @@ class RondaState extends Schema {
 const EVENT_POINTS: Record<GameEvent, number> = {
   caida: 1,
   ara_khamssa: 5,
-  ara_7dach: 11,
+  ara_3achra: 10,
   missa: 1,
   ronda: 1,
   tringa: 5,

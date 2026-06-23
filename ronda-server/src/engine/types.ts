@@ -68,7 +68,7 @@ export type GamePhase =
 export type GameEvent =
   | 'caida'         // Ara Wahd  (caída niveau 1, +1)
   | 'ara_khamssa'   // caída niveau 2 (+5)
-  | 'ara_7dach'     // caída niveau 3 (+11)
+  | 'ara_3achra'    // caída niveau 3 (+10)
   | 'missa'
   | 'ronda'
   | 'tringa'
@@ -91,7 +91,7 @@ export interface GameState {
   lastCapture: { playerId: PlayerId; card: Card } | null
   /**
    * Chaîne de caídas en cours sur une même valeur (section 3.2).
-   * level 1 = Ara Wahd (+1), 2 = Ara Khamssa (+5), 3 = Ara 7dach (+11).
+   * level 1 = Ara Wahd (+1), 2 = Ara Khamssa (+5), 3 = Ara 3achra (+10).
    * null si aucune chaîne (reset dès qu'un coup ne capture pas la dernière
    * carte adverse, ou capture une valeur différente).
    */

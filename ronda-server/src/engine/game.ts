@@ -146,11 +146,19 @@ function applyPlayCard(
     newCaidaChain = { level: caidaLevel, value: card.value }
   }
 
-  const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
+  const caidaPoints = caidaLevel === 3 ? 10 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
   const caidaEvents: GameEvent[] =
-    caidaLevel === 3 ? ['ara_7dach'] :
+    caidaLevel === 3 ? ['ara_3achra'] :
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
+
+  // Montée de chaîne : on efface les points que l'adversaire avait gagnés au
+  // niveau précédent (Ara Khamssa efface son Ara Wahd ; Ara 3achra efface son
+  // Ara Khamssa). La pénalité dépend du niveau précédent : 1 → -1, 2 → -5.
+  const opponentPenalty =
+    caidaLevel >= 2 && prevChain !== null
+      ? (prevChain.level === 1 ? 1 : prevChain.level === 2 ? 5 : 0)
+      : 0
 
   // Carte laissée 1 tour si caída — MAIS seulement si :
   //  1. l'adversaire peut continuer la chaîne (il a encore une carte de même
@@ -195,12 +203,18 @@ function applyPlayCard(
       pendingCombo: detectCombination(newHand),
     }
 
+    // L'adversaire perd les points gagnés au niveau de chaîne précédent (jamais < 0).
+    const updatedOpponent: PlayerState =
+      opponentPenalty > 0
+        ? { ...base.players[opponent], score: Math.max(0, base.players[opponent].score - opponentPenalty) }
+        : base.players[opponent]
+
     newState = {
       ...base,
       table: finalTable,
       players: [
-        playerId === 0 ? updatedPlayer : base.players[0],
-        playerId === 1 ? updatedPlayer : base.players[1],
+        playerId === 0 ? updatedPlayer : updatedOpponent,
+        playerId === 1 ? updatedPlayer : updatedOpponent,
       ],
       // Caída : la « prise » est la carte adverse capturée ; sinon la carte joueuse.
       lastCapture: { playerId, card: cardRemains ? captured[0] : card },

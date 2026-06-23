@@ -194,11 +194,11 @@ describe('2v2 — Chaîne de caídas inter-équipes', () => {
     expect(st.lastEvents).toContain('ara_khamssa')
   })
 
-  it('Ara 7dach (joueur 3, équipe B) → +11, niveau 3', () => {
+  it('Ara 3achra (joueur 3, équipe B) → +10, niveau 3', () => {
     const st = playCaida(3, 5, { level: 2, value: 5 })
     expect(st.caidaChain).toEqual({ level: 3, value: 5 })
-    expect(st.teams[1].score).toBe(11) // équipe B
-    expect(st.lastEvents).toContain('ara_7dach')
+    expect(st.teams[1].score).toBe(10) // équipe B
+    expect(st.lastEvents).toContain('ara_3achra')
   })
 
   it('valeur différente → la chaîne repart à Ara Wahd', () => {
@@ -275,6 +275,49 @@ describe('2v2 — Chaîne de caídas inter-équipes', () => {
     expect(st.table).toEqual([makeCard(12, 'bastos'), makeCard(2, 'copas')]) // 2c reste
     // 2o (caída) + 3b (escalier) → pile équipe B.
     expect(st.teams[1].captured).toEqual([makeCard(2, 'oros'), makeCard(3, 'bastos')])
+  })
+
+  it('regle: Ara Khamssa efface le +1 de l\'equipe adverse', () => {
+    // P2 (équipe A) fait Ara Khamssa en capturant le 5 posé par P3 = prevPlayer(2)
+    // (équipe B). L'équipe B, qui avait fait Ara Wahd, perd son +1.
+    const st = makeState({
+      currentPlayer: 2,
+      table: [makeCard(5, 'oros'), makeCard(12, 'bastos')], // 12 évite la missa
+      lastPlayed: [null, null, null, makeCard(5, 'oros')], // posée par P3 = prevPlayer(2)
+      caidaChain: { level: 1, value: 5 },
+      teams: [{ captured: [], score: 0 }, { captured: [], score: 1 }], // B a son +1
+      players: [
+        makePlayer({ hand: [makeCard(2, 'bastos')] }),
+        makePlayer({ hand: [makeCard(2, 'oros')] }), // P1 = nextPlayer(2), pas de 5
+        makePlayer({ hand: [makeCard(5, 'copas'), makeCard(2, 'espadas')] }),
+        makePlayer({ hand: [makeCard(2, 'copas')] }),
+      ],
+    })
+    const next = applyAction2v2(st, { type: 'PLAY_CARD', playerId: 2, card: makeCard(5, 'copas') }, rngZero)
+    expect(next.lastEvents).toContain('ara_khamssa')
+    expect(next.teams[0].score).toBe(5) // équipe A : Ara Khamssa
+    expect(next.teams[1].score).toBe(0) // équipe B : son +1 effacé
+  })
+
+  it('regle: missa sur caida en 2v2 → +1 en plus', () => {
+    // Table = [5o] seulement. P1 capture le 5 posé par P2 = prevPlayer(1) ; la table
+    // est vidée → missa. P0 = nextPlayer(1) n'a pas de 5 → la carte va en pile.
+    const st = makeState({
+      currentPlayer: 1,
+      table: [makeCard(5, 'oros')],
+      lastPlayed: [null, null, makeCard(5, 'oros'), null], // posée par P2 = prevPlayer(1)
+      caidaChain: null,
+      players: [
+        makePlayer({ hand: [makeCard(2, 'bastos')] }), // P0 = nextPlayer(1) sans 5
+        makePlayer({ hand: [makeCard(5, 'copas'), makeCard(2, 'oros')] }),
+        makePlayer({ hand: [makeCard(2, 'espadas')] }),
+        makePlayer({ hand: [makeCard(2, 'copas')] }),
+      ],
+    })
+    const next = applyAction2v2(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+    expect(next.lastEvents).toContain('caida')
+    expect(next.lastEvents).toContain('missa')
+    expect(next.teams[1].score).toBe(2) // +1 caida +1 missa
   })
 })
 

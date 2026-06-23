@@ -137,11 +137,19 @@ function applyPlayCard2v2(
     else caidaLevel = 1
     newCaidaChain = { level: caidaLevel, value: card.value }
   }
-  const caidaPoints = caidaLevel === 3 ? 11 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
+  const caidaPoints = caidaLevel === 3 ? 10 : caidaLevel === 2 ? 5 : caidaLevel === 1 ? 1 : 0
   const caidaEvents: GameEvent[] =
-    caidaLevel === 3 ? ['ara_7dach'] :
+    caidaLevel === 3 ? ['ara_3achra'] :
     caidaLevel === 2 ? ['ara_khamssa'] :
     caidaLevel === 1 ? ['caida'] : []
+
+  // Montée de chaîne : l'équipe adverse perd les points gagnés au niveau
+  // précédent (1 → -1, 2 → -5). Les équipes alternent dans le sens du jeu, donc
+  // l'équipe qui avait marqué la chaîne est l'opposée de l'équipe courante.
+  const opponentPenalty =
+    caidaLevel >= 2 && prevChain !== null
+      ? (prevChain.level === 1 ? 1 : prevChain.level === 2 ? 5 : 0)
+      : 0
 
   // Carte laissée 1 tour si caída — MAIS seulement si :
   //  1. le joueur SUIVANT (sens du jeu) peut continuer la chaîne : il a encore
@@ -178,10 +186,16 @@ function applyPlayCard2v2(
       : [...base.teams[team].captured, card, ...captured]
     const finalTable = cardRemains ? [...tableAfter, card] : tableAfter
 
-    const teams = withTeam(base.teams, team, {
+    let teams = withTeam(base.teams, team, {
       captured: newPile,
       score: base.teams[team].score + bonus,
     })
+    if (opponentPenalty > 0) {
+      const oppTeam = (1 - team) as 0 | 1
+      teams = withTeam(teams, oppTeam, {
+        score: Math.max(0, teams[oppTeam].score - opponentPenalty),
+      })
+    }
 
     newState = {
       ...base,

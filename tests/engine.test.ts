@@ -177,17 +177,24 @@ describe('4. Missa (balayage)', () => {
     expect(result!.tableAfter).toHaveLength(1)
   })
 
-  it('caida : la carte joueuse reste sur la table -> pas de missa', () => {
-    // Nouvelle regle : sur une caida, la carte joueuse reste sur la table, donc
-    // la table n'est jamais videe -> isMissa = false. Seule la carte adverse est
-    // capturee ; la carte joueuse est renvoyee dans remainsOnTable.
+  it('caida qui vide la table -> missa (la carte joueuse reste en appat)', () => {
+    // Correction : sur une caida, si la table est videe par la capture (avant que
+    // la carte joueuse n'y soit rajoutee), c'est aussi une missa (+1).
     const opponentCard = makeCard(5, 'oros')
     const result = resolveCapture(makeCard(5, 'copas'), [opponentCard], opponentCard)
     expect(result!.isCaida).toBe(true)
-    expect(result!.isMissa).toBe(false)
+    expect(result!.isMissa).toBe(true)
     expect(result!.captured).toEqual([opponentCard])
     expect(result!.remainsOnTable).toEqual(makeCard(5, 'copas'))
     expect(result!.tableAfter).toEqual([]) // la carte joueuse est ajoutee par applyPlayCard
+  })
+
+  it('caida qui ne vide PAS la table -> pas de missa', () => {
+    const opponentCard = makeCard(5, 'oros')
+    const result = resolveCapture(makeCard(5, 'copas'), [opponentCard, makeCard(12, 'bastos')], opponentCard)
+    expect(result!.isCaida).toBe(true)
+    expect(result!.isMissa).toBe(false)
+    expect(result!.tableAfter).toEqual([makeCard(12, 'bastos')])
   })
 })
 
@@ -649,7 +656,7 @@ describe('14. Alternance du premier joueur', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 15. Chaîne de caídas (Ara Wahd / Ara Khamssa / Ara 7dach)
+// 15. Chaîne de caídas (Ara Wahd / Ara Khamssa / Ara 3achra)
 // ---------------------------------------------------------------------------
 describe('15. Chaine de caidas', () => {
   // Joueur 0 capture la carte 'value' que l'adversaire (1) vient de poser.
@@ -688,11 +695,11 @@ describe('15. Chaine de caidas', () => {
     expect(next.lastEvents).toContain('ara_khamssa')
   })
 
-  it('3e caida meme valeur -> Ara 7dach, +11, niveau 3', () => {
+  it('3e caida meme valeur -> Ara 3achra, +10, niveau 3', () => {
     const next = playCaida(5, { level: 2, value: 5 })
-    expect(next.players[0].score).toBe(11)
+    expect(next.players[0].score).toBe(10)
     expect(next.caidaChain).toEqual({ level: 3, value: 5 })
-    expect(next.lastEvents).toContain('ara_7dach')
+    expect(next.lastEvents).toContain('ara_3achra')
   })
 
   it('caida sur une valeur differente -> la chaine repart a Ara Wahd (+1)', () => {
@@ -762,29 +769,35 @@ describe('15. Chaine de caidas', () => {
     expect(st.table).toEqual([makeCard(5, 'oros')])
     expect(st.caidaChain).toBeNull()
 
-    // T2 : P1 capture -> Ara Wahd. Son 5 reste sur la table, le 5 adverse part dans sa pile.
+    // T2 : P1 capture -> Ara Wahd. La capture vide la table → c'est aussi une missa
+    // (+1). Son 5 reste en appat, le 5 adverse part dans sa pile. P1 = 1 + 1 = 2.
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 1, value: 5 })
-    expect(st.players[1].score).toBe(1)
+    expect(st.players[1].score).toBe(2)
     expect(st.lastEvents).toContain('caida')
+    expect(st.lastEvents).toContain('missa')
     expect(st.table).toEqual([makeCard(5, 'copas')])
     expect(st.players[1].captured).toEqual([makeCard(5, 'oros')])
 
-    // T3 : P0 capture le 5 du bot -> Ara Khamssa (+5).
+    // T3 : P0 capture le 5 du bot -> Ara Khamssa (+5) + missa (+1) = 6 ; et efface
+    // l'Ara Wahd de P1 (-1) → P1 passe de 2 à 1.
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'espadas') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 2, value: 5 })
-    expect(st.players[0].score).toBe(5)
+    expect(st.players[0].score).toBe(6)
+    expect(st.players[1].score).toBe(1)
     expect(st.lastEvents).toContain('ara_khamssa')
     expect(st.table).toEqual([makeCard(5, 'espadas')])
     expect(st.players[0].captured).toEqual([makeCard(5, 'copas')])
 
-    // T4 : P1 capture -> Ara 7dach (+11). Total bot = 1 + 11 = 12.
+    // T4 : P1 capture -> Ara 3achra (+10) + missa (+1) = 11, ET efface l'Ara Khamssa
+    // de P0 (-5). P0 : 6 → 1 ; P1 : 1 + 11 = 12.
     // Les quatre 5 sont desormais joues : P0 n'a plus de 5 en main → la chaine ne
     // peut plus continuer, donc le 5b ne reste PAS sur la table (il va en pile).
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'bastos') }, rngZero)
     expect(st.caidaChain).toEqual({ level: 3, value: 5 })
     expect(st.players[1].score).toBe(12)
-    expect(st.lastEvents).toContain('ara_7dach')
+    expect(st.players[0].score).toBe(1)
+    expect(st.lastEvents).toContain('ara_3achra')
     expect(st.table).toEqual([])
     expect(st.pendingCaidaCard).toBeNull()
   })
@@ -808,7 +821,7 @@ describe('15. Chaine de caidas', () => {
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
     expect(st.pendingCaidaCard).toEqual({ card: makeCard(5, 'copas'), playerId: 1 })
-    expect(st.players[1].score).toBe(1)
+    expect(st.players[1].score).toBe(2) // Ara Wahd (+1) + missa (+1), la capture vide la table
     expect(st.table).toEqual([makeCard(5, 'copas')])
 
     // T3 : P0 joue un 7 — pas de caida de meme valeur.
@@ -817,7 +830,7 @@ describe('15. Chaine de caidas', () => {
     expect(st.caidaChain).toBeNull()
     expect(st.table).toEqual([makeCard(7, 'espadas')])                    // le 5c a quitte la table
     expect(st.players[1].captured).toEqual([makeCard(5, 'oros'), makeCard(5, 'copas')]) // 5c rendu a P1
-    expect(st.players[1].score).toBe(1)                                   // score inchange
+    expect(st.players[1].score).toBe(2)                                   // score inchange
   })
 
   it('correction 1 : la carte ne reste PAS si l\'adversaire n\'a aucun 5 en main', () => {
@@ -836,7 +849,7 @@ describe('15. Chaine de caidas', () => {
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
 
     expect(st.lastEvents).toContain('caida')
-    expect(st.players[1].score).toBe(1)
+    expect(st.players[1].score).toBe(2) // Ara Wahd (+1) + missa (+1)
     expect(st.caidaChain).toEqual({ level: 1, value: 5 })
     expect(st.pendingCaidaCard).toBeNull()             // pas d'appat laisse
     expect(st.table).toEqual([])                        // 5c parti en pile, pas sur la table
@@ -859,7 +872,7 @@ describe('15. Chaine de caidas', () => {
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
 
     expect(st.lastEvents).toContain('caida')
-    expect(st.players[1].score).toBe(1)
+    expect(st.players[1].score).toBe(2) // Ara Wahd (+1) + missa (+1)
     expect(st.pendingCaidaCard).toBeNull()             // main vide → aucun appat
     expect(st.table).toEqual([])
     expect(st.players[1].captured).toEqual([makeCard(5, 'copas'), makeCard(5, 'oros')])
@@ -884,10 +897,77 @@ describe('15. Chaine de caidas', () => {
 
     st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(2, 'copas') }, rngZero)
     expect(st.lastEvents).toContain('caida')
-    expect(st.players[1].score).toBe(1)
+    // La caida + escalier vide la table → missa : +1 (caida) +1 (missa) = 2.
+    expect(st.players[1].score).toBe(2)
     // Le 2c reste (appat), le 2o (caida) + 3b (escalier) partent dans la pile de P1.
     expect(st.pendingCaidaCard).toEqual({ card: makeCard(2, 'copas'), playerId: 1 })
     expect(st.table).toEqual([makeCard(2, 'copas')])
     expect(st.players[1].captured).toEqual([makeCard(2, 'oros'), makeCard(3, 'bastos')])
+  })
+
+  // ── Corrections de règles ───────────────────────────────────────────────────
+
+  it('regle: Ara 3achra vaut 10 points (et non 11)', () => {
+    const next = playCaida(5, { level: 2, value: 5 })
+    expect(next.players[0].score).toBe(10)
+    expect(next.lastEvents).toContain('ara_3achra')
+  })
+
+  it('regle: missa sur caida → isMissa et +1 en plus du bonus caida', () => {
+    // Table = [5o] uniquement (pas de 12). P1 fait une caida sur le 5o : la table
+    // est videe par la capture → missa. P0 n'a plus de 5 → la carte va en pile.
+    let st = makeGameState({
+      currentPlayer: 0,
+      dealer: 1,
+      table: [],
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'oros'), makeCard(2, 'oros')] }),
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(3, 'copas')] }),
+      ],
+    })
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'oros') }, rngZero)
+    st = applyAction(st, { type: 'PLAY_CARD', playerId: 1, card: makeCard(5, 'copas') }, rngZero)
+
+    expect(st.lastEvents).toContain('caida')
+    expect(st.lastEvents).toContain('missa')
+    expect(st.players[1].score).toBe(2) // +1 caida (Ara Wahd) +1 missa
+  })
+
+  it('regle: Ara Khamssa efface le +1 (Ara Wahd) de l\'adversaire', () => {
+    // P1 est a 1 (a fait Ara Wahd au tour precedent) ; P0 fait Ara Khamssa.
+    const opponentCard = makeCard(5, 'oros')
+    const state = makeGameState({
+      currentPlayer: 0,
+      table: [opponentCard, makeCard(12, 'bastos')],
+      lastPlayed: [null, opponentCard],
+      caidaChain: { level: 1, value: 5 },
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(2, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(3, 'bastos')], score: 1 }),
+      ],
+    })
+    const next = applyAction(state, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'copas') }, rngZero)
+    expect(next.lastEvents).toContain('ara_khamssa')
+    expect(next.players[0].score).toBe(5) // Ara Khamssa
+    expect(next.players[1].score).toBe(0) // son +1 efface
+  })
+
+  it('regle: Ara 3achra efface le +5 (Ara Khamssa) de l\'adversaire, jamais sous 0', () => {
+    // P1 est a 3 ; P0 fait Ara 3achra (prevChain level 2) → P1 perd 5 → max(0, 3-5)=0.
+    const opponentCard = makeCard(5, 'oros')
+    const state = makeGameState({
+      currentPlayer: 0,
+      table: [opponentCard, makeCard(12, 'bastos')],
+      lastPlayed: [null, opponentCard],
+      caidaChain: { level: 2, value: 5 },
+      players: [
+        makePlayerState({ hand: [makeCard(5, 'copas'), makeCard(2, 'espadas')] }),
+        makePlayerState({ hand: [makeCard(3, 'bastos')], score: 3 }),
+      ],
+    })
+    const next = applyAction(state, { type: 'PLAY_CARD', playerId: 0, card: makeCard(5, 'copas') }, rngZero)
+    expect(next.lastEvents).toContain('ara_3achra')
+    expect(next.players[0].score).toBe(10) // Ara 3achra
+    expect(next.players[1].score).toBe(0)  // 3 - 5 borne a 0
   })
 })

@@ -72,7 +72,7 @@ export function RulesScreen({ onBack }: Props) {
           <Section title="Caída — la chaîne">
             <Rule term={TERMS.araWahd}  pts="+1"  desc="Capturer la carte que l'adversaire vient EXACTEMENT de poser (même valeur ET couleur)." />
             <Rule term={TERMS.araKhamssa} pts="+5" desc="2e caída d'affilée sur la même valeur : l'adversaire repose cette valeur et tu la reprends." />
-            <Rule term={TERMS.ara7dach} pts="+11" desc="3e caída sur la même valeur. Maximum de la chaîne (il n'y a que 4 cartes par valeur)." />
+            <Rule term={TERMS.ara3achra} pts="+10" desc="3e caída sur la même valeur. Maximum de la chaîne (il n'y a que 4 cartes par valeur)." />
             <P>La chaîne se brise dès qu'un coup ne capture pas, ou capture une autre valeur.</P>
           </Section>
 

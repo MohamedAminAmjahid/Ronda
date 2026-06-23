@@ -206,7 +206,7 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToastEvents(lastEvent.events)
     toastTimer.current = setTimeout(() => setToastEvents(null), 1500)
-    if (lastEvent.events.includes('caida') || lastEvent.events.includes('ara_khamssa') || lastEvent.events.includes('ara_7dach')) {
+    if (lastEvent.events.includes('caida') || lastEvent.events.includes('ara_khamssa') || lastEvent.events.includes('ara_3achra')) {
       void playSound('caida')
     } else if (lastEvent.events.includes('ronda') || lastEvent.events.includes('tringa')) {
       void playSound('announce')

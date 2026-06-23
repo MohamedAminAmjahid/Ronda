@@ -72,14 +72,15 @@ export function resolveCapture(
   }
 
   // Caída : la carte joueuse RESTE sur la table (nouvel appât) ; les cartes
-  // capturées (carte adverse + escalier) partent dans la pile. Pas de missa
-  // (la table n'est jamais vide puisque la carte joueuse y reste).
+  // capturées (carte adverse + escalier) partent dans la pile.
+  // Missa sur caída : si la table est vidée par la capture (avant que la carte
+  // joueuse n'y soit rajoutée), c'est aussi une missa → +1 en plus du bonus caída.
   if (isCaida) {
     return {
       captured,                 // carte adverse capturée + escalier éventuel
       tableAfter: tableArr,     // table sans les cartes capturées (la carte joueuse est rajoutée par applyPlayCard)
       isCaida: true,
-      isMissa: false,
+      isMissa: tableArr.length === 0,
       remainsOnTable: playedCard,
     }
   }

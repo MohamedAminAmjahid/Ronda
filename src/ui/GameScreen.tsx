@@ -228,7 +228,7 @@ function GameOver({ scores, onReplay }: { scores: [number, number]; onReplay: ()
 const EVENT_LABEL: Record<GameEvent, { ar: string; la: string; pts?: string }> = {
   caida:       { ...TERMS.araWahd,    pts: '+1' },
   ara_khamssa: { ...TERMS.araKhamssa, pts: '+5' },
-  ara_7dach:   { ...TERMS.ara7dach,   pts: '+11' },
+  ara_3achra:  { ...TERMS.ara3achra,  pts: '+10' },
   missa:  TERMS.missa,
   ronda:  TERMS.ronda,
   tringa: TERMS.tringa,
