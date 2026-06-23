@@ -197,6 +197,19 @@ export function GoldShopScreen({ onBack }: Props) {
             onPress={() => openFollow('ig')}
           />
 
+          {/* Regarder une vidéo (AdMob plus tard — affichage uniquement) */}
+          <View style={s.card}>
+            <View style={s.cardHead}>
+              <Text style={s.cardTitle}>🎬 Regarder une vidéo</Text>
+              <Text style={s.reward}>🪙 +50</Text>
+            </View>
+            <Text style={s.cardDesc}>+50 gold par vidéo</Text>
+            <View style={[s.btnPrimary, s.btnDisabled]}>
+              <Text style={[s.btnPrimaryTxt, s.btnDisabledTxt]}>🔒 Bientôt</Text>
+            </View>
+            <Text style={s.counter}>Disponible sur mobile bientôt</Text>
+          </View>
+
           {/* 4. Packs payants (affichage uniquement) */}
           <Text style={s.sectionLabel}>Packs d'or</Text>
           <View style={s.packGrid}>
