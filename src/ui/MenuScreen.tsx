@@ -5,6 +5,7 @@ import { Svg, Circle, Polygon } from 'react-native-svg'
 import { router, type Href } from 'expo-router'
 import { TERMS } from './terms'
 import { useProfile } from '../profile/useProfile'
+import { useAuth } from '../firebase/auth'
 import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
@@ -57,6 +58,7 @@ interface Props {
 
 export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
   const { username, gold, gamesPlayed, gamesWon, setUsername } = useProfile()
+  const { user } = useAuth()
   const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -111,20 +113,42 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
 
         {/* ── Barre de profil ──────────────────────────────────── */}
         <View style={s.profileBar}>
-          <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
-            <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
-            <Text style={s.profileEdit}>✎</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={s.goldPill}
-            onPress={() => router.push('/gold-shop' as Href)}
-            activeOpacity={0.7}
-            accessibilityLabel="Ouvrir la boutique d'or"
-          >
-            <Text style={s.goldCoin}>🪙</Text>
-            <Text style={s.goldAmount}>{gold}</Text>
-            <Text style={s.goldPlus}>+</Text>
-          </TouchableOpacity>
+          <View style={s.profileLeft}>
+            <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
+              <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
+              <Text style={s.profileEdit}>✎</Text>
+            </TouchableOpacity>
+            {user ? (
+              <Text style={s.profileEmail} numberOfLines={1}>{user.email}</Text>
+            ) : (
+              <TouchableOpacity onPress={() => router.push('/auth' as Href)} activeOpacity={0.7}>
+                <Text style={s.profileSignIn}>Se connecter</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={s.profileRight}>
+            {user && (
+              <TouchableOpacity
+                style={s.friendsBtn}
+                onPress={() => router.push('/friends' as Href)}
+                activeOpacity={0.7}
+                accessibilityLabel="Amis"
+              >
+                <Text style={s.friendsIcon}>👥</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={s.goldPill}
+              onPress={() => router.push('/gold-shop' as Href)}
+              activeOpacity={0.7}
+              accessibilityLabel="Ouvrir la boutique d'or"
+            >
+              <Text style={s.goldCoin}>🪙</Text>
+              <Text style={s.goldAmount}>{gold}</Text>
+              <Text style={s.goldPlus}>+</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* ── Modale d'édition du pseudo ───────────────────────── */}
@@ -292,6 +316,30 @@ const s = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 4,
   },
+  profileLeft: { flexShrink: 1, gap: 2 },
+  profileRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  profileEmail: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 11,
+    color: 'rgba(244,236,216,0.4)',
+  },
+  profileSignIn: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 11,
+    color: C.brass,
+    textDecorationLine: 'underline',
+  },
+  friendsBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.35)',
+  },
+  friendsIcon: { fontSize: 16 },
   profileNameWrap: {
     flexDirection: 'row',
     alignItems: 'center',

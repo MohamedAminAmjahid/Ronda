@@ -4,10 +4,13 @@ import { useFonts } from 'expo-font'
 import { ReemKufi_700Bold } from '@expo-google-fonts/reem-kufi'
 import { Cairo_400Regular, Cairo_600SemiBold } from '@expo-google-fonts/cairo'
 import * as SplashScreen from 'expo-splash-screen'
+import { useFirebaseProfileSync } from '../firebase/sync'
 
 SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
+  useFirebaseProfileSync()
+
   const [fontsLoaded, fontError] = useFonts({
     ReemKufi_700Bold,
     Cairo_400Regular,
