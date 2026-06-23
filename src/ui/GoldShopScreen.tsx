@@ -22,6 +22,7 @@ const C = {
 const GAME_URL = 'https://ronda-virid.vercel.app'
 const FB_URL = 'https://www.facebook.com/PLACEHOLDER_FB'
 const IG_URL = 'https://www.instagram.com/PLACEHOLDER_IG'
+const BMC_URL = 'https://buymeacoffee.com/TONLIEN'
 
 const SHARE_KEY = 'ronda_share_count'
 const FB_KEY = 'ronda_fb_claimed'
@@ -161,6 +162,26 @@ export function GoldShopScreen({ onBack }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+          {/* 0. Soutenir le développeur */}
+          <View style={s.card}>
+            <Text style={s.cardTitle}>☕ Soutenir le développeur</Text>
+            <Text style={s.cardDesc}>Aide à maintenir le jeu en ligne.</Text>
+            <View style={s.supportRow}>
+              <TouchableOpacity
+                style={[s.btnSecondary, s.supportBtn]}
+                onPress={() => Linking.openURL(BMC_URL)}
+              >
+                <Text style={s.btnSecondaryTxt}>☕ Un café — 2€</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.btnSecondary, s.supportBtn]}
+                onPress={() => Linking.openURL(`${BMC_URL}?amount=500`)}
+              >
+                <Text style={s.btnSecondaryTxt}>🍕 Un repas — 5€</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* 1. Partager le jeu */}
           <View style={s.card}>
@@ -348,6 +369,9 @@ const s = StyleSheet.create({
   btnSecondaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass, letterSpacing: 0.3 },
   btnClaimed: { backgroundColor: 'rgba(201,162,39,0.18)' },
   btnClaimedTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
+
+  supportRow: { flexDirection: 'row', gap: 10 },
+  supportBtn: { flex: 1, paddingVertical: 12 },
 
   sectionLabel: {
     fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
