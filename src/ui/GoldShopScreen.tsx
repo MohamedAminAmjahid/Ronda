@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
   Share, Linking, AppState, Modal, type AppStateStatus,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -43,6 +43,16 @@ const PACKS: { gold: number; price: string }[] = [
   { gold: 5000, price: '8,99 €' },
 ]
 
+// Pack de référence pour le prix d'un montant personnalisé.
+const REF_GOLD = 500
+const REF_PRICE = 1.19
+const MIN_CUSTOM_GOLD = 500
+
+/** Prix proportionnel au pack de référence, arrondi à 2 décimales. */
+function customPrice(gold: number): number {
+  return Math.round((gold / REF_GOLD) * REF_PRICE * 100) / 100
+}
+
 interface Props {
   onBack: () => void
 }
@@ -53,6 +63,7 @@ export function GoldShopScreen({ onBack }: Props) {
   const [shareCount, setShareCount] = useState(0)
   const [fbClaimed, setFbClaimed] = useState(false)
   const [igClaimed, setIgClaimed] = useState(false)
+  const [customGold, setCustomGold] = useState('')
 
   // Plateforme dont on attend le retour (pour proposer la récompense au retour app).
   const [pendingClaim, setPendingClaim] = useState<null | 'fb' | 'ig'>(null)
@@ -128,6 +139,9 @@ export function GoldShopScreen({ onBack }: Props) {
 
   const quotaReached = shareCount >= SHARE_DAILY_LIMIT
 
+  const customNum = parseInt(customGold, 10) || 0
+  const customValid = customNum >= MIN_CUSTOM_GOLD
+
   // ── Rendu ─────────────────────────────────────────────────────────────────────
 
   return (
@@ -196,6 +210,35 @@ export function GoldShopScreen({ onBack }: Props) {
                 </View>
               </View>
             ))}
+          </View>
+
+          {/* Montant personnalisé */}
+          <View style={s.customCard}>
+            <Text style={s.customTitle}>Montant personnalisé</Text>
+            <View style={s.customInputRow}>
+              <Text style={s.customCoin}>🪙</Text>
+              <TextInput
+                style={s.customInput}
+                value={customGold}
+                onChangeText={(t) => setCustomGold(t.replace(/[^0-9]/g, '').slice(0, 7))}
+                placeholder={`min. ${MIN_CUSTOM_GOLD}`}
+                placeholderTextColor={C.boneOff}
+                keyboardType="number-pad"
+                inputMode="numeric"
+              />
+            </View>
+            {customGold.length > 0 && !customValid ? (
+              <Text style={s.customErr}>Minimum {MIN_CUSTOM_GOLD} gold</Text>
+            ) : (
+              <Text style={s.customPrice}>
+                {customValid
+                  ? `${customNum} gold → ${customPrice(customNum).toFixed(2)} €`
+                  : `${MIN_CUSTOM_GOLD} gold = ${REF_PRICE.toFixed(2)} €`}
+              </Text>
+            )}
+            <View style={[s.packBtn, s.customBtn, !customValid && s.customBtnDisabled]}>
+              <Text style={s.packBtnTxt}>🔒 Bientôt</Text>
+            </View>
           </View>
 
         </ScrollView>
@@ -311,6 +354,25 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(244,236,216,0.18)',
   },
   packBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
+
+  customCard: {
+    backgroundColor: C.deep, borderRadius: 14, padding: 16, gap: 10, marginTop: 4,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.22)',
+  },
+  customTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.bone },
+  customInputRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 10, paddingHorizontal: 14,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  customCoin: { fontSize: 18 },
+  customInput: {
+    flex: 1, paddingVertical: 13, fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone,
+  },
+  customPrice: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
+  customErr: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: '#E74C3C' },
+  customBtn: { alignSelf: 'flex-start' },
+  customBtnDisabled: { opacity: 0.45 },
 
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(9,64,47,0.85)',
