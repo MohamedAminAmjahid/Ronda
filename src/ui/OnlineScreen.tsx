@@ -150,35 +150,39 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
               <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(username)}>
                 <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
               </TouchableOpacity>
-              <View style={s.divider} />
+              <Text style={s.hint}>Pour jouer avec un ami, reviens au menu → « Jouer avec un ami ».</Text>
             </>
           )}
 
-          <Text style={s.label}>Avec un ami</Text>
-          <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(username)}>
-            <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(username)}>
-            <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
-          </TouchableOpacity>
+          {mode === 'friend' && (
+            <>
+              <Text style={s.label}>Avec un ami</Text>
+              <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(username)}>
+                <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(username)}>
+                <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
+              </TouchableOpacity>
 
-          <Text style={s.label}>Rejoindre avec un code</Text>
-          <TextInput
-            style={s.input}
-            value={codeInput}
-            onChangeText={(t) => setCodeInput(normalizeCode(t))}
-            placeholder="AB3X7K"
-            placeholderTextColor={C.boneOff}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            editable={!joining}
-          />
-          {joining ? (
-            <Text style={s.hint}>Connexion à la partie…</Text>
-          ) : lookupError ? (
-            <Text style={s.lookupErr}>{lookupError}</Text>
-          ) : (
-            <Text style={s.hint}>Le type de partie est détecté automatiquement.</Text>
+              <Text style={s.label}>Rejoindre avec un code</Text>
+              <TextInput
+                style={s.input}
+                value={codeInput}
+                onChangeText={(t) => setCodeInput(normalizeCode(t))}
+                placeholder="AB3X7K"
+                placeholderTextColor={C.boneOff}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!joining}
+              />
+              {joining ? (
+                <Text style={s.hint}>Connexion à la partie…</Text>
+              ) : lookupError ? (
+                <Text style={s.lookupErr}>{lookupError}</Text>
+              ) : (
+                <Text style={s.hint}>Le type de partie est détecté automatiquement.</Text>
+              )}
+            </>
           )}
         </View>
       </View>
