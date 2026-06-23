@@ -1,15 +1,29 @@
 import { useEffect } from 'react'
+import { Platform, I18nManager } from 'react-native'
 import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { ReemKufi_700Bold } from '@expo-google-fonts/reem-kufi'
 import { Cairo_400Regular, Cairo_600SemiBold } from '@expo-google-fonts/cairo'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFirebaseProfileSync } from '../firebase/sync'
+import { useI18n } from '../i18n/useI18n'
 
 SplashScreen.preventAutoHideAsync()
 
 export default function RootLayout() {
   useFirebaseProfileSync()
+
+  // Direction RTL pour l'arabe : sur web via document.dir (effet immédiat),
+  // sur mobile via I18nManager (appliqué au prochain rendu/recharge).
+  const { isRTL } = useI18n()
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (typeof document !== 'undefined') document.dir = isRTL ? 'rtl' : 'ltr'
+    } else if (I18nManager.isRTL !== isRTL) {
+      I18nManager.allowRTL(isRTL)
+      I18nManager.forceRTL(isRTL)
+    }
+  }, [isRTL])
 
   const [fontsLoaded, fontError] = useFonts({
     ReemKufi_700Bold,

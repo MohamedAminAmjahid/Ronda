@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Polygon } from 'react-native-svg'
 import { signInWithGoogle } from '../firebase/auth'
 import { TERMS } from './terms'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export function AuthScreen({ onBack, onSignedIn }: Props) {
+  const { t } = useI18n()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -63,7 +65,7 @@ export function AuthScreen({ onBack, onSignedIn }: Props) {
           <KhatamLogo />
           <Text style={s.title}>RONDA</Text>
           <Text style={s.titleSub}>{TERMS.ronda.ar}</Text>
-          <Text style={s.tagline}>Joue avec tes amis en ligne</Text>
+          <Text style={s.tagline}>{t('signInSubtitle')}</Text>
         </View>
 
         <View style={s.bottom}>
@@ -74,7 +76,7 @@ export function AuthScreen({ onBack, onSignedIn }: Props) {
             ) : (
               <>
                 <View style={s.gMark}><Text style={s.gMarkTxt}>G</Text></View>
-                <Text style={s.googleTxt}>Se connecter avec Google</Text>
+                <Text style={s.googleTxt}>{t('signIn')}</Text>
               </>
             )}
           </TouchableOpacity>

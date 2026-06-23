@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TERMS } from './terms'
 import { getDifficulty, setDifficulty, loadDifficulty, type Difficulty } from '../game/difficulty'
+import { useI18n } from '../i18n/useI18n'
 
 // ── Tokens (cohérents avec MenuScreen) ─────────────────────────────────────────
 
@@ -21,13 +22,11 @@ interface Props {
   onPlay2v2:  () => void
 }
 
-const DIFFICULTIES: { key: Difficulty; label: string }[] = [
-  { key: 'easy', label: 'Facile' },
-  { key: 'medium', label: 'Moyen' },
-]
+const DIFFICULTIES: Difficulty[] = ['easy', 'medium']
 
 /** Choix du mode hors-ligne (vs IA) : 1 contre 1 ou 2 contre 2 + difficulté. */
 export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
+  const { t } = useI18n()
   const [difficulty, setDiff] = useState<Difficulty>(getDifficulty)
 
   useEffect(() => {
@@ -53,18 +52,18 @@ export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
 
         <View style={s.body}>
 
-          <Text style={s.diffLabel}>Difficulté</Text>
+          <Text style={s.diffLabel}>{t('difficulty')}</Text>
           <View style={s.diffRow}>
             {DIFFICULTIES.map((d) => {
-              const active = d.key === difficulty
+              const active = d === difficulty
               return (
                 <TouchableOpacity
-                  key={d.key}
+                  key={d}
                   style={[s.diffPill, active && s.diffPillActive]}
-                  onPress={() => chooseDifficulty(d.key)}
+                  onPress={() => chooseDifficulty(d)}
                   activeOpacity={0.85}
                 >
-                  <Text style={[s.diffPillTxt, active && s.diffPillTxtActive]}>{d.label}</Text>
+                  <Text style={[s.diffPillTxt, active && s.diffPillTxtActive]}>{t(d)}</Text>
                 </TouchableOpacity>
               )
             })}

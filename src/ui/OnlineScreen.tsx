@@ -7,6 +7,7 @@ import { GameScreen } from './GameScreen'
 import { useOnlineGame } from '../online/useOnlineGame'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
+import { useI18n } from '../i18n/useI18n'
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
 
@@ -43,6 +44,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
   const { username } = useProfile()
+  const { t: tr } = useI18n()
 
   const [codeInput, setCodeInput] = useState(() => normalizeCode(initialCode ?? ''))
   const [lookupError, setLookupError] = useState<string | null>(null)
@@ -121,7 +123,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
             <Text style={s.backTxt}>← Menu</Text>
           </TouchableOpacity>
-          <Text style={s.title}>{mode === 'friend' ? 'Jouer avec un ami' : 'Jouer en ligne'}</Text>
+          <Text style={s.title}>{mode === 'friend' ? tr('playWithFriend') : tr('playOnline')}</Text>
         </View>
 
         {error && (
@@ -148,7 +150,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             <>
               <Text style={s.label}>Adversaire aléatoire</Text>
               <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(username)}>
-                <Text style={s.btnPrimaryTxt}>Partie rapide</Text>
+                <Text style={s.btnPrimaryTxt}>{tr('quickMatch')}</Text>
               </TouchableOpacity>
               <Text style={s.hint}>Pour jouer avec un ami, reviens au menu → « Jouer avec un ami ».</Text>
             </>
@@ -158,25 +160,25 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             <>
               <Text style={s.label}>Avec un ami</Text>
               <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(username)}>
-                <Text style={s.btnSecondaryTxt}>Créer une partie 1v1</Text>
+                <Text style={s.btnSecondaryTxt}>{tr('createGame')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(username)}>
-                <Text style={s.btnSecondaryTxt}>2 contre 2 (lobby)</Text>
+                <Text style={s.btnSecondaryTxt}>{tr('lobby2v2')}</Text>
               </TouchableOpacity>
 
-              <Text style={s.label}>Rejoindre avec un code</Text>
+              <Text style={s.label}>{tr('joinWithCode')}</Text>
               <TextInput
                 style={s.input}
                 value={codeInput}
-                onChangeText={(t) => setCodeInput(normalizeCode(t))}
-                placeholder="AB3X7K"
+                onChangeText={(v) => setCodeInput(normalizeCode(v))}
+                placeholder={tr('codePlaceholder')}
                 placeholderTextColor={C.boneOff}
                 autoCapitalize="characters"
                 autoCorrect={false}
                 editable={!joining}
               />
               {joining ? (
-                <Text style={s.hint}>Connexion à la partie…</Text>
+                <Text style={s.hint}>{tr('connecting')}</Text>
               ) : lookupError ? (
                 <Text style={s.lookupErr}>{lookupError}</Text>
               ) : (
@@ -193,6 +195,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
 // ── Écran d'attente avec pulsation ──────────────────────────────────────────────
 
 function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () => void }) {
+  const { t: tr } = useI18n()
   const pulse = useRef(new Animated.Value(0.4)).current
   useEffect(() => {
     const loop = Animated.loop(
@@ -233,31 +236,31 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
     <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
       <View style={[s.column, { alignItems: 'center', gap: 18 }]}>
         <Animated.Text style={[s.waitTxt, { opacity: pulse }]}>
-          En attente d'un adversaire…
+          {tr('waitingOpponent')}
         </Animated.Text>
 
         {code ? (
           <>
             <View style={s.codeBox}>
-              <Text style={s.codeLabel}>Code à partager</Text>
+              <Text style={s.codeLabel}>{tr('joinWithCode')}</Text>
               <Text style={s.codeValue}>{code}</Text>
             </View>
             <View style={s.shareRow}>
               <TouchableOpacity style={s.btnShare} onPress={shareCode}>
-                <Text style={s.btnShareTxt}>Partager</Text>
+                <Text style={s.btnShareTxt}>{tr('share')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btnCopy} onPress={copyCode}>
-                <Text style={s.btnCopyTxt}>{copied ? 'Copié ✓' : 'Copier le code'}</Text>
+                <Text style={s.btnCopyTxt}>{copied ? tr('copied') : tr('copy')}</Text>
               </TouchableOpacity>
             </View>
           </>
         ) : (
           // Partie rapide (sans code) : on attend juste un adversaire.
-          <Text style={s.codeLabel}>Recherche d'un adversaire…</Text>
+          <Text style={s.codeLabel}>{tr('waitingOpponent')}</Text>
         )}
 
         <TouchableOpacity style={s.btnCancel} onPress={onCancel}>
-          <Text style={s.btnCancelTxt}>Annuler</Text>
+          <Text style={s.btnCancelTxt}>{tr('cancel')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

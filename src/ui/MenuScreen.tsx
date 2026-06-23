@@ -6,6 +6,7 @@ import { router, type Href } from 'expo-router'
 import { TERMS } from './terms'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
+import { useI18n } from '../i18n/useI18n'
 import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
@@ -59,6 +60,7 @@ interface Props {
 export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
   const { username, gold, gamesPlayed, gamesWon, setUsername } = useProfile()
   const { user } = useAuth()
+  const { t, lang, setLang } = useI18n()
   const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -250,32 +252,46 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
 
           {/* Jouer (vs IA) — ouvre le choix 1v1 / 2v2 */}
           <TouchableOpacity style={s.btnPrimary} onPress={onPlay}>
-            <Text style={s.btnPrimaryTxt}>Jouer</Text>
+            <Text style={s.btnPrimaryTxt}>{t('play')}</Text>
           </TouchableOpacity>
 
           {/* Jouer en ligne — partie rapide (matchmaking) */}
           <TouchableOpacity style={s.btnSecondary} onPress={onPlayOnline}>
-            <Text style={s.btnSecondaryTxt}>Jouer en ligne</Text>
+            <Text style={s.btnSecondaryTxt}>{t('playOnline')}</Text>
           </TouchableOpacity>
 
           {/* Jouer avec un ami — créer / rejoindre par code */}
           <TouchableOpacity style={s.btnSecondary} onPress={onPlayFriend}>
-            <Text style={s.btnSecondaryTxt}>Jouer avec un ami</Text>
+            <Text style={s.btnSecondaryTxt}>{t('playWithFriend')}</Text>
           </TouchableOpacity>
 
           {/* Classement + Règles + Crédits — liens discrets */}
           <View style={s.textLinks}>
             <TouchableOpacity style={s.btnCredits} onPress={onLeaderboard}>
-              <Text style={s.btnCreditsTxt}>Classement</Text>
+              <Text style={s.btnCreditsTxt}>{t('leaderboard')}</Text>
             </TouchableOpacity>
             <Text style={s.linkSep}>·</Text>
             <TouchableOpacity style={s.btnCredits} onPress={onRules}>
-              <Text style={s.btnCreditsTxt}>Règles</Text>
+              <Text style={s.btnCreditsTxt}>{t('rules')}</Text>
             </TouchableOpacity>
             <Text style={s.linkSep}>·</Text>
             <TouchableOpacity style={s.btnCredits} onPress={onCredits}>
-              <Text style={s.btnCreditsTxt}>Crédits</Text>
+              <Text style={s.btnCreditsTxt}>{t('credits')}</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* Sélecteur de langue */}
+          <View style={s.langRow}>
+            {(['ar', 'fr', 'en'] as const).map((lg) => (
+              <TouchableOpacity
+                key={lg}
+                style={[s.langBtn, lang === lg && s.langBtnActive]}
+                onPress={() => setLang(lg)}
+                accessibilityLabel={lg}
+              >
+                <Text style={s.langFlag}>{lg === 'ar' ? '🇲🇦' : lg === 'fr' ? '🇫🇷' : '🇬🇧'}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
         </View>
@@ -484,6 +500,15 @@ const s = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
+
+  // Sélecteur de langue
+  langRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 4 },
+  langBtn: {
+    width: 44, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.12)', backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  langBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.18)' },
+  langFlag: { fontSize: 20 },
 
   // Boutons
   actions: {

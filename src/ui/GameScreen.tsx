@@ -14,6 +14,7 @@ import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { recordResult } from '../profile/profile'
+import { useI18n } from '../i18n/useI18n'
 import type { PlayerId } from '../engine/types'
 import { RitualPickerScreen } from './RitualPickerScreen'
 import { CoinFlipScreen } from './CoinFlipScreen'
@@ -179,6 +180,7 @@ export function GameOverScreen({
   /** Or gagné pour cette victoire (affiché si > 0). */
   goldReward?: number
 }) {
+  const { t } = useI18n()
   const reduceMotion = useReducedMotion()
   const titleScale = useSharedValue(reduceMotion ? 1 : 0.4)
   const titleOpacity = useSharedValue(reduceMotion ? 1 : 0)
@@ -212,7 +214,7 @@ export function GameOverScreen({
             <Text style={styles.gameOverReward}>🪙 +{goldReward}</Text>
           )}
           <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
-            <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
+            <Text style={styles.btnPrimaryTxt}>{t('replay')}</Text>
           </TouchableOpacity>
         </ReAnimated.View>
       </View>
@@ -517,6 +519,7 @@ interface GameScreenProps {
 
 export function GameScreen({ onBack, useGame = useRondaGame, opponentName, online = false }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
+  const { t } = useI18n()
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
@@ -782,7 +785,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
 
       {/* ── 1. Barre de score ──────────────────────────────── */}
       <View style={styles.scorebar}>
-        <TouchableOpacity style={styles.quitBtn} onPress={handleQuit} accessibilityLabel="Quitter la partie">
+        <TouchableOpacity style={styles.quitBtn} onPress={handleQuit} accessibilityLabel={t('quit')}>
           <Text style={styles.quitTxt}>✕</Text>
         </TouchableOpacity>
         <View style={styles.scorebarInner}>
@@ -795,7 +798,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
           </View>
           <View style={styles.sbMid}>
             <Text style={styles.sbDash}>—</Text>
-            <Text style={styles.sbTarget}>→ 41</Text>
+            <Text style={styles.sbTarget}>{t('target')}</Text>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <View style={styles.sbNameRow}>
@@ -819,18 +822,14 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       <Modal visible={confirmQuit} transparent animationType="fade" onRequestClose={() => setConfirmQuit(false)}>
         <View style={styles.quitBackdrop}>
           <View style={styles.quitCard}>
-            <Text style={styles.quitCardTitle}>Quitter la partie ?</Text>
-            <Text style={styles.quitCardText}>
-              {online
-                ? 'Si tu quittes, ton adversaire gagne automatiquement. Continuer ?'
-                : 'Veux-tu vraiment quitter la partie en cours ?'}
-            </Text>
+            <Text style={styles.quitCardTitle}>{t('quitConfirm')}</Text>
+            {online && <Text style={styles.quitCardText}>{t('quitOnline')}</Text>}
             <View style={styles.quitActions}>
               <TouchableOpacity style={styles.quitStay} onPress={() => setConfirmQuit(false)}>
-                <Text style={styles.quitStayTxt}>Rester</Text>
+                <Text style={styles.quitStayTxt}>{t('stay')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.quitLeave} onPress={() => { setConfirmQuit(false); onBack() }}>
-                <Text style={styles.quitLeaveTxt}>Quitter</Text>
+                <Text style={styles.quitLeaveTxt}>{t('leave')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -937,7 +936,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       {!isHumanTurn && !isBotThinking && (
         <View style={styles.statusBar}>
           <Text style={styles.statusTxt}>
-            {opponentName ? `Tour de ${opponentName}…` : 'Tour du bot…'}
+            {opponentName ? `${opponentName}…` : t('botTurn')}
           </Text>
         </View>
       )}
