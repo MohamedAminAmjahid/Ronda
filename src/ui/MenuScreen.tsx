@@ -108,16 +108,22 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onRules, onCred
       <View style={s.column}>
 
         {/* ── Barre de profil ──────────────────────────────────── */}
-        <TouchableOpacity style={s.profileBar} onPress={openEditor} activeOpacity={0.7}>
-          <View style={s.profileNameWrap}>
+        <View style={s.profileBar}>
+          <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
             <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
             <Text style={s.profileEdit}>✎</Text>
-          </View>
-          <View style={s.goldPill}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.goldPill}
+            onPress={() => router.push('/gold-shop' as Href)}
+            activeOpacity={0.7}
+            accessibilityLabel="Ouvrir la boutique d'or"
+          >
             <Text style={s.goldCoin}>🪙</Text>
             <Text style={s.goldAmount}>{gold}</Text>
-          </View>
-        </TouchableOpacity>
+            <Text style={s.goldPlus}>+</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── Modale d'édition du pseudo ───────────────────────── */}
         <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
@@ -295,6 +301,11 @@ const s = StyleSheet.create({
   },
   goldCoin: { fontSize: 14 },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
+  goldPlus: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, marginLeft: 2,
+    backgroundColor: C.brass, width: 18, height: 18, borderRadius: 9,
+    textAlign: 'center', lineHeight: 18, overflow: 'hidden',
+  },
 
   // Modale d'édition du pseudo
   modalBackdrop: {
