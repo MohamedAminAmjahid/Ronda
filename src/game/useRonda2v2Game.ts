@@ -14,6 +14,7 @@ import type { Card, Combination, GameEvent, Value } from '../engine/types'
 import type { Rng } from '../engine/deck'
 import { getObservableState2v2 } from '../ai2v2/observable2v2'
 import { chooseAction2v2 } from '../ai2v2/bot2v2'
+import { getDifficulty } from './difficulty'
 import { createMemory2v2, updateMemory2v2 } from '../ai2v2/memory2v2'
 import type { AiMemory2v2 } from '../ai2v2/memory2v2'
 
@@ -180,7 +181,7 @@ export function useRonda2v2Game() {
 
     const tid = setTimeout(() => {
       const obs = getObservableState2v2(gs, pid)
-      const action = chooseAction2v2(obs, pid, 'medium', memsRef.current[pid])
+      const action = chooseAction2v2(obs, pid, getDifficulty(), memsRef.current[pid])
 
       if (action.type === 'PLAY_CARD') {
         recordForAll(gs, { byPlayer: pid, card: action.card })

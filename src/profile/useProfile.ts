@@ -25,6 +25,8 @@ export function useProfile() {
   return {
     username: profile.username,
     gold: profile.gold,
+    gamesPlayed: profile.gamesPlayed,
+    gamesWon: profile.gamesWon,
     setUsername,
     addGold,
     removeGold,

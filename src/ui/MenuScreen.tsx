@@ -56,7 +56,8 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
-  const { username, gold, setUsername } = useProfile()
+  const { username, gold, gamesPlayed, gamesWon, setUsername } = useProfile()
+  const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -142,6 +143,20 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
                 autoCorrect={false}
               />
               <Text style={s.modalHint}>16 caractères max.</Text>
+              <View style={s.statsRow}>
+                <View style={s.statBox}>
+                  <Text style={s.statNum}>{gamesPlayed}</Text>
+                  <Text style={s.statLbl}>Parties</Text>
+                </View>
+                <View style={s.statBox}>
+                  <Text style={s.statNum}>{gamesWon}</Text>
+                  <Text style={s.statLbl}>Victoires</Text>
+                </View>
+                <View style={s.statBox}>
+                  <Text style={s.statNum}>{winRate}%</Text>
+                  <Text style={s.statLbl}>Réussite</Text>
+                </View>
+              </View>
               <View style={s.modalActions}>
                 <TouchableOpacity style={s.modalCancel} onPress={() => setEditing(false)}>
                   <Text style={s.modalCancelTxt}>Annuler</Text>
@@ -350,6 +365,20 @@ const s = StyleSheet.create({
   },
   modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
   resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 6,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(244,236,216,0.1)',
+  },
+  statBox: { alignItems: 'center', gap: 2 },
+  statNum: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.brass },
+  statLbl: {
+    fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff,
+    letterSpacing: 0.5, textTransform: 'uppercase',
+  },
   modalActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

@@ -6,6 +6,7 @@ import { useRonda2v2Game, HUMAN_ID_2V2 } from '../game/useRonda2v2Game'
 import { teamOf, prevPlayer, type PlayerId2v2 } from '../engine2v2/types2v2'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
+import { recordResult } from '../profile/profile'
 import {
   DealFly,
   FlyingCard,
@@ -159,6 +160,22 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
 
   const handleQuit = () => setConfirmQuit(true)
 
+  // Récompense de fin de partie : enregistrée une seule fois (équipe du joueur = A).
+  const [winReward, setWinReward] = useState(0)
+  const resultRecorded = useRef(false)
+  useEffect(() => {
+    if (view.isGameOver) {
+      if (!resultRecorded.current) {
+        resultRecorded.current = true
+        setWinReward(recordResult(view.teamScores[0] >= 41))
+      }
+    } else {
+      resultRecorded.current = false
+      setWinReward(0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.isGameOver])
+
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
   const [toastEvents, setToastEvents] = useState<readonly GameEvent[] | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -290,6 +307,7 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
         won={teamScores[0] >= 41}
         scoreText={`Vous ${teamScores[0]} — Adversaires ${teamScores[1]}`}
         onReplay={() => { setSelectedRitual(null); newGame() }}
+        goldReward={winReward}
       />
     )
   }

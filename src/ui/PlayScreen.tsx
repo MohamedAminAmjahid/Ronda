@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TERMS } from './terms'
+import { getDifficulty, setDifficulty, loadDifficulty, type Difficulty } from '../game/difficulty'
 
 // ── Tokens (cohérents avec MenuScreen) ─────────────────────────────────────────
 
@@ -19,8 +21,24 @@ interface Props {
   onPlay2v2:  () => void
 }
 
-/** Choix du mode hors-ligne (vs IA) : 1 contre 1 ou 2 contre 2. */
+const DIFFICULTIES: { key: Difficulty; label: string }[] = [
+  { key: 'easy', label: 'Facile' },
+  { key: 'medium', label: 'Moyen' },
+]
+
+/** Choix du mode hors-ligne (vs IA) : 1 contre 1 ou 2 contre 2 + difficulté. */
 export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
+  const [difficulty, setDiff] = useState<Difficulty>(getDifficulty)
+
+  useEffect(() => {
+    void loadDifficulty().then(setDiff)
+  }, [])
+
+  const chooseDifficulty = (d: Difficulty) => {
+    setDifficulty(d)
+    setDiff(d)
+  }
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -34,6 +52,23 @@ export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
         </View>
 
         <View style={s.body}>
+
+          <Text style={s.diffLabel}>Difficulté</Text>
+          <View style={s.diffRow}>
+            {DIFFICULTIES.map((d) => {
+              const active = d.key === difficulty
+              return (
+                <TouchableOpacity
+                  key={d.key}
+                  style={[s.diffPill, active && s.diffPillActive]}
+                  onPress={() => chooseDifficulty(d.key)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[s.diffPillTxt, active && s.diffPillTxtActive]}>{d.label}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
           <TouchableOpacity style={s.btnPrimary} onPress={onPlay1v1} activeOpacity={0.85}>
             <Text style={s.btnPrimaryTxt}>1 contre 1</Text>
             <Text style={s.btnPrimarySub}>Toi contre l'IA</Text>
@@ -73,6 +108,19 @@ const s = StyleSheet.create({
   },
 
   body: { flex: 1, justifyContent: 'center', gap: 16 },
+
+  diffLabel: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff,
+    letterSpacing: 1.5, textTransform: 'uppercase', alignSelf: 'center',
+  },
+  diffRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginBottom: 8 },
+  diffPill: {
+    paddingHorizontal: 22, paddingVertical: 10, borderRadius: 20,
+    borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.18)', backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  diffPillActive: { borderColor: C.brass, backgroundColor: C.brass },
+  diffPillTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff },
+  diffPillTxtActive: { color: C.ink },
   btnPrimary: {
     backgroundColor: C.brass, borderRadius: 14, paddingVertical: 22,
     alignItems: 'center', gap: 4,

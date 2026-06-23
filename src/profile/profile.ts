@@ -9,10 +9,14 @@ const STORAGE_KEY = 'ronda_profile'
 const ACTIVE_ROOM_KEY = 'ronda_active_room'
 const STARTING_GOLD = 200
 const MAX_USERNAME = 16
+/** Or gagné en remportant une partie (solo ou en ligne). */
+export const WIN_REWARD = 20
 
 export interface Profile {
   username: string
   gold: number
+  gamesPlayed: number
+  gamesWon: number
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -26,7 +30,7 @@ export interface ActiveRoom {
 
 type Listener = (profile: Profile) => void
 
-let profile: Profile = { username: '', gold: STARTING_GOLD }
+let profile: Profile = { username: '', gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
 const listeners = new Set<Listener>()
@@ -65,12 +69,14 @@ export function loadProfile(): Promise<Profile> {
         profile = {
           username: parsed.username?.slice(0, MAX_USERNAME) || randomUsername(),
           gold: typeof parsed.gold === 'number' ? parsed.gold : STARTING_GOLD,
+          gamesPlayed: typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : 0,
+          gamesWon: typeof parsed.gamesWon === 'number' ? parsed.gamesWon : 0,
         }
       } else {
-        profile = { username: randomUsername(), gold: STARTING_GOLD }
+        profile = { username: randomUsername(), gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
       }
     } catch {
-      profile = { username: randomUsername(), gold: STARTING_GOLD }
+      profile = { username: randomUsername(), gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
     }
     loaded = true
     await persist()
@@ -106,6 +112,24 @@ export function removeGold(amount: number): void {
   profile = { ...profile, gold: Math.max(0, profile.gold - amount) }
   void persist()
   emit()
+}
+
+/**
+ * Enregistre le résultat d'une partie terminée : incrémente le compteur de parties,
+ * et (si gagnée) le compteur de victoires + crédite WIN_REWARD d'or.
+ * Retourne l'or gagné (0 si défaite) pour l'affichage sur l'écran de fin.
+ */
+export function recordResult(won: boolean): number {
+  const reward = won ? WIN_REWARD : 0
+  profile = {
+    ...profile,
+    gamesPlayed: profile.gamesPlayed + 1,
+    gamesWon: profile.gamesWon + (won ? 1 : 0),
+    gold: profile.gold + reward,
+  }
+  void persist()
+  emit()
+  return reward
 }
 
 /** Abonnement aux changements de profil. Retourne la fonction de désabonnement. */

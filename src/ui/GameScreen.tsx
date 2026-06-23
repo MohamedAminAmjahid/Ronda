@@ -13,6 +13,7 @@ import ReAnimated, {
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
+import { recordResult } from '../profile/profile'
 import type { PlayerId } from '../engine/types'
 import { RitualPickerScreen } from './RitualPickerScreen'
 import { CoinFlipScreen } from './CoinFlipScreen'
@@ -170,10 +171,13 @@ export function GameOverScreen({
   won,
   scoreText,
   onReplay,
+  goldReward = 0,
 }: {
   won: boolean
   scoreText: string
   onReplay: () => void
+  /** Or gagné pour cette victoire (affiché si > 0). */
+  goldReward?: number
 }) {
   const reduceMotion = useReducedMotion()
   const titleScale = useSharedValue(reduceMotion ? 1 : 0.4)
@@ -204,6 +208,9 @@ export function GameOverScreen({
         </ReAnimated.Text>
         <ReAnimated.View style={[{ alignItems: 'center', gap: 24 }, bodyStyle]}>
           <Text style={styles.gameOverScore}>{scoreText}</Text>
+          {goldReward > 0 && (
+            <Text style={styles.gameOverReward}>🪙 +{goldReward}</Text>
+          )}
           <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
             <Text style={styles.btnPrimaryTxt}>Rejouer</Text>
           </TouchableOpacity>
@@ -213,12 +220,13 @@ export function GameOverScreen({
   )
 }
 
-function GameOver({ scores, onReplay }: { scores: [number, number]; onReplay: () => void }) {
+function GameOver({ scores, onReplay, goldReward = 0 }: { scores: [number, number]; onReplay: () => void; goldReward?: number }) {
   return (
     <GameOverScreen
       won={scores[HUMAN_ID] >= 41}
       scoreText={`Toi ${scores[HUMAN_ID]} — Bot ${scores[BOT_ID]}`}
       onReplay={onReplay}
+      goldReward={goldReward}
     />
   )
 }
@@ -516,6 +524,23 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   const [confirmQuit, setConfirmQuit] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Récompense de fin de partie : on enregistre le résultat une seule fois quand
+  // la partie se termine (incrémente les stats + crédite l'or si victoire).
+  const [winReward, setWinReward] = useState(0)
+  const resultRecorded = useRef(false)
+  useEffect(() => {
+    if (view.isGameOver) {
+      if (!resultRecorded.current) {
+        resultRecorded.current = true
+        setWinReward(recordResult(view.state.players[HUMAN_ID].score >= 41))
+      }
+    } else {
+      resultRecorded.current = false
+      setWinReward(0)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.isGameOver])
+
   // Quitter : toujours via une confirmation (en ligne, départ = défaite).
   const handleQuit = () => setConfirmQuit(true)
 
@@ -701,6 +726,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
     return (
       <GameOver
         scores={[human.score, bot.score]}
+        goldReward={winReward}
         onReplay={() => { setSelectedRitual(null); newGame() }}
       />
     )
@@ -1538,6 +1564,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Cairo_400Regular',
     fontSize: 18,
     color: C.boneOff,
+  },
+  gameOverReward: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 20,
+    color: C.brass,
   },
   btnPrimary: {
     backgroundColor: C.brass,

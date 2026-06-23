@@ -5,6 +5,7 @@ import type { Rng } from '../engine/deck'
 import type { Action } from '../engine/types'
 import { getObservableState } from '../ai/observable'
 import { chooseAction } from '../ai/bot'
+import { getDifficulty } from './difficulty'
 import { createMemory, updateMemory } from '../ai/memory'
 import type { AiMemory } from '../ai/memory'
 
@@ -176,7 +177,7 @@ export function useRondaGame() {
     const delay = Math.random() * 1000 + 2000
 
     const tid = setTimeout(() => {
-      const action = chooseAction(obs, BOT_ID, 'medium', memRef.current)
+      const action = chooseAction(obs, BOT_ID, getDifficulty(), memRef.current)
 
       // Si le bot joue une carte, on l'enregistre dans la mémoire
       if (action.type === 'PLAY_CARD') {
