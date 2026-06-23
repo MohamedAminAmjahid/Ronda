@@ -40,6 +40,28 @@ export function createLobby2v2(pseudo: string): Promise<Room> {
   return getClient().create('ronda2v2', { pseudo })
 }
 
+export interface WeeklyEntry {
+  username: string
+  week_start: string
+  gold_wagered: number
+  league: string
+}
+
+/** Classement hebdomadaire d'une ligue (semaine courante). */
+export async function fetchWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
+  const res = await fetch(`${httpBase()}/leaderboard/weekly?league=${encodeURIComponent(league)}`)
+  if (!res.ok) throw new Error('Classement indisponible.')
+  return (await res.json()) as WeeklyEntry[]
+}
+
+/** Ligue courante d'un joueur. */
+export async function fetchUserLeague(username: string): Promise<string> {
+  const res = await fetch(`${httpBase()}/league/${encodeURIComponent(username)}`)
+  if (!res.ok) throw new Error('Ligue indisponible.')
+  const { league } = (await res.json()) as { league: string }
+  return league
+}
+
 export type RoomType = 'ronda' | 'ronda2v2'
 
 /** Détecte le type de room associé à un code (pour router 1v1 vs lobby 2v2). */

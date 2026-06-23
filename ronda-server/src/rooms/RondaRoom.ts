@@ -14,7 +14,7 @@ import type {
   PlayerId,
   Value,
 } from '../engine/types'
-import { recordGame, touchPlayer, getStats } from '../db/queries'
+import { recordGame, touchPlayer, getStats, addWageredGold } from '../db/queries'
 import { generateCode, registerCode, unregisterCode } from './registry'
 
 // ── Schéma Colyseus (état PUBLIC, identique aux deux joueurs) ─────────────────
@@ -83,12 +83,15 @@ export class RondaRoom extends Room<RondaState> {
   private startedAt = 0
   private recorded = false
   private reconnectSeconds = Number(process.env.RECONNECT_SECONDS ?? 60)
+  /** Mise de la partie (or). 0 = partie amicale sans enjeu de classement. */
+  private bet = 0
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean }): void {
+  onCreate(options: { private?: boolean; bet?: number }): void {
     this.state = new RondaState()
     this.maxClients = 2
+    this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
 
     const code = generateCode()
     this.state.code = code
@@ -305,6 +308,11 @@ export class RondaRoom extends Room<RondaState> {
       winner_pseudo: winnerPseudo,
       duration_seconds: Math.round((Date.now() - this.startedAt) / 1000),
     })
+
+    // Partie avec mise → crédite l'or misé au vainqueur pour le classement hebdo.
+    if (this.bet > 0 && winnerPseudo) {
+      addWageredGold(winnerPseudo, this.bet)
+    }
 
     this.broadcast('game_over', {
       aborted: false,

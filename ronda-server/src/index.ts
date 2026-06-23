@@ -4,7 +4,10 @@ import cors from 'cors'
 import { Server } from 'colyseus'
 import { WebSocketTransport } from '@colyseus/ws-transport'
 import { initDatabase } from './db/database'
-import { getStats, getLeaderboard, getRecentGames } from './db/queries'
+import {
+  getStats, getLeaderboard, getRecentGames,
+  getWeeklyLeaderboard, getUserLeague, processWeeklyReset,
+} from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { resolveCode, resolveCodeEntry } from './rooms/registry'
@@ -37,6 +40,27 @@ app.get('/room/:code/type', (req, res) => {
   const entry = resolveCodeEntry(req.params.code)
   if (!entry) return res.status(404).json({ error: 'Code de partie inconnu.' })
   return res.json({ type: entry.type, roomId: entry.roomId })
+})
+
+// ── Ligues & classement hebdomadaire ───────────────────────────────────────────
+
+// Classement de la semaine courante pour une ligue.
+app.get('/leaderboard/weekly', (req, res) => {
+  const league = typeof req.query.league === 'string' ? req.query.league : 'Bronze'
+  return res.json(getWeeklyLeaderboard(league))
+})
+
+// Ligue courante d'un joueur.
+app.get('/league/:username', (req, res) => {
+  return res.json({ league: getUserLeague(req.params.username) })
+})
+
+// Reset hebdomadaire (admin uniquement) → promotions/rétrogradations + récompenses.
+app.post('/league/reset', (req, res) => {
+  if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Non autorisé.' })
+  }
+  return res.json({ rewards: processWeeklyReset() })
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────

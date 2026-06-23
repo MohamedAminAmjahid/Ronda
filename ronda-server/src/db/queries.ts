@@ -75,3 +75,148 @@ export function getRecentGames(limit = 20): GameRecord[] {
   if (!db) return []
   return db.prepare('SELECT * FROM games ORDER BY created_at DESC LIMIT ?').all(limit) as GameRecord[]
 }
+
+// ── Ligues & classement hebdomadaire ───────────────────────────────────────────
+
+/** Ligues par ordre croissant (Bronze le plus bas, Légende le plus haut). */
+export const LEAGUES = ['Bronze', 'Argent', 'Or', 'Platine', 'Diamond', 'Master', 'Légende'] as const
+export type League = (typeof LEAGUES)[number]
+
+/** Récompenses du top 3 d'une ligue à chaque reset hebdomadaire. */
+const TOP_REWARDS = [500, 300, 150]
+const PROMOTE_COUNT = 3
+const DEMOTE_COUNT = 3
+
+export interface WeeklyScoreRecord {
+  username: string
+  week_start: string
+  gold_wagered: number
+  league: string
+}
+
+export interface WeeklyReward {
+  username: string
+  goldReward: number
+}
+
+/** Lundi 00:00 UTC de la semaine contenant `d`, au format YYYY-MM-DD. */
+function mondayUTC(d: Date): string {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  const day = date.getUTCDay() // 0 = dimanche … 6 = samedi
+  const shift = day === 0 ? -6 : 1 - day // ramène au lundi
+  date.setUTCDate(date.getUTCDate() + shift)
+  return date.toISOString().slice(0, 10)
+}
+
+/** Lundi (UTC) de la semaine courante. */
+export function currentWeekStart(): string {
+  return mondayUTC(new Date())
+}
+
+function promote(league: string): string {
+  const i = LEAGUES.indexOf(league as League)
+  if (i < 0) return 'Bronze'
+  return LEAGUES[Math.min(i + 1, LEAGUES.length - 1)]
+}
+
+function demote(league: string): string {
+  const i = LEAGUES.indexOf(league as League)
+  if (i < 0) return 'Bronze'
+  return LEAGUES[Math.max(i - 1, 0)]
+}
+
+/** Ligue courante d'un joueur (Bronze par défaut / persistance désactivée). */
+export function getUserLeague(username: string): League {
+  const db = getDbOrNull()
+  if (!db) return 'Bronze'
+  const row = db.prepare('SELECT current_league FROM league_history WHERE username = ?').get(username) as
+    | { current_league: string }
+    | undefined
+  const league = row?.current_league
+  return (LEAGUES as readonly string[]).includes(league ?? '') ? (league as League) : 'Bronze'
+}
+
+/**
+ * Incrémente l'or misé d'un joueur pour la semaine courante (crée la ligne si
+ * absente, avec la ligue courante du joueur). No-op si persistance désactivée.
+ */
+export function addWageredGold(username: string, amount: number): void {
+  const db = getDbOrNull()
+  if (!db || amount <= 0) return
+  const week = currentWeekStart()
+  const league = getUserLeague(username)
+  db.prepare(`
+    INSERT INTO weekly_scores (username, week_start, gold_wagered, league)
+    VALUES (@username, @week, @amount, @league)
+    ON CONFLICT(username, week_start) DO UPDATE SET
+      gold_wagered = gold_wagered + @amount
+  `).run({ username, week, amount, league })
+}
+
+/** Classement de la semaine courante pour une ligue, trié par or misé décroissant. */
+export function getWeeklyLeaderboard(league: string): WeeklyScoreRecord[] {
+  const db = getDbOrNull()
+  if (!db) return []
+  const week = currentWeekStart()
+  return db.prepare(`
+    SELECT username, week_start, gold_wagered, league
+    FROM weekly_scores
+    WHERE week_start = ? AND league = ?
+    ORDER BY gold_wagered DESC, username ASC
+  `).all(week, league) as WeeklyScoreRecord[]
+}
+
+/**
+ * Reset hebdomadaire : pour la dernière semaine ayant de l'activité, promeut le
+ * top 3 et rétrograde le bottom 3 de chaque ligue (Bronze ne descend pas,
+ * Légende ne monte pas), met à jour `league_history`, et retourne les
+ * récompenses d'or à créditer au top 3 de chaque ligue.
+ */
+export function processWeeklyReset(): WeeklyReward[] {
+  const db = getDbOrNull()
+  if (!db) return []
+
+  const latest = db.prepare('SELECT MAX(week_start) AS w FROM weekly_scores').get() as { w: string | null }
+  const week = latest?.w
+  if (!week) return []
+
+  const rewards: WeeklyReward[] = []
+  const resetDate = currentWeekStart()
+
+  const upsertHistory = db.prepare(`
+    INSERT INTO league_history (username, current_league, last_week_rank, last_reset)
+    VALUES (@username, @league, @rank, @reset)
+    ON CONFLICT(username) DO UPDATE SET
+      current_league = @league,
+      last_week_rank = @rank,
+      last_reset     = @reset
+  `)
+
+  const apply = db.transaction(() => {
+    for (const league of LEAGUES) {
+      const standings = db.prepare(`
+        SELECT username, gold_wagered FROM weekly_scores
+        WHERE week_start = ? AND league = ?
+        ORDER BY gold_wagered DESC, username ASC
+      `).all(week, league) as { username: string; gold_wagered: number }[]
+
+      const n = standings.length
+      standings.forEach((row, idx) => {
+        const rank = idx + 1
+        let newLeague: string = league
+
+        if (idx < PROMOTE_COUNT) {
+          newLeague = promote(league)
+          rewards.push({ username: row.username, goldReward: TOP_REWARDS[idx] ?? 0 })
+        } else if (idx >= n - DEMOTE_COUNT) {
+          newLeague = demote(league)
+        }
+
+        upsertHistory.run({ username: row.username, league: newLeague, rank, reset: resetDate })
+      })
+    }
+  })
+  apply()
+
+  return rewards
+}

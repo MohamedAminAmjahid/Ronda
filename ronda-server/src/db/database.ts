@@ -70,5 +70,22 @@ function migrate(database: SqliteDb): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_games_created_at ON games (created_at);
+
+    CREATE TABLE IF NOT EXISTS weekly_scores (
+      username     TEXT NOT NULL,
+      week_start   TEXT NOT NULL, -- ISO date du lundi (ex. 2026-06-23)
+      gold_wagered INTEGER NOT NULL DEFAULT 0,
+      league       TEXT NOT NULL DEFAULT 'Bronze',
+      PRIMARY KEY (username, week_start)
+    );
+
+    CREATE TABLE IF NOT EXISTS league_history (
+      username       TEXT PRIMARY KEY,
+      current_league TEXT NOT NULL DEFAULT 'Bronze',
+      last_week_rank INTEGER,
+      last_reset     TEXT -- date du dernier reset traité
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_weekly_week_league ON weekly_scores (week_start, league);
   `)
 }

@@ -13,6 +13,7 @@ export default function Index() {
       onPlay={() => router.push(PLAY)}
       onPlayOnline={() => router.push(ONLINE)}
       onPlayFriend={() => router.push(ONLINE_FRIEND)}
+      onLeaderboard={() => router.push('/leaderboard' as Href)}
       onRules={() => router.push('/rules')}
       onCredits={() => router.push('/credits')}
     />

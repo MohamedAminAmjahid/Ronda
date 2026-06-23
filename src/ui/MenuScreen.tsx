@@ -45,16 +45,17 @@ function KhatamLogo() {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onPlay:       () => void
-  onPlayOnline: () => void
-  onPlayFriend: () => void
-  onRules:      () => void
-  onCredits:    () => void
+  onPlay:        () => void
+  onPlayOnline:  () => void
+  onPlayFriend:  () => void
+  onLeaderboard: () => void
+  onRules:       () => void
+  onCredits:     () => void
 }
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onRules, onCredits }: Props) {
+export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
   const { username, gold, setUsername } = useProfile()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -223,8 +224,12 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onRules, onCred
             <Text style={s.btnSecondaryTxt}>Jouer avec un ami</Text>
           </TouchableOpacity>
 
-          {/* Règles + Crédits — liens discrets */}
+          {/* Classement + Règles + Crédits — liens discrets */}
           <View style={s.textLinks}>
+            <TouchableOpacity style={s.btnCredits} onPress={onLeaderboard}>
+              <Text style={s.btnCreditsTxt}>Classement</Text>
+            </TouchableOpacity>
+            <Text style={s.linkSep}>·</Text>
             <TouchableOpacity style={s.btnCredits} onPress={onRules}>
               <Text style={s.btnCreditsTxt}>Règles</Text>
             </TouchableOpacity>
