@@ -197,19 +197,10 @@ export async function sendFriendRequest(myUid: string, targetUid: string): Promi
       if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
     }
 
-    // S'assure que le document users/{myUid} existe avant de lire le username.
-    // setDoc merge:true ne crase pas les champs existants.
     const authUser = getAuth(firebaseApp).currentUser
-    if (authUser) {
-      const displayName = authUser.displayName || 'Joueur'
-      await setDoc(userRef(myUid), {
-        username: displayName,
-        usernameLower: displayName.toLowerCase(),
-        lastSeen: serverTimestamp(),
-      }, { merge: true })
-    }
-
-    const myUsername = (await getUsername(myUid)) || 'Joueur'
+    const myUsername = (await getUsername(myUid).catch(() => null))
+      || authUser?.displayName
+      || 'Joueur'
     console.log('[sendFriendRequest] username:', myUsername)
 
     await setDoc(friendRef(targetUid, myUid), {
