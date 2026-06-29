@@ -234,6 +234,13 @@ export const translations = {
     rondaCardDesc: 'لعبة ورق مغربية كلاسيكية',
     dijoujCardDesc: 'لعبة ورق شعبية مغربية',
     dijoujSoon: 'القواعد قادمة قريباً…',
+    // ── Di Jouj ───────────────────────────────────────────────────────────────
+    djDraw:       'اسحب',
+    djSkip:       'تخطّ',
+    djChooseSuit: 'اختر اللون',
+    djYouWin:     'لقد فزت!',
+    djYouLose:    'خسرت.',
+    djNewGame:    'مباراة جديدة',
   },
   fr: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -468,6 +475,13 @@ export const translations = {
     rondaCardDesc: 'Jeu de cartes marocain classique',
     dijoujCardDesc: 'Jeu de cartes populaire marocain',
     dijoujSoon: 'Les règles arrivent bientôt…',
+    // ── Di Jouj ───────────────────────────────────────────────────────────────
+    djDraw:       'Piocher',
+    djSkip:       'Passer',
+    djChooseSuit: 'Choisir une couleur',
+    djYouWin:     'Vous avez gagné !',
+    djYouLose:    'Vous avez perdu.',
+    djNewGame:    'Nouvelle partie',
   },
   en: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -702,6 +716,13 @@ export const translations = {
     rondaCardDesc: 'Classic Moroccan card game',
     dijoujCardDesc: 'Popular Moroccan card game',
     dijoujSoon: 'Rules coming soon…',
+    // ── Di Jouj ───────────────────────────────────────────────────────────────
+    djDraw:       'Draw',
+    djSkip:       'Skip',
+    djChooseSuit: 'Choose a color',
+    djYouWin:     'You won!',
+    djYouLose:    'You lost.',
+    djNewGame:    'New game',
   },
 } as const
 
