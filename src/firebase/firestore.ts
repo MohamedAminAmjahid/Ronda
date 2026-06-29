@@ -372,7 +372,8 @@ export interface GameInviteDoc {
   roomCode?: string
 }
 
-/** Envoie une invitation de partie à un ami. Retourne l'ID du document créé. */
+/** Envoie une invitation de partie à un ami. Retourne l'ID du document créé.
+ *  Lance 'already_invited' si une invitation pending existe déjà vers cet ami. */
 export async function sendGameInvite(
   fromUid: string,
   fromName: string,
@@ -380,6 +381,16 @@ export async function sendGameInvite(
   game: 'ronda' | 'dijouj',
   betAmount: number,
 ): Promise<string> {
+  // Vérifie s'il existe déjà une invitation pending vers ce même ami
+  // (filtre client-side pour éviter un index composite Firestore)
+  const existing = await getDocs(
+    query(collection(db, 'gameInvites'), where('fromUid', '==', fromUid)),
+  )
+  const hasPending = existing.docs.some(
+    (d) => d.data().toUid === toUid && d.data().status === 'pending',
+  )
+  if (hasPending) throw new Error('already_invited')
+
   const ref = doc(collection(db, 'gameInvites'))
   await setDoc(ref, { fromUid, fromName, toUid, game, betAmount, status: 'pending', createdAt: serverTimestamp() })
   return ref.id

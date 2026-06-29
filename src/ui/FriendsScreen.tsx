@@ -176,8 +176,12 @@ export function FriendsScreen({ onBack }: Props) {
       const id = await sendGameInvite(user.uid, username || 'Joueur', inviteFriend.uid, inviteGame, inviteBet)
       setPendingInvite({ id, game: inviteGame, bet: inviteBet })
       setInvitePhase('waiting')
-    } catch {
-      setInviteError("Erreur lors de l'envoi de l'invitation")
+    } catch (e) {
+      if (e instanceof Error && e.message === 'already_invited') {
+        setInviteError(`Tu as déjà invité ${inviteFriend.username}, en attente de sa réponse.`)
+      } else {
+        setInviteError("Erreur lors de l'envoi de l'invitation")
+      }
       setInvitePhase('error')
     }
   }
