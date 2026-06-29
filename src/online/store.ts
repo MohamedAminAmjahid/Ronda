@@ -56,6 +56,12 @@ export interface DealEndPayload {
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'waiting' | 'playing' | 'disconnected'
 
+export interface ChatMessage {
+  id: number
+  username: string
+  text: string
+}
+
 export interface OnlineSnapshot {
   status: ConnectionStatus
   roomCode: string | null
@@ -66,11 +72,14 @@ export interface OnlineSnapshot {
   gameOver: GameOverPayload | null
   dealEnd: DealEndPayload | null
   error: string | null
+  chatMessages: ChatMessage[]
 }
 
 // ── Store singleton ─────────────────────────────────────────────────────────────
 
 const AUTO_CONTINUE_MS = 3000
+
+let chatCounter = 0
 
 let snapshot: OnlineSnapshot = {
   status: 'idle',
@@ -82,6 +91,7 @@ let snapshot: OnlineSnapshot = {
   gameOver: null,
   dealEnd: null,
   error: null,
+  chatMessages: [],
 }
 
 const listeners = new Set<() => void>()
@@ -168,6 +178,9 @@ function wireRoom(r: Room): void {
   r.onMessage('opponent_disconnected', () => set({ opponentDisconnected: true }))
   r.onMessage('opponent_reconnected', () => set({ opponentDisconnected: false }))
   r.onMessage('error', (p: { message: string }) => set({ error: p.message }))
+  r.onMessage('chat', (p: { username: string; text: string }) => {
+    set({ chatMessages: [...snapshot.chatMessages, { id: chatCounter++, username: p.username, text: p.text }] })
+  })
 
   r.onLeave(() => {
     clearContinueTimer()
@@ -255,5 +268,10 @@ export function reset(): void {
     gameOver: null,
     dealEnd: null,
     error: null,
+    chatMessages: [],
   })
+}
+
+export function sendChat(text: string): void {
+  send('chat', { text })
 }

@@ -9,6 +9,7 @@ import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
 import { VoiceButton } from '../voice/VoiceButton'
+import { GameChat } from '../voice/GameChat'
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
 
@@ -108,6 +109,13 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           </View>
         )}
         <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
+        <GameChat
+          messages={game.chatMessages}
+          sendMessage={game.sendChatMsg}
+          myUsername={username || 'Joueur'}
+          accentColor="#2E7D32"
+          isGameOver={game.view.isGameOver}
+        />
       </View>
     )
   }

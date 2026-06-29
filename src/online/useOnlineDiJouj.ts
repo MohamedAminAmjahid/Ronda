@@ -5,12 +5,14 @@ import {
   getSnapshot,
   connectDiJoujQuick,
   connectDiJoujPrivate,
+  sendChat,
   send,
   leave,
   type DjServerState,
   type DjOpponent,
   type ConnectionStatus,
   type DjGameOverPayload,
+  type ChatMessage,
 } from './storeDiJouj'
 
 // ── Reconstruction du GameState depuis l'état serveur ────────────────────────
@@ -148,6 +150,8 @@ export function useOnlineDiJouj() {
     opponentDisconnected: snap.opponentDisconnected,
     gameOver:             snap.gameOver,
     error:                snap.error,
+    chatMessages:         snap.chatMessages as ChatMessage[],
+    sendChatMsg:          sendChat,
     connectQuick:         connectDiJoujQuick,
     connectPrivate:       connectDiJoujPrivate,
   }

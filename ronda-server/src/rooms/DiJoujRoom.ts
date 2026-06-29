@@ -80,6 +80,14 @@ export class DiJoujRoom extends Room<DiJoujState> {
       this.handlePlayCard(client, msg),
     )
     this.onMessage('draw_card', (client) => this.handleDrawCard(client))
+
+    this.onMessage('chat', (client, msg: { text: string }) => {
+      const ps = this.state.players.get(client.sessionId)
+      if (!ps) return
+      const text = String(msg?.text ?? '').trim().slice(0, 120)
+      if (!text) return
+      this.broadcast('chat', { username: ps.pseudo, text })
+    })
   }
 
   onJoin(client: Client, options: { pseudo: string }): void {

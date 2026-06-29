@@ -7,10 +7,12 @@ import {
   connectQuick,
   connectCreate,
   connectByCode,
+  sendChat,
   send,
   leave,
   type ServerGameState,
   type ConnectionStatus,
+  type ChatMessage,
 } from './store'
 
 const PLACEHOLDER: Card = { value: 1, suit: 'oros' }
@@ -163,6 +165,8 @@ export function useOnlineGame() {
     opponentName: snap.server?.opponent.pseudo ?? null,
     opponentDisconnected: snap.opponentDisconnected,
     error: snap.error,
+    chatMessages: snap.chatMessages as ChatMessage[],
+    sendChatMsg: sendChat,
     connectQuick,
     connectCreate,
     connectByCode,

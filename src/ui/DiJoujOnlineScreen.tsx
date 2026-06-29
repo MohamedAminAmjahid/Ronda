@@ -13,6 +13,7 @@ import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
 import { VoiceButton } from '../voice/VoiceButton'
+import { GameChat } from '../voice/GameChat'
 
 const C = {
   gradTop: '#1A0008' as const,
@@ -83,6 +84,7 @@ export function DiJoujOnlineScreen() {
     playCard, draw, isGameOver, winner, restart,
     connectionStatus, roomCode, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
+    chatMessages, sendChatMsg,
   } = useOnlineDiJouj()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
@@ -507,6 +509,13 @@ export function DiJoujOnlineScreen() {
       </SafeAreaView>
     </LinearGradient>
     <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
+    <GameChat
+      messages={chatMessages}
+      sendMessage={sendChatMsg}
+      myUsername={username || 'Joueur'}
+      accentColor="#6B1A2C"
+      isGameOver={isGameOver}
+    />
     </View>
   )
 }

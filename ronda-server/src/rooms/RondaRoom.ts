@@ -111,6 +111,14 @@ export class RondaRoom extends Room<RondaState> {
       this.handleAction(client, { type: 'CONTEST', playerId: 0, accusedValue: msg.accusedValue }, 'contest'),
     )
     this.onMessage('continue_deal', (client) => this.handleContinueDeal(client))
+
+    this.onMessage('chat', (client, msg: { text: string }) => {
+      const ps = this.state.players.get(client.sessionId)
+      if (!ps) return
+      const text = String(msg?.text ?? '').trim().slice(0, 120)
+      if (!text) return
+      this.broadcast('chat', { username: ps.pseudo, text })
+    })
   }
 
   onJoin(client: Client, options: { pseudo: string }): void {

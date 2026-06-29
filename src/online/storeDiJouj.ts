@@ -42,6 +42,12 @@ export interface DjGameOverPayload {
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'waiting' | 'playing' | 'disconnected'
 
+export interface ChatMessage {
+  id: number
+  username: string
+  text: string
+}
+
 export interface DjSnapshot {
   status:               ConnectionStatus
   roomCode:             string | null
@@ -51,9 +57,12 @@ export interface DjSnapshot {
   opponentDisconnected: boolean
   gameOver:             DjGameOverPayload | null
   error:                string | null
+  chatMessages:         ChatMessage[]
 }
 
 // ── Store singleton ────────────────────────────────────────────────────────────
+
+let djChatCounter = 0
 
 let snapshot: DjSnapshot = {
   status:               'idle',
@@ -64,6 +73,7 @@ let snapshot: DjSnapshot = {
   opponentDisconnected: false,
   gameOver:             null,
   error:                null,
+  chatMessages:         [],
 }
 
 const listeners = new Set<() => void>()
@@ -123,6 +133,9 @@ function wireRoom(r: Room): void {
   r.onMessage('opponent_disconnected', () => set({ opponentDisconnected: true }))
   r.onMessage('opponent_reconnected',  () => set({ opponentDisconnected: false }))
   r.onMessage('error', (p: { message: string }) => set({ error: p.message }))
+  r.onMessage('chat', (p: { username: string; text: string }) => {
+    set({ chatMessages: [...snapshot.chatMessages, { id: djChatCounter++, username: p.username, text: p.text }] })
+  })
 
   r.onLeave(() => {
     if (snapshot.status !== 'playing' || snapshot.server?.phase !== 'GAME_OVER') {
@@ -200,7 +213,12 @@ export function reset(): void {
     opponentDisconnected: false,
     gameOver:             null,
     error:                null,
+    chatMessages:         [],
   })
+}
+
+export function sendChat(text: string): void {
+  send('chat', { text })
 }
 
 export type { Suit, Value }
