@@ -369,13 +369,17 @@ describe('applyDraw — pioche normale', () => {
     expect(r.currentPlayerId).toBe(1)
   })
 
-  it('refusé si le joueur a des cartes jouables', () => {
+  it('autorisé même si le joueur a des cartes jouables', () => {
     const s = makeState({
       humanHand:  [c('oros', 3)],   // jouable (même couleur)
       discardTop: c('oros', 5),
       drawPile:   [c('bastos', 6)],
     })
-    expect(applyDraw(s, 0, rng0)).toBe(s)
+    const r = applyDraw(s, 0, rng0)
+    // La pioche est autorisée — le joueur reçoit une carte supplémentaire
+    expect(r.players[0].hand).toHaveLength(2)
+    // La carte piochée (bastos 6) n'est pas jouable → tour passe
+    expect(r.currentPlayerId).toBe(1)
   })
 
   it('refill de la pioche depuis la défausse si vide', () => {

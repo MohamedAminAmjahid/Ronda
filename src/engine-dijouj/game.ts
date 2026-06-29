@@ -183,10 +183,7 @@ export function applyDraw(
     return { ...state, currentPlayerId: nextPId, pendingEffect: null }
   }
 
-  // ── Pioche normale : refusée si le joueur a des cartes jouables ─────────────
-  const hasPlayable = player.hand.some(c => isPlayable(c, topCard, state.chosenSuit, null))
-  if (hasPlayable) return state
-
+  // ── Pioche normale : toujours autorisée ────────────────────────────────────
   const { drawPile, discardPile, drawn } = drawCards(
     state.drawPile, state.discardPile, 1, rng,
   )
