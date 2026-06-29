@@ -88,14 +88,17 @@ describe('createInitialState', () => {
     expect(s.discardPile).toHaveLength(1)
   })
 
-  it('la première carte n\'est pas le 7 de Oros', () => {
-    // Teste sur plusieurs seeds pour s'assurer de la règle
-    for (let seed = 0; seed < 20; seed++) {
-      let x = (seed >>> 0) || 1
+  it('la carte initiale de la défausse n\'est jamais spéciale (As, 2, 7oros) — 200 seeds', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      let x = ((seed + 1) >>> 0)
       const lcg = () => { x = (Math.imul(x, 1664525) + 1013904223) >>> 0; return x / 0x100000000 }
       const s = createInitialState(2, lcg)
       const top = s.discardPile[0]
-      expect(top.value === 7 && top.suit === 'oros').toBe(false)
+      const isSpecial =
+        top.value === 1 ||
+        top.value === 2 ||
+        (top.value === 7 && top.suit === 'oros')
+      expect(isSpecial, `seed ${seed}: carte initiale ${top.suit}_${top.value} est spéciale`).toBe(false)
     }
   })
 

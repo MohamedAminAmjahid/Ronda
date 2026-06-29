@@ -221,6 +221,7 @@ export function DiJoujScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={s.handScroll}
+            overScrollMode="never"
           >
             {human.hand.map((card, i) => {
               const playable = playableSet.has(cardKey(card))
@@ -229,7 +230,6 @@ export function DiJoujScreen() {
                   key={i}
                   style={[
                     s.humanCard,
-                    i > 0 && s.humanCardOverlap,
                     !playable && s.humanCardDimmed,
                   ]}
                 >
@@ -412,22 +412,23 @@ const s = StyleSheet.create({
     opacity:      0.85,
   },
 
-  // Human hand zone
+  // Human hand zone — cartes entièrement visibles, pas de chevauchement
   humanZone: {
     flex:          4,
     justifyContent:'center',
     paddingBottom: 4,
+    overflow:      'visible',
   },
   handScroll: {
-    flexGrow:       1,
-    justifyContent: 'center',
-    alignItems:     'flex-end',
-    paddingHorizontal: 16,
-    paddingBottom:  12,
+    flexGrow:          1,
+    justifyContent:    'center',
+    alignItems:        'center',
+    paddingHorizontal: 12,
+    paddingVertical:   12,
+    gap:               10,
   },
-  humanCard:        { zIndex: 1 },
-  humanCardOverlap: { marginLeft: -22 },
-  humanCardDimmed:  { opacity: 0.38 },
+  humanCard:       { overflow: 'visible' },
+  humanCardDimmed: { opacity: 0.38 },
 
   // Color picker modal
   modalOverlay: {
