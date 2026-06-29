@@ -1,6 +1,6 @@
 import type { Room } from 'colyseus.js'
 import type { Suit, Value, PendingEffect } from '../engine-dijouj/types'
-import { joinDiJoujQuick, createDiJoujPrivate } from './client'
+import { joinDiJoujQuick, createDiJoujPrivate, joinByCode } from './client'
 import { addGold } from '../profile/profile'
 
 // ── Types des messages serveur ────────────────────────────────────────────────
@@ -157,6 +157,16 @@ export function connectDiJoujQuick(pseudo: string, bet = 0): Promise<void> {
 
 export function connectDiJoujPrivate(pseudo: string): Promise<void> {
   return connect(() => createDiJoujPrivate(pseudo))
+}
+/** Crée une room privée Di Jouj pour une partie entre amis (hôte). */
+export function connectDiJoujFriendHost(pseudo: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => createDiJoujPrivate(pseudo))
+}
+/** Rejoint une room Di Jouj privée par code (invité). */
+export function connectDiJoujFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => joinByCode(pseudo, code))
 }
 
 /** Transfert d'une room déjà connectée (depuis le lobby). */

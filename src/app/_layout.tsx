@@ -8,6 +8,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useFirebaseProfileSync } from '../firebase/sync'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
+import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -52,6 +53,7 @@ export default function RootLayout() {
         }}
       />
       <BottomNav />
+      <IncomingInviteModal />
     </View>
   )
 }

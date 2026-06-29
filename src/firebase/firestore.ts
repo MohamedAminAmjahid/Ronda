@@ -354,6 +354,77 @@ export function subscribeTotalUnread(
   )
 }
 
+// ── Invitations de partie (entre amis) ────────────────────────────────────────
+
+export interface GameInviteDoc {
+  id: string
+  fromUid: string
+  fromName: string
+  toUid: string
+  game: 'ronda' | 'dijouj'
+  betAmount: number
+  status: 'pending' | 'accepted' | 'declined' | 'room_ready'
+  roomCode?: string
+}
+
+/** Envoie une invitation de partie à un ami. Retourne l'ID du document créé. */
+export async function sendGameInvite(
+  fromUid: string,
+  fromName: string,
+  toUid: string,
+  game: 'ronda' | 'dijouj',
+  betAmount: number,
+): Promise<string> {
+  const ref = doc(collection(db, 'gameInvites'))
+  await setDoc(ref, { fromUid, fromName, toUid, game, betAmount, status: 'pending', createdAt: serverTimestamp() })
+  return ref.id
+}
+
+/** Écoute les invitations en attente reçues par myUid (filtre côté client). */
+export function subscribeIncomingInvites(
+  myUid: string,
+  cb: (invites: GameInviteDoc[]) => void,
+): () => void {
+  const q = query(collection(db, 'gameInvites'), where('toUid', '==', myUid))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const pending = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<GameInviteDoc, 'id'>) }))
+        .filter((inv) => inv.status === 'pending')
+      cb(pending)
+    },
+    () => cb([]),
+  )
+}
+
+/** Écoute une invitation précise (pour attendre room_ready côté invité). */
+export function subscribeInviteById(
+  inviteId: string,
+  cb: (invite: GameInviteDoc | null) => void,
+): () => void {
+  return onSnapshot(
+    doc(db, 'gameInvites', inviteId),
+    (snap) => {
+      if (!snap.exists()) { cb(null); return }
+      cb({ id: snap.id, ...(snap.data() as Omit<GameInviteDoc, 'id'>) })
+    },
+    () => cb(null),
+  )
+}
+
+export function acceptGameInvite(inviteId: string): Promise<void> {
+  return updateDoc(doc(db, 'gameInvites', inviteId), { status: 'accepted' })
+}
+
+export function declineGameInvite(inviteId: string): Promise<void> {
+  return updateDoc(doc(db, 'gameInvites', inviteId), { status: 'declined' })
+}
+
+export function updateInviteRoomCode(inviteId: string, roomCode: string): Promise<void> {
+  return updateDoc(doc(db, 'gameInvites', inviteId), { status: 'room_ready', roomCode })
+}
+
 /** Écoute les non-lus par ami : { [friendUid]: count }. */
 export function subscribeFriendUnreadCounts(
   myUid: string,

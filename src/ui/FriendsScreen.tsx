@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Share,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -9,9 +9,14 @@ import { useAuth } from '../firebase/auth'
 import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   getFriends, getPendingRequests, subscribePendingCount, subscribeFriendUnreadCounts,
+  sendGameInvite, subscribeInviteById, updateInviteRoomCode, declineGameInvite,
   type FriendDoc, type UserDoc,
 } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
+import { useProfile } from '../profile/useProfile'
+import { removeGold } from '../profile/profile'
+import { connectFriendHost, getSnapshot as getRondaSnap } from '../online/store'
+import { connectDiJoujFriendHost, getSnapshot as getDjSnap } from '../online/storeDiJouj'
 
 const C = {
   table:   '#0E5C4A',
@@ -21,9 +26,9 @@ const C = {
   bone:    '#F4ECD8',
   ink:     '#1C2622',
   boneOff: 'rgba(244,236,216,0.45)',
+  red:     '#C0392B',
+  green:   '#27AE60',
 } as const
-
-const GAME_URL = 'https://ronda-virid.vercel.app'
 
 type Tab = 'friends' | 'requests' | 'add'
 
@@ -34,6 +39,7 @@ interface Props {
 export function FriendsScreen({ onBack }: Props) {
   const { user, loading: authLoading } = useAuth()
   const { t } = useI18n()
+  const { username, gold } = useProfile()
   const [tab, setTab] = useState<Tab>('friends')
 
   const [friends, setFriends] = useState<FriendDoc[]>([])
@@ -117,11 +123,87 @@ export function FriendsScreen({ onBack }: Props) {
     void refresh()
   }
 
-  const invite = async (friend: FriendDoc) => {
-    try {
-      await Share.share({ message: `🎴 ${GAME_URL}` })
-    } catch { /* annulé */ }
+  // ── Modale d'invitation de partie ────────────────────────────────────────────
+  const [showInviteModal, setShowInviteModal]   = useState(false)
+  const [inviteFriend,    setInviteFriend]      = useState<FriendDoc | null>(null)
+  const [inviteGame,      setInviteGame]        = useState<'ronda' | 'dijouj'>('dijouj')
+  const [inviteBet,       setInviteBet]         = useState(0)
+  const [invitePhase,     setInvitePhase]       = useState<'setup' | 'sending' | 'waiting' | 'creating' | 'declined' | 'error'>('setup')
+  const [inviteError,     setInviteError]       = useState('')
+  const [pendingInvite,   setPendingInvite]     = useState<{ id: string; game: 'ronda' | 'dijouj'; bet: number } | null>(null)
+
+  const usernameRef = useRef(username)
+  usernameRef.current = username
+
+  function openInviteModal(friend: FriendDoc) {
+    setInviteFriend(friend)
+    setInviteGame('dijouj')
+    setInviteBet(0)
+    setInvitePhase('setup')
+    setInviteError('')
+    setPendingInvite(null)
+    setShowInviteModal(true)
   }
+
+  function closeInviteModal() {
+    if (pendingInvite && invitePhase === 'waiting') {
+      void declineGameInvite(pendingInvite.id).catch(() => {})
+    }
+    setShowInviteModal(false)
+    setInvitePhase('setup')
+    setPendingInvite(null)
+  }
+
+  async function doSendInvite() {
+    if (!user || !inviteFriend) return
+    if (inviteBet > gold) { setInviteError('Or insuffisant'); setInvitePhase('error'); return }
+    setInvitePhase('sending')
+    try {
+      const id = await sendGameInvite(user.uid, username || 'Joueur', inviteFriend.uid, inviteGame, inviteBet)
+      setPendingInvite({ id, game: inviteGame, bet: inviteBet })
+      setInvitePhase('waiting')
+    } catch {
+      setInviteError("Erreur lors de l'envoi de l'invitation")
+      setInvitePhase('error')
+    }
+  }
+
+  // Écoute la réponse de l'ami une fois l'invitation envoyée
+  useEffect(() => {
+    if (!pendingInvite || invitePhase !== 'waiting') return
+    const { id, game, bet } = pendingInvite
+    const unsub = subscribeInviteById(id, async (inv) => {
+      if (!inv) return
+      if (inv.status === 'declined') {
+        setInvitePhase('declined')
+      } else if (inv.status === 'accepted') {
+        setInvitePhase('creating')
+        try {
+          let roomCode: string | null = null
+          const pseudo = usernameRef.current || 'Joueur'
+          if (game === 'dijouj') {
+            await connectDiJoujFriendHost(pseudo, bet)
+            roomCode = getDjSnap().roomCode
+          } else {
+            await connectFriendHost(pseudo, bet)
+            roomCode = getRondaSnap().roomCode
+          }
+          if (!roomCode) throw new Error('no room code')
+          if (bet > 0) removeGold(bet)
+          await updateInviteRoomCode(id, roomCode)
+          setShowInviteModal(false)
+          setInvitePhase('setup')
+          setPendingInvite(null)
+          router.push((game === 'dijouj' ? '/dijouj-online' : '/online') as never)
+        } catch {
+          setInviteError('Impossible de créer la partie. Vérifiez votre connexion.')
+          setInvitePhase('error')
+        }
+      }
+    })
+    return unsub
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingInvite, invitePhase])
 
   // ── Rendu ─────────────────────────────────────────────────────────────────────
 
@@ -205,8 +287,8 @@ export function FriendsScreen({ onBack }: Props) {
                           </View>
                         )}
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.btnSmall} onPress={() => invite(f)}>
-                        <Text style={s.btnSmallTxt}>{t('inviteToPlay')}</Text>
+                      <TouchableOpacity style={s.btnSmall} onPress={() => openInviteModal(f)}>
+                        <Text style={s.btnSmallTxt}>🎮 {t('inviteToPlay')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -284,6 +366,125 @@ export function FriendsScreen({ onBack }: Props) {
           )}
         </ScrollView>
       </View>
+
+      {/* ── Modale d'invitation de partie ─────────────────────────────────────── */}
+      <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={closeInviteModal}>
+        <View style={s.modalOverlay}>
+          <View style={s.inviteBox}>
+
+            {/* ── Sélection jeu + mise ── */}
+            {(invitePhase === 'setup') && (
+              <>
+                <Text style={s.inviteTitle}>Inviter {inviteFriend?.username}</Text>
+
+                <Text style={s.inviteLabel}>Jeu</Text>
+                <View style={s.gameRow}>
+                  {(['dijouj', 'ronda'] as const).map((g) => (
+                    <TouchableOpacity
+                      key={g}
+                      style={[s.gameBtn, inviteGame === g && s.gameBtnActive]}
+                      onPress={() => setInviteGame(g)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[s.gameBtnTxt, inviteGame === g && s.gameBtnTxtActive]}>
+                        {g === 'dijouj' ? '🎴 Di Jouj' : '🃏 Ronda'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={s.inviteLabel}>Mise (solde : {gold} 🪙)</Text>
+                <View style={s.betRow}>
+                  {[0, 10, 25, 50, 100].map((b) => (
+                    <TouchableOpacity
+                      key={b}
+                      style={[s.betChip, inviteBet === b && s.betChipActive, b > gold && s.betChipDis]}
+                      onPress={() => b <= gold && setInviteBet(b)}
+                      disabled={b > gold}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[s.betChipTxt, inviteBet === b && s.betChipTxtActive, b > gold && s.betChipTxtDis]}>
+                        {b === 0 ? 'Libre' : `${b} 🪙`}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={s.inviteActions}>
+                  <TouchableOpacity style={s.inviteCancelBtn} onPress={closeInviteModal} activeOpacity={0.8}>
+                    <Text style={s.inviteCancelTxt}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.inviteSendBtn} onPress={doSendInvite} activeOpacity={0.85}>
+                    <Text style={s.inviteSendTxt}>Envoyer</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {/* ── Envoi en cours ── */}
+            {invitePhase === 'sending' && (
+              <>
+                <ActivityIndicator color={C.brass} size="large" />
+                <Text style={s.inviteStatusTxt}>Envoi de l'invitation...</Text>
+              </>
+            )}
+
+            {/* ── En attente de réponse ── */}
+            {invitePhase === 'waiting' && (
+              <>
+                <Text style={s.inviteEmoji}>⏳</Text>
+                <Text style={s.inviteStatusTxt}>En attente de {inviteFriend?.username}...</Text>
+                <TouchableOpacity style={s.inviteCancelBtn} onPress={closeInviteModal} activeOpacity={0.8}>
+                  <Text style={s.inviteCancelTxt}>Annuler</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* ── Création de la room ── */}
+            {invitePhase === 'creating' && (
+              <>
+                <ActivityIndicator color={C.brass} size="large" />
+                <Text style={s.inviteStatusTxt}>Création de la partie...</Text>
+              </>
+            )}
+
+            {/* ── Invitation refusée ── */}
+            {invitePhase === 'declined' && (
+              <>
+                <Text style={s.inviteEmoji}>😔</Text>
+                <Text style={s.inviteStatusTxt}>{inviteFriend?.username} a refusé l'invitation</Text>
+                <TouchableOpacity
+                  style={s.inviteSendBtn}
+                  onPress={() => { setInvitePhase('setup'); setPendingInvite(null) }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.inviteSendTxt}>Réessayer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.inviteCancelBtn} onPress={closeInviteModal} activeOpacity={0.8}>
+                  <Text style={s.inviteCancelTxt}>Fermer</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* ── Erreur ── */}
+            {invitePhase === 'error' && (
+              <>
+                <Text style={s.inviteEmoji}>⚠️</Text>
+                <Text style={s.inviteErrTxt}>{inviteError}</Text>
+                <TouchableOpacity
+                  style={s.inviteCancelBtn}
+                  onPress={() => { setShowInviteModal(false); setInvitePhase('setup'); setPendingInvite(null) }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.inviteCancelTxt}>Fermer</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   )
 }
@@ -381,4 +582,72 @@ const s = StyleSheet.create({
     paddingHorizontal: 3,
   },
   msgBadgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 10, color: '#fff' },
+
+  // ── Modale invitation de partie ─────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', alignItems: 'center', justifyContent: 'center',
+  },
+  inviteBox: {
+    backgroundColor: '#1A2E25',
+    borderRadius: 22,
+    paddingVertical: 32,
+    paddingHorizontal: 28,
+    width: 320,
+    alignItems: 'center',
+    gap: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.22)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  inviteTitle: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 18, letterSpacing: 0.4, textAlign: 'center',
+  },
+  inviteLabel: {
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12,
+    letterSpacing: 1.5, textTransform: 'uppercase', alignSelf: 'flex-start',
+  },
+  gameRow:      { flexDirection: 'row', gap: 10, width: '100%' },
+  gameBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.25)', borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.15)',
+  },
+  gameBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.15)' },
+  gameBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.boneOff, fontSize: 14 },
+  gameBtnTxtActive: { color: C.brass },
+
+  betRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, width: '100%' },
+  betChip: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(244,236,216,0.18)',
+  },
+  betChipActive: { backgroundColor: C.brass, borderColor: C.brass },
+  betChipDis:    { opacity: 0.35 },
+  betChipTxt:    { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13 },
+  betChipTxtActive: { color: C.ink },
+  betChipTxtDis:    { color: C.boneOff },
+
+  inviteActions: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
+  inviteCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(244,236,216,0.25)',
+  },
+  inviteCancelTxt: { fontFamily: 'Cairo_600SemiBold', color: C.boneOff, fontSize: 14 },
+  inviteSendBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    backgroundColor: C.brass,
+    shadowColor: C.brass, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
+  },
+  inviteSendTxt: { fontFamily: 'Cairo_600SemiBold', color: C.ink, fontSize: 14 },
+
+  inviteEmoji:    { fontSize: 40, lineHeight: 48 },
+  inviteStatusTxt: {
+    fontFamily: 'Cairo_400Regular', color: C.bone, fontSize: 14, textAlign: 'center', lineHeight: 20,
+  },
+  inviteErrTxt: {
+    fontFamily: 'Cairo_400Regular', color: C.red, fontSize: 14, textAlign: 'center', lineHeight: 20,
+  },
 })

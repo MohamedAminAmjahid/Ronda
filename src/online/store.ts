@@ -206,6 +206,16 @@ export function connectCreate(pseudo: string): Promise<void> {
 export function connectByCode(pseudo: string, code: string): Promise<void> {
   return connect(() => joinByCode(pseudo, code))
 }
+/** Crée une room privée Ronda pour une partie entre amis (hôte). */
+export function connectFriendHost(pseudo: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => createPrivate(pseudo))
+}
+/** Rejoint une room privée Ronda par code (invité). */
+export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => joinByCode(pseudo, code))
+}
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */
 export async function reconnect(reconnectionToken: string): Promise<void> {
