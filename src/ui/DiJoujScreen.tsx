@@ -5,12 +5,15 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
-import { router } from 'expo-router'
+import { router, type Href } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
+
+const DJ_ONLINE: Href  = '/dijouj-online' as Href
+const DJ_LOBBY: Href   = '/dijouj-lobby' as Href
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -36,18 +39,81 @@ const SUIT_COLOR: Record<Suit, string> = {
   bastos:  '#27AE60',
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function cardKey(c: Card) { return `${c.suit}_${c.value}` }
 
 const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos: 3 }
 
-// ── Screen ────────────────────────────────────────────────────────────────────
+// ── Menu Di Jouj ──────────────────────────────────────────────────────────────
 
-export function DiJoujScreen() {
+function DiJoujMenu({ onLocalGame }: { onLocalGame: () => void }) {
   const { t } = useI18n()
-  const { state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause, playCard, draw, isGameOver, winner, restart } =
-    useDiJoujGame()
+
+  return (
+    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+
+        <View style={s.header}>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={s.backBtn}>
+            <Text style={s.backTxt}>{t('back')}</Text>
+          </TouchableOpacity>
+          <Text style={s.title}>DI JOUJ</Text>
+          <View style={s.headerSpacer} />
+        </View>
+
+        <View style={s.menuCenter}>
+          <Text style={s.menuTagline}>{t('dijoujCardDesc')}</Text>
+
+          <View style={s.menuCards}>
+            {/* Vs Bot */}
+            <TouchableOpacity style={s.menuCard} onPress={onLocalGame} activeOpacity={0.85}>
+              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
+                <Text style={s.menuCardEmoji}>🤖</Text>
+                <Text style={s.menuCardTitle}>{t('djVsBot')}</Text>
+                <Text style={s.menuCardSub}>{t('youVsAI')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Jouer en ligne */}
+            <TouchableOpacity
+              style={s.menuCard}
+              onPress={() => router.push(DJ_ONLINE)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
+                <Text style={s.menuCardEmoji}>⚡</Text>
+                <Text style={s.menuCardTitle}>{t('playOnline')}</Text>
+                <Text style={s.menuCardSub}>{t('quickMatch')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Jouer avec un ami */}
+            <TouchableOpacity
+              style={s.menuCard}
+              onPress={() => router.push(DJ_LOBBY)}
+              activeOpacity={0.85}
+            >
+              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
+                <Text style={s.menuCardEmoji}>👥</Text>
+                <Text style={s.menuCardTitle}>{t('playWithFriend')}</Text>
+                <Text style={s.menuCardSub}>2 – 4 {t('djPlayers')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+      </SafeAreaView>
+    </LinearGradient>
+  )
+}
+
+// ── Jeu local (vs bot) ────────────────────────────────────────────────────────
+
+function LocalGame({ onBack }: { onBack: () => void }) {
+  const { t } = useI18n()
+  const {
+    state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
+    playCard, draw, isGameOver, winner, restart,
+  } = useDiJoujGame()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
 
@@ -55,16 +121,12 @@ export function DiJoujScreen() {
   const bot     = state.players.find(p => p.id !== DJ_HUMAN_ID)!
   const topCard = state.discardPile[state.discardPile.length - 1]
 
-  // ── Main triée visuellement ───────────────────────────────────────────────────
-
   const sortedHand = useMemo(
     () => [...human.hand].sort(
       (a, b) => SUIT_RANK[a.suit] - SUIT_RANK[b.suit] || a.value - b.value,
     ),
     [human.hand],
   )
-
-  // ── Playable set ─────────────────────────────────────────────────────────────
 
   const playableSet = useMemo<Set<string>>(() => {
     if (!isHumanTurn) return new Set()
@@ -75,9 +137,6 @@ export function DiJoujScreen() {
     )
   }, [isHumanTurn, human.hand, topCard, state.chosenSuit, state.pendingEffect])
 
-  // ── Animations ───────────────────────────────────────────────────────────────
-
-  // Discard card: scale pop when the top card changes
   const discardScale = useRef(new Animated.Value(1)).current
   const prevTopKey   = useRef('')
   const topKey       = topCard ? cardKey(topCard) : ''
@@ -85,25 +144,16 @@ export function DiJoujScreen() {
   useEffect(() => {
     if (prevTopKey.current && prevTopKey.current !== topKey) {
       discardScale.setValue(0.85)
-      Animated.spring(discardScale, {
-        toValue:   1,
-        friction:  6,
-        tension:   180,
-        useNativeDriver: true,
-      }).start()
+      Animated.spring(discardScale, { toValue: 1, friction: 6, tension: 180, useNativeDriver: true }).start()
     }
     prevTopKey.current = topKey
   }, [topKey])
 
-  // 2-second "last card" message before showing the game-over overlay
   const lastCardPulse = useRef(new Animated.Value(1)).current
   const [showLastCardMsg, setShowLastCardMsg] = useState(false)
 
   useEffect(() => {
-    if (!isGameOver) {
-      setShowLastCardMsg(false)
-      return
-    }
+    if (!isGameOver) { setShowLastCardMsg(false); return }
     setShowLastCardMsg(true)
     const loop = Animated.loop(
       Animated.sequence([
@@ -113,14 +163,11 @@ export function DiJoujScreen() {
     )
     loop.start()
     const tid = setTimeout(() => {
-      loop.stop()
-      lastCardPulse.setValue(1)
-      setShowLastCardMsg(false)
+      loop.stop(); lastCardPulse.setValue(1); setShowLastCardMsg(false)
     }, 2000)
     return () => { clearTimeout(tid); loop.stop(); lastCardPulse.setValue(1) }
   }, [isGameOver])
 
-  // Bot cards: slow opacity pulse when it's the bot's turn
   const botOpacity = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
@@ -137,90 +184,61 @@ export function DiJoujScreen() {
     botOpacity.setValue(1)
   }, [isHumanTurn, isGameOver])
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
-
   function handleCardPress(card: Card) {
     if (!isHumanTurn) return
     if (!playableSet.has(cardKey(card))) return
-    if (card.value === 7 && card.suit === 'oros') {
-      setPendingWild(card)
-    } else {
-      playCard(card)
-    }
+    if (card.value === 7 && card.suit === 'oros') { setPendingWild(card) }
+    else { playCard(card) }
   }
 
   function handleSuitChoice(suit: Suit) {
     if (!pendingWild) return
-    playCard(pendingWild, suit)
-    setPendingWild(null)
+    playCard(pendingWild, suit); setPendingWild(null)
   }
-
-  // ── Derived display ───────────────────────────────────────────────────────────
 
   let statusText: string
   if (isBotThinking)    statusText = t('botThinks').replace('{name}', 'Bot')
-  else if (isDrawPause) statusText = t('botTurn')   // tour passé, en attente du bot
+  else if (isDrawPause) statusText = t('botTurn')
   else if (isHumanTurn) statusText = t('yourTurn')
   else                  statusText = t('botTurn')
 
   const pendingEff = state.pendingEffect
   let bannerText: string | null = null
   let bannerBg: string = C.acc
-  if (pendingEff?.type === 'draw2') {
-    bannerText = `+${pendingEff.count} ${t('djDraw')}`
-    bannerBg   = C.red
-  } else if (pendingEff?.type === 'skip') {
-    bannerText = t('djSkip')
-    bannerBg   = C.amber
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────────────
+  if (pendingEff?.type === 'draw2') { bannerText = `+${pendingEff.count} ${t('djDraw')}`; bannerBg = C.red }
+  else if (pendingEff?.type === 'skip') { bannerText = t('djSkip'); bannerBg = C.amber }
 
   return (
-    <LinearGradient
-      colors={[C.gradTop, C.gradBot]}
-      style={s.root}
-    >
+    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
         <View style={s.header}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={s.backBtn}>
+          <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backBtn}>
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <Text style={s.title}>DI JOUJ</Text>
           <View style={s.headerSpacer} />
         </View>
 
-        {/* ── Bot zone (flex 2 ≈ 20%) ────────────────────────────────────────── */}
         <Animated.View style={[s.botZone, { opacity: botOpacity }]}>
           <Text style={s.botLabel}>Bot — {bot.hand.length}</Text>
           <View style={s.botHand}>
             {bot.hand.map((_, i) => (
-              <View
-                key={i}
-                style={[s.botCard, i > 0 && s.botCardOverlap]}
-              >
+              <View key={i} style={[s.botCard, i > 0 && s.botCardOverlap]}>
                 <CardBack size="md" />
               </View>
             ))}
           </View>
         </Animated.View>
 
-        {/* ── Pending effect banner ───────────────────────────────────────────── */}
         {bannerText !== null && (
           <View style={[s.banner, { backgroundColor: bannerBg }]}>
             <Text style={s.bannerTxt}>{bannerText}</Text>
-            {isAutoSkipping && (
-              <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>
-            )}
+            {isAutoSkipping && <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>}
           </View>
         )}
 
-        {/* ── Table zone (flex 4 ≈ 40%) ──────────────────────────────────────── */}
         <View style={s.tableZone}>
-
-          {/* Draw pile */}
           <TouchableOpacity
             activeOpacity={isHumanTurn && !isDrawPause ? 0.75 : 1}
             onPress={() => isHumanTurn && !isDrawPause && draw()}
@@ -233,13 +251,9 @@ export function DiJoujScreen() {
             <Text style={s.pileCount}>{state.drawPile.length}</Text>
           </TouchableOpacity>
 
-          {/* Discard pile */}
           <View style={s.discardWrap}>
             <Animated.View style={{ transform: [{ scale: discardScale }] }}>
-              {topCard
-                ? <CardFace card={topCard} size="xxl" />
-                : <View style={s.emptyPile} />
-              }
+              {topCard ? <CardFace card={topCard} size="xxl" /> : <View style={s.emptyPile} />}
             </Animated.View>
             {state.chosenSuit && (
               <View style={[s.suitDot, { backgroundColor: SUIT_COLOR[state.chosenSuit] }]}>
@@ -247,15 +261,12 @@ export function DiJoujScreen() {
               </View>
             )}
           </View>
-
         </View>
 
-        {/* ── Status indicator ───────────────────────────────────────────────── */}
         <View style={s.statusBar}>
           <Text style={s.statusTxt}>{statusText}</Text>
         </View>
 
-        {/* ── Human hand (flex 4 ≈ 40%) ──────────────────────────────────────── */}
         <View style={s.humanZone}>
           <ScrollView
             horizontal
@@ -266,17 +277,9 @@ export function DiJoujScreen() {
             {sortedHand.map((card, i) => {
               const playable = playableSet.has(cardKey(card))
               return (
-                <View
-                  key={i}
-                  style={[
-                    s.humanCard,
-                    !playable && s.humanCardDimmed,
-                  ]}
-                >
+                <View key={i} style={[s.humanCard, !playable && s.humanCardDimmed]}>
                   <CardFace
-                    card={card}
-                    size="xl"
-                    highlighted={playable}
+                    card={card} size="xl" highlighted={playable}
                     disabled={!playable || !isHumanTurn}
                     onPress={() => handleCardPress(card)}
                   />
@@ -286,7 +289,6 @@ export function DiJoujScreen() {
           </ScrollView>
         </View>
 
-        {/* ── Color picker modal (7 de Oros) ─────────────────────────────────── */}
         <Modal visible={pendingWild !== null} transparent animationType="fade">
           <View style={s.modalOverlay}>
             <View style={s.modalBox}>
@@ -311,7 +313,6 @@ export function DiJoujScreen() {
           </View>
         </Modal>
 
-        {/* ── "Dernière carte" message (2s before the game-over overlay) ────── */}
         {isGameOver && showLastCardMsg && (
           <View style={s.overlay} pointerEvents="none">
             <Animated.Text style={[s.lastCardTxt, { opacity: lastCardPulse }]}>
@@ -320,7 +321,6 @@ export function DiJoujScreen() {
           </View>
         )}
 
-        {/* ── Game over overlay (appears after 2s delay) ──────────────────────── */}
         {isGameOver && !showLastCardMsg && (
           <View style={s.overlay}>
             <View style={s.overlayBox}>
@@ -331,7 +331,7 @@ export function DiJoujScreen() {
               <TouchableOpacity style={s.restartBtn} onPress={restart} activeOpacity={0.8}>
                 <Text style={s.restartTxt}>{t('djNewGame')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={s.backFromOverlay}>
+              <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backFromOverlay}>
                 <Text style={s.backFromOverlayTxt}>{t('back')}</Text>
               </TouchableOpacity>
             </View>
@@ -343,275 +343,150 @@ export function DiJoujScreen() {
   )
 }
 
+// ── Écran principal (menu ou jeu) ─────────────────────────────────────────────
+
+export function DiJoujScreen() {
+  const [mode, setMode] = useState<'menu' | 'local'>('menu')
+
+  if (mode === 'local') {
+    return <LocalGame onBack={() => setMode('menu')} />
+  }
+  return <DiJoujMenu onLocalGame={() => setMode('local')} />
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
 
-  // Header
   header: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    paddingHorizontal: 16,
-    paddingTop:     8,
-    paddingBottom:  4,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4,
   },
   backBtn:      { paddingRight: 12, paddingVertical: 6 },
   backTxt:      { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
   title: {
-    flex:        1,
-    textAlign:   'center',
-    fontFamily:  'Cairo_600SemiBold',
-    color:       C.brass,
-    fontSize:    20,
-    letterSpacing: 6,
+    flex: 1, textAlign: 'center',
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 20, letterSpacing: 6,
   },
   headerSpacer: { width: 60 },
 
-  // Bot zone
+  // ── Menu ──────────────────────────────────────────────────────────────────
+  menuCenter: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 32,
+  },
+  menuTagline: {
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, textAlign: 'center',
+  },
+  menuCards: { width: '100%', gap: 14 },
+  menuCard:  { borderRadius: 16, overflow: 'hidden' },
+  menuCardGrad: {
+    paddingVertical: 20, paddingHorizontal: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+  },
+  menuCardEmoji: { fontSize: 28, lineHeight: 34 },
+  menuCardTitle: {
+    fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 17, flex: 1,
+  },
+  menuCardSub: {
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12,
+  },
+
+  // ── Jeu local ─────────────────────────────────────────────────────────────
   botZone: {
-    flex:           2,
-    alignItems:     'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
+    flex: 2, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
   },
   botLabel: {
-    fontFamily: 'Cairo_400Regular',
-    color:      C.boneOff,
-    fontSize:   11,
-    marginBottom: 8,
-    letterSpacing: 0.5,
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, marginBottom: 8, letterSpacing: 0.5,
   },
-  botHand: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'center',
-    flexWrap:       'nowrap',
-  },
+  botHand: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'nowrap' },
   botCard:        { zIndex: 1 },
   botCardOverlap: { marginLeft: 10 },
 
-  // Pending effect banner
   banner: {
-    marginHorizontal: 28,
-    marginVertical:   4,
-    borderRadius:     8,
-    paddingVertical:  5,
-    alignItems:       'center',
+    marginHorizontal: 28, marginVertical: 4, borderRadius: 8, paddingVertical: 5, alignItems: 'center',
   },
-  bannerTxt: {
-    fontFamily:   'Cairo_600SemiBold',
-    color:        C.bone,
-    fontSize:     13,
-    letterSpacing: 0.5,
-  },
+  bannerTxt:   { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13, letterSpacing: 0.5 },
   autoSkipTxt: {
-    fontFamily: 'Cairo_400Regular',
-    color:      'rgba(244,236,216,0.75)',
-    fontSize:   11,
-    marginTop:  2,
+    fontFamily: 'Cairo_400Regular', color: 'rgba(244,236,216,0.75)', fontSize: 11, marginTop: 2,
   },
 
-  // Table zone
   tableZone: {
-    flex:           4,
-    flexDirection:  'row',
-    alignItems:     'center',
-    justifyContent: 'center',
-    gap:            28,
-    paddingVertical: 8,
+    flex: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 28, paddingVertical: 8,
   },
-
-  pileWrap: { alignItems: 'center', gap: 6 },
+  pileWrap:    { alignItems: 'center', gap: 6 },
   pileInactive: { opacity: 0.45 },
-  pileCount: {
-    fontFamily: 'Cairo_400Regular',
-    color:      C.boneOff,
-    fontSize:   12,
-  },
+  pileCount:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12 },
   emptyPile: {
-    width: 100, height: 150,
-    borderRadius:  8,
-    borderWidth:   1,
-    borderColor:   C.ghost,
-    alignItems:    'center',
-    justifyContent:'center',
+    width: 100, height: 150, borderRadius: 8, borderWidth: 1, borderColor: C.ghost,
+    alignItems: 'center', justifyContent: 'center',
   },
   emptyPileTxt: { color: C.boneOff, fontSize: 24 },
-
-  discardWrap: { alignItems: 'center', gap: 8 },
+  discardWrap:  { alignItems: 'center', gap: 8 },
   suitDot: {
-    paddingHorizontal: 12,
-    paddingVertical:   4,
-    borderRadius:      14,
-    alignItems:        'center',
+    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, alignItems: 'center',
   },
   suitDotTxt: {
-    fontFamily:    'Cairo_600SemiBold',
-    color:         '#fff',
-    fontSize:      11,
-    textTransform: 'capitalize',
+    fontFamily: 'Cairo_600SemiBold', color: '#fff', fontSize: 11, textTransform: 'capitalize',
   },
 
-  // Status bar
-  statusBar: {
-    alignItems:    'center',
-    paddingVertical: 6,
-  },
+  statusBar:  { alignItems: 'center', paddingVertical: 6 },
   statusTxt: {
-    fontFamily:   'Cairo_600SemiBold',
-    color:        C.bone,
-    fontSize:     14,
-    letterSpacing: 0.4,
-    opacity:      0.85,
+    fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.4, opacity: 0.85,
   },
 
-  // Human hand zone — cartes entièrement visibles, pas de chevauchement
-  humanZone: {
-    flex:          4,
-    justifyContent:'center',
-    paddingBottom: 4,
-    overflow:      'visible',
-  },
+  humanZone: { flex: 4, justifyContent: 'center', paddingBottom: 4, overflow: 'visible' },
   handScroll: {
-    flexGrow:          1,
-    justifyContent:    'center',
-    alignItems:        'center',
-    paddingHorizontal: 12,
-    paddingVertical:   12,
-    gap:               10,
+    flexGrow: 1, justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 12, paddingVertical: 12, gap: 10,
   },
   humanCard:       { overflow: 'visible' },
   humanCardDimmed: { opacity: 0.38 },
 
-  // Color picker modal
   modalOverlay: {
-    flex:            1,
-    backgroundColor: 'rgba(0,0,0,0.78)',
-    alignItems:      'center',
-    justifyContent:  'center',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.78)', alignItems: 'center', justifyContent: 'center',
   },
   modalBox: {
-    backgroundColor: '#3D1030',
-    borderRadius:    18,
-    paddingVertical: 28,
-    paddingHorizontal: 24,
-    width:           300,
-    alignItems:      'center',
-    gap:             18,
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 8 },
-    shadowOpacity:   0.5,
-    shadowRadius:    16,
-    elevation:       20,
+    backgroundColor: '#3D1030', borderRadius: 18, paddingVertical: 28, paddingHorizontal: 24,
+    width: 300, alignItems: 'center', gap: 18,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 16, elevation: 20,
   },
-  modalTitle: {
-    fontFamily:   'Cairo_600SemiBold',
-    color:        C.bone,
-    fontSize:     16,
-    letterSpacing: 0.5,
-  },
-  suitGrid: {
-    flexDirection: 'row',
-    flexWrap:      'wrap',
-    gap:           12,
-    justifyContent:'center',
-  },
+  modalTitle: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16, letterSpacing: 0.5 },
+  suitGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
   suitBtn: {
-    width:          128,
-    flexDirection:  'row',
-    alignItems:     'center',
-    gap:            10,
-    borderWidth:    2,
-    borderRadius:   10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    width: 128, flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 2, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
   },
-  suitCircle: {
-    width:        14,
-    height:       14,
-    borderRadius: 7,
-  },
-  suitLabel: {
-    fontFamily:    'Cairo_400Regular',
-    color:         C.bone,
-    fontSize:      13,
-    textTransform: 'capitalize',
-  },
-  cancelBtn: { paddingVertical: 4 },
-  cancelTxt: {
-    fontFamily: 'Cairo_400Regular',
-    color:      C.boneOff,
-    fontSize:   13,
-  },
+  suitCircle:  { width: 14, height: 14, borderRadius: 7 },
+  suitLabel:   { fontFamily: 'Cairo_400Regular', color: C.bone, fontSize: 13, textTransform: 'capitalize' },
+  cancelBtn:   { paddingVertical: 4 },
+  cancelTxt:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
 
-  // Game over overlay
   overlay: {
-    position:        'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(10,0,6,0.82)',
-    alignItems:      'center',
-    justifyContent:  'center',
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(10,0,6,0.82)', alignItems: 'center', justifyContent: 'center',
   },
   overlayBox: {
-    backgroundColor: '#3D1030',
-    borderRadius:    22,
-    paddingVertical: 40,
-    paddingHorizontal: 44,
-    alignItems:      'center',
-    gap:             14,
-    minWidth:        240,
-    shadowColor:     '#000',
-    shadowOffset:    { width: 0, height: 10 },
-    shadowOpacity:   0.55,
-    shadowRadius:    20,
-    elevation:       24,
+    backgroundColor: '#3D1030', borderRadius: 22, paddingVertical: 40, paddingHorizontal: 44,
+    alignItems: 'center', gap: 14, minWidth: 240,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 20, elevation: 24,
   },
   overlayEmoji: { fontSize: 56, lineHeight: 64 },
   overlayTitle: {
-    fontFamily:   'Cairo_600SemiBold',
-    color:        C.bone,
-    fontSize:     24,
-    letterSpacing: 0.5,
-    textAlign:    'center',
+    fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 24, letterSpacing: 0.5, textAlign: 'center',
   },
   restartBtn: {
-    marginTop:         6,
-    backgroundColor:   C.acc,
-    borderRadius:      14,
-    paddingVertical:   15,
-    paddingHorizontal: 36,
-    alignItems:        'center',
-    shadowColor:       C.acc,
-    shadowOffset:      { width: 0, height: 4 },
-    shadowOpacity:     0.5,
-    shadowRadius:      8,
-    elevation:         8,
+    marginTop: 6, backgroundColor: C.acc, borderRadius: 14,
+    paddingVertical: 15, paddingHorizontal: 36, alignItems: 'center',
+    shadowColor: C.acc, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
   },
-  restartTxt: {
-    fontFamily:   'Cairo_600SemiBold',
-    color:        C.bone,
-    fontSize:     16,
-    letterSpacing: 0.5,
-  },
-  backFromOverlay: { marginTop: 4 },
-  backFromOverlayTxt: {
-    fontFamily: 'Cairo_400Regular',
-    color:      C.boneOff,
-    fontSize:   13,
-  },
-
-  // "Dernière carte" pulsing message
+  restartTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16, letterSpacing: 0.5 },
+  backFromOverlay:    { marginTop: 4 },
+  backFromOverlayTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
   lastCardTxt: {
-    fontFamily:        'Cairo_600SemiBold',
-    color:             C.brass,
-    fontSize:          36,
-    letterSpacing:     1,
-    textAlign:         'center',
-    textShadowColor:   'rgba(201,162,39,0.75)',
-    textShadowOffset:  { width: 0, height: 0 },
-    textShadowRadius:  20,
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 36, letterSpacing: 1, textAlign: 'center',
+    textShadowColor: 'rgba(201,162,39,0.75)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 20,
     paddingHorizontal: 24,
   },
 })

@@ -10,6 +10,8 @@ import {
 } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
+import { DiJoujRoom } from './rooms/DiJoujRoom'
+import { DiJoujLobbyRoom } from './rooms/DiJoujLobbyRoom'
 import { resolveCode, resolveCodeEntry } from './rooms/registry'
 
 const PORT = Number(process.env.PORT ?? 2567)
@@ -69,6 +71,8 @@ const gameServer = new Server({ transport: new WebSocketTransport({ server: http
 
 gameServer.define('ronda', RondaRoom)
 gameServer.define('ronda2v2', LobbyRoom2v2)
+gameServer.define('dijouj', DiJoujRoom)
+gameServer.define('dijouj-lobby', DiJoujLobbyRoom)
 
 gameServer.listen(PORT)
 console.log(`[ronda-server] écoute sur :${PORT}`)

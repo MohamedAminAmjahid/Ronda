@@ -243,6 +243,11 @@ export const translations = {
     djNewGame:    'مباراة جديدة',
     djLastCard:   '🎉 آخر ورقة!',
     djAutoSkip:   'دورك يُتخطى تلقائياً',
+    djLaunch:     'إطلاق اللعبة',
+    djBotsInfo:   'الروبوتات ستملأ المقاعد الفارغة',
+    djAdmin:      'المضيف',
+    djVsBot:      'ضد الروبوت',
+    djPlayers:    'لاعبون',
   },
   fr: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -486,6 +491,11 @@ export const translations = {
     djNewGame:    'Nouvelle partie',
     djLastCard:   '🎉 Dernière carte !',
     djAutoSkip:   'Tour passé automatiquement',
+    djLaunch:     'Lancer la partie',
+    djBotsInfo:   'Les bots combleront les places vides',
+    djAdmin:      'Hôte',
+    djVsBot:      'Contre le bot',
+    djPlayers:    'joueurs',
   },
   en: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -729,6 +739,11 @@ export const translations = {
     djNewGame:    'New game',
     djLastCard:   '🎉 Last card!',
     djAutoSkip:   'Turn auto-skipped',
+    djLaunch:     'Launch game',
+    djBotsInfo:   'Bots will fill empty slots',
+    djAdmin:      'Host',
+    djVsBot:      'vs Bot',
+    djPlayers:    'players',
   },
 } as const
 

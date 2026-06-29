@@ -3,7 +3,7 @@
 // Les routes HTTP /room/:code et /room/:code/type le consultent pour traduire
 // un code lisible en roomId joignable (joinById) et en type de room.
 
-export type RoomType = 'ronda' | 'ronda2v2'
+export type RoomType = 'ronda' | 'ronda2v2' | 'dijouj' | 'dijouj-lobby'
 
 interface RoomEntry {
   roomId: string

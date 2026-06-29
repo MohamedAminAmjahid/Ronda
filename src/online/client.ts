@@ -40,6 +40,21 @@ export function createLobby2v2(pseudo: string): Promise<Room> {
   return getClient().create('ronda2v2', { pseudo })
 }
 
+/** Partie rapide Di Jouj (matchmaking public). */
+export function joinDiJoujQuick(pseudo: string): Promise<Room> {
+  return getClient().joinOrCreate('dijouj', { pseudo })
+}
+
+/** Partie privée Di Jouj (code à partager). */
+export function createDiJoujPrivate(pseudo: string): Promise<Room> {
+  return getClient().create('dijouj', { pseudo, private: true })
+}
+
+/** Crée un lobby Di Jouj (l'hôte choisit 2 ou 4 joueurs, code à partager). */
+export function createDiJoujLobby(pseudo: string): Promise<Room> {
+  return getClient().create('dijouj-lobby', { pseudo })
+}
+
 export interface WeeklyEntry {
   username: string
   week_start: string
@@ -62,7 +77,7 @@ export async function fetchUserLeague(username: string): Promise<string> {
   return league
 }
 
-export type RoomType = 'ronda' | 'ronda2v2'
+export type RoomType = 'ronda' | 'ronda2v2' | 'dijouj' | 'dijouj-lobby'
 
 /** Détecte le type de room associé à un code (pour router 1v1 vs lobby 2v2). */
 export async function roomTypeByCode(
