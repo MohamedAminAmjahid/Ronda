@@ -10,6 +10,7 @@ import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   getFriends, getPendingRequests, subscribePendingCount, subscribeFriendUnreadCounts,
   sendGameInvite, subscribeInviteById, updateInviteRoomCode, declineGameInvite,
+  removeFriend,
   type FriendDoc, type UserDoc,
 } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
@@ -120,6 +121,19 @@ export function FriendsScreen({ onBack }: Props) {
   const decline = async (fromUid: string) => {
     if (!user) return
     await declineFriendRequest(user.uid, fromUid).catch(() => {})
+    void refresh()
+  }
+
+  // ── Suppression d'ami ─────────────────────────────────────────────────────────
+  const [removeTarget, setRemoveTarget] = useState<FriendDoc | null>(null)
+  const [removing, setRemoving]         = useState(false)
+
+  const doRemoveFriend = async () => {
+    if (!user || !removeTarget) return
+    setRemoving(true)
+    await removeFriend(user.uid, removeTarget.uid).catch(() => {})
+    setRemoving(false)
+    setRemoveTarget(null)
     void refresh()
   }
 
@@ -290,6 +304,9 @@ export function FriendsScreen({ onBack }: Props) {
                       <TouchableOpacity style={s.btnSmall} onPress={() => openInviteModal(f)}>
                         <Text style={s.btnSmallTxt}>🎮 {t('inviteToPlay')}</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity style={s.btnRemove} onPress={() => setRemoveTarget(f)}>
+                        <Text style={s.btnRemoveTxt}>✕</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )
@@ -366,6 +383,36 @@ export function FriendsScreen({ onBack }: Props) {
           )}
         </ScrollView>
       </View>
+
+      {/* ── Modale suppression d'ami ──────────────────────────────────────────── */}
+      <Modal visible={removeTarget !== null} transparent animationType="fade" onRequestClose={() => setRemoveTarget(null)}>
+        <View style={s.modalOverlay}>
+          <View style={s.confirmBox}>
+            <Text style={s.confirmTitle}>{t('removeFriend')}</Text>
+            <Text style={s.confirmSub}>
+              {t('removeConfirm').replace('{name}', removeTarget?.username ?? '')}
+            </Text>
+            <View style={s.confirmActions}>
+              <TouchableOpacity
+                style={s.confirmCancelBtn}
+                onPress={() => setRemoveTarget(null)}
+                disabled={removing}
+                activeOpacity={0.8}
+              >
+                <Text style={s.confirmCancelTxt}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.confirmDeleteBtn, removing && { opacity: 0.5 }]}
+                onPress={doRemoveFriend}
+                disabled={removing}
+                activeOpacity={0.85}
+              >
+                <Text style={s.confirmDeleteTxt}>{removing ? '...' : t('removeFriend')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Modale d'invitation de partie ─────────────────────────────────────── */}
       <Modal visible={showInviteModal} transparent animationType="fade" onRequestClose={closeInviteModal}>
@@ -582,6 +629,47 @@ const s = StyleSheet.create({
     paddingHorizontal: 3,
   },
   msgBadgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 10, color: '#fff' },
+
+  // Bouton supprimer ami
+  btnRemove: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(192,57,43,0.15)',
+    borderWidth: 1, borderColor: 'rgba(192,57,43,0.35)',
+  },
+  btnRemoveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.red, lineHeight: 16 },
+
+  // ── Modale confirmation suppression ────────────────────────────────────────
+  confirmBox: {
+    backgroundColor: '#1A2E25',
+    borderRadius: 18,
+    paddingVertical: 28,
+    paddingHorizontal: 28,
+    width: 300,
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(192,57,43,0.30)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  confirmTitle: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 17, letterSpacing: 0.3 },
+  confirmSub:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  confirmActions: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 4 },
+  confirmCancelBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(244,236,216,0.22)',
+  },
+  confirmCancelTxt: { fontFamily: 'Cairo_600SemiBold', color: C.boneOff, fontSize: 14 },
+  confirmDeleteBtn: {
+    flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center',
+    backgroundColor: C.red,
+    shadowColor: C.red, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4, shadowRadius: 6, elevation: 6,
+  },
+  confirmDeleteTxt: { fontFamily: 'Cairo_600SemiBold', color: '#fff', fontSize: 14 },
 
   // ── Modale invitation de partie ─────────────────────────────────────────────
   modalOverlay: {

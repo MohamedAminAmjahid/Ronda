@@ -216,6 +216,14 @@ export async function declineFriendRequest(myUid: string, fromUid: string): Prom
   await deleteDoc(friendRef(myUid, fromUid))
 }
 
+/** Supprime un ami des deux côtés. */
+export async function removeFriend(myUid: string, friendUid: string): Promise<void> {
+  await Promise.all([
+    deleteDoc(friendRef(myUid, friendUid)),
+    deleteDoc(friendRef(friendUid, myUid)),
+  ])
+}
+
 async function readFriends(ownerUid: string, status: FriendDoc['status']): Promise<FriendDoc[]> {
   const q = query(collection(db, 'users', ownerUid, 'friends'), where('status', '==', status))
   const res = await getDocs(q)

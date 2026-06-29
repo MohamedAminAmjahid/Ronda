@@ -2,22 +2,21 @@ import { useRef } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native'
 import { usePathname, router, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { BlurView } from 'expo-blur'
 import { useAuth } from '../firebase/auth'
 import { useNotifBadges } from '../hooks/useNotifBadges'
 
 const C = {
   bg:     '#0D0D1A',
-  border: 'rgba(201,162,39,0.15)',
+  border: 'rgba(201,162,39,0.20)',
   brass:  '#C9A227',
-  gray:   'rgba(244,236,216,0.30)',
+  muted:  'rgba(244,236,216,0.35)',
 } as const
 
 const TABS = [
-  { icon: '🎮', label: 'Jeux',      href: '/'            },
+  { icon: '🎮', label: 'Jeux',       href: '/'            },
   { icon: '🏆', label: 'Classement', href: '/leaderboard' },
-  { icon: '👥', label: 'Amis',      href: '/friends'     },
-  { icon: '👤', label: 'Profil',    href: '/profile'     },
+  { icon: '👥', label: 'Amis',       href: '/friends'     },
+  { icon: '👤', label: 'Profil',     href: '/profile'     },
 ] as const
 
 const HIDDEN_PREFIXES = [
@@ -40,8 +39,8 @@ function TabItem({
 
   const onPress = () => {
     Animated.sequence([
-      Animated.timing(scale, { toValue: 0.88, duration: 80, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.92, duration: 70, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 5, tension: 240, useNativeDriver: true }),
     ]).start()
     router.push(tab.href as Href)
   }
@@ -51,7 +50,7 @@ function TabItem({
       <Animated.View style={[s.tabInner, { transform: [{ scale }] }]}>
         {active && <View style={s.activeBar} />}
         <View style={s.iconWrap}>
-          <Text style={s.icon}>{tab.icon}</Text>
+          <Text style={[s.icon, active && s.iconActive]}>{tab.icon}</Text>
           {badge > 0 && (
             <View style={s.badge}>
               <Text style={s.badgeTxt}>{badge > 9 ? '9+' : badge}</Text>
@@ -59,7 +58,6 @@ function TabItem({
           )}
         </View>
         <Text style={[s.label, active && s.labelActive]}>{tab.label}</Text>
-        {active && <View style={s.dot} />}
       </Animated.View>
     </TouchableOpacity>
   )
@@ -77,8 +75,10 @@ export function BottomNav() {
 
   if (isHidden) return null
 
-  const content = (
-    <View style={s.row}>
+  const bottomPad = Math.max(insets.bottom, 6)
+
+  return (
+    <View style={[s.bar, { paddingBottom: bottomPad }]}>
       {TABS.map(tab => {
         const active = tab.href === '/'
           ? pathname === '/'
@@ -88,90 +88,48 @@ export function BottomNav() {
       })}
     </View>
   )
-
-  const bottomPad = Math.max(insets.bottom, 8)
-
-  // BlurView sur iOS/Android ; fond semi-transparent sur web
-  if (Platform.OS === 'web') {
-    return (
-      <View style={[s.barWeb, { paddingBottom: bottomPad }]}>
-        {content}
-      </View>
-    )
-  }
-
-  return (
-    <BlurView
-      intensity={60}
-      tint="dark"
-      style={[s.bar, { paddingBottom: bottomPad }]}
-    >
-      <View style={s.blurOverlay} />
-      {content}
-    </BlurView>
-  )
 }
 
 const s = StyleSheet.create({
   bar: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(201,162,39,0.18)',
-    paddingTop: 6,
-    overflow: 'hidden',
-  },
-  barWeb: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(13,13,26,0.96)',
+    backgroundColor: C.bg,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(201,162,39,0.15)',
+    borderTopColor: C.border,
     paddingTop: 6,
     ...Platform.select({ web: { position: 'sticky' as never, bottom: 0 } as object, default: {} }),
   },
-  blurOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(13,13,26,0.78)',
-  },
-  row:      { flexDirection: 'row' },
+
   tab:      { flex: 1 },
-  tabInner: { alignItems: 'center', gap: 2, paddingBottom: 2 },
+  tabInner: { alignItems: 'center', paddingVertical: 4, gap: 3 },
 
   activeBar: {
-    width: 28,
-    height: 3,
-    borderRadius: 2,
+    position: 'absolute',
+    top: -6,
+    width: 24,
+    height: 2,
+    borderRadius: 1,
     backgroundColor: C.brass,
-    marginBottom: 4,
-    shadowColor: C.brass,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
   },
 
   iconWrap: { position: 'relative' },
+  icon:     { fontSize: 18, opacity: 0.55 },
+  iconActive: { opacity: 1 },
+
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -8,
+    top: -4,
+    right: -7,
     backgroundColor: '#E53935',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 2,
   },
-  badgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 10, color: '#fff' },
+  badgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 9, color: '#fff' },
 
-  icon:  { fontSize: 20 },
-  label: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 10,
-    color: C.gray,
-    letterSpacing: 0.3,
-  },
+  label:       { fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.muted, letterSpacing: 0.2 },
   labelActive: { color: C.brass, fontFamily: 'Cairo_600SemiBold' },
-  dot: {
-    width: 3, height: 3, borderRadius: 2,
-    backgroundColor: C.brass, marginTop: 1,
-  },
 })
