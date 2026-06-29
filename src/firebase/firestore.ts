@@ -1,7 +1,7 @@
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
+  getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, limit, serverTimestamp,
-  onSnapshot, increment, writeBatch, orderBy,
+  onSnapshot, increment, orderBy,
 } from 'firebase/firestore'
 import { firebaseApp } from './config'
 import type { User } from './auth'
@@ -286,30 +286,27 @@ export async function sendMessage(
   friendUid: string,
   text: string,
 ): Promise<void> {
-  const chatId = getChatId(myUid, friendUid)
+  const chatId  = getChatId(myUid, friendUid)
   const chatRef = doc(db, 'chats', chatId)
-  const msgRef = doc(collection(db, 'chats', chatId, 'messages'))
-  const chatSnap = await getDoc(chatRef)
-  const batch = writeBatch(db)
-  if (!chatSnap.exists()) {
-    batch.set(chatRef, {
-      participants: [myUid, friendUid],
-      [`unread_${myUid}`]: 0,
-      [`unread_${friendUid}`]: 1,
-      lastText: text,
-      lastFrom: myUid,
-      lastAt: serverTimestamp(),
-    })
-  } else {
-    batch.update(chatRef, {
+  try {
+    // setDoc merge:true crée le doc s'il n'existe pas, ou le met à jour sinon.
+    // increment(1) s'initialise à 1 sur un champ absent.
+    await setDoc(chatRef, {
+      participants:           [myUid, friendUid],
       [`unread_${friendUid}`]: increment(1),
-      lastText: text,
-      lastFrom: myUid,
-      lastAt: serverTimestamp(),
+      lastText:               text,
+      lastFrom:               myUid,
+      lastAt:                 serverTimestamp(),
+    }, { merge: true })
+    await addDoc(collection(db, 'chats', chatId, 'messages'), {
+      fromUid:   myUid,
+      text,
+      createdAt: serverTimestamp(),
     })
+  } catch (e) {
+    console.error('[sendMessage] Firestore error:', e)
+    throw e
   }
-  batch.set(msgRef, { fromUid: myUid, text, createdAt: serverTimestamp() })
-  await batch.commit()
 }
 
 /** Écoute les messages d'un chat en temps réel (triés chronologiquement). */
