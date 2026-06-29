@@ -44,7 +44,13 @@ export default function RootLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ headerShown: false }} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 180,
+        }}
+      />
       <BottomNav />
     </View>
   )

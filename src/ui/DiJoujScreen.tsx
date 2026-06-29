@@ -161,6 +161,42 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     return () => { clearTimeout(tid); loop.stop(); lastCardPulse.setValue(1) }
   }, [isGameOver])
 
+  // Halo défausse : couleur active selon la couleur de la carte du dessus
+  const haloOpacity = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(haloOpacity, { toValue: 0.85, duration: 900, useNativeDriver: false }),
+        Animated.timing(haloOpacity, { toValue: 0.30, duration: 900, useNativeDriver: false }),
+      ]),
+    ).start()
+  }, [haloOpacity])
+  const haloColor = topCard ? SUIT_COLOR[topCard.suit] : C.brass
+
+  // Pulsation bordure laiton sur les cartes jouables
+  const playablePulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(playablePulse, { toValue: 1, duration: 600, useNativeDriver: false }),
+        Animated.timing(playablePulse, { toValue: 0.4, duration: 600, useNativeDriver: false }),
+      ]),
+    ).start()
+  }, [playablePulse])
+
+  // Indicateur de tour animé
+  const turnArrow = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    if (!isHumanTurn) { turnArrow.setValue(0); return }
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(turnArrow, { toValue: 4, duration: 400, useNativeDriver: true }),
+        Animated.timing(turnArrow, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]),
+    ).start()
+    return () => { turnArrow.setValue(0) }
+  }, [isHumanTurn, turnArrow])
+
   const botOpacity = useRef(new Animated.Value(1)).current
 
   useEffect(() => {
@@ -245,11 +281,20 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
             {/* Défausse */}
             <View style={s.discardWrap}>
-              <Animated.View style={{ transform: [{ scale: discardScale }] }}>
-                {topCard
-                  ? <CardFace card={topCard} size="xl" />
-                  : <View style={s.emptyPile} />
-                }
+              <Animated.View style={{
+                borderRadius: 12,
+                shadowColor: haloColor,
+                shadowOpacity: haloOpacity,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 12,
+              }}>
+                <Animated.View style={{ transform: [{ scale: discardScale }] }}>
+                  {topCard
+                    ? <CardFace card={topCard} size="xl" />
+                    : <View style={s.emptyPile} />
+                  }
+                </Animated.View>
               </Animated.View>
               {state.chosenSuit && (
                 <View style={[s.suitDot, { backgroundColor: SUIT_COLOR[state.chosenSuit] }]}>
@@ -262,7 +307,15 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
         {/* ── Statut ────────────────────────────────────────────────────────── */}
         <View style={s.statusBar}>
-          <Text style={s.statusTxt}>{statusText}</Text>
+          {isHumanTurn ? (
+            <>
+              <Animated.Text style={[s.turnArrowL, { transform: [{ translateX: turnArrow }] }]}>▶</Animated.Text>
+              <Text style={[s.statusTxt, s.statusTxtActive]}>{statusText}</Text>
+              <Animated.Text style={[s.turnArrowR, { transform: [{ translateX: Animated.multiply(turnArrow, -1) }] }]}>◀</Animated.Text>
+            </>
+          ) : (
+            <Text style={s.statusTxt}>{statusText}</Text>
+          )}
         </View>
 
         {/* ── Main ─────────────────────────────────────────────────────────── */}
@@ -272,13 +325,23 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             {sortedHand.map((card, i) => {
               const playable = playableSet.has(cardKey(card))
               return (
-                <View key={i} style={[s.humanCard, !playable && s.humanCardDimmed]}>
+                <Animated.View key={i} style={[
+                  s.humanCard,
+                  !playable && s.humanCardDimmed,
+                  playable && {
+                    shadowColor: C.brass,
+                    shadowOpacity: playablePulse,
+                    shadowRadius: 12,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: 8,
+                  },
+                ]}>
                   <CardFace
                     card={card} size="lg" highlighted={playable}
                     disabled={!playable || !isHumanTurn}
                     onPress={() => handleCardPress(card)}
                   />
-                </View>
+                </Animated.View>
               )
             })}
           </ScrollView>
@@ -433,10 +496,21 @@ const s = StyleSheet.create({
   },
 
   // Status bar
-  statusBar: { alignItems: 'center', paddingVertical: 6 },
+  statusBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 6, gap: 8,
+  },
   statusTxt: {
     fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.4, opacity: 0.85,
   },
+  statusTxtActive: {
+    color: C.brass, opacity: 1,
+    textShadowColor: 'rgba(201,162,39,0.55)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  turnArrowL: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 13 },
+  turnArrowR: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 13 },
 
   // Hand zone
   handZone: { flex: 3, justifyContent: 'center', overflow: 'visible' },

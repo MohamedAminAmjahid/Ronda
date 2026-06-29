@@ -4,6 +4,7 @@ import { firebaseApp } from '../firebase/config'
 import {
   updateGold as firestoreUpdateGold,
   updateUsernameChanges as firestoreUpdateUsernameChanges,
+  updateAvatar as firestoreUpdateAvatar,
 } from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
@@ -155,6 +156,12 @@ function syncUsernameChangesToFirestore(count: number): void {
   void firestoreUpdateUsernameChanges(uid, count).catch(() => {})
 }
 
+function syncAvatarToFirestore(type: string, emoji: string, image: string): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateAvatar(uid, type, emoji, image).catch(() => {})
+}
+
 // ── Mutations ──────────────────────────────────────────────────────────────────
 
 export function setUsername(name: string): void {
@@ -230,18 +237,21 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
 export function setAvatarEmoji(emoji: string): void {
   profile = { ...profile, avatarType: 'emoji', avatarEmoji: emoji, avatarImage: '' }
   void persist()
+  syncAvatarToFirestore('emoji', emoji, '')
   emit()
 }
 
 export function setAvatarImage(uri: string): void {
   profile = { ...profile, avatarType: 'image', avatarImage: uri, avatarEmoji: '' }
   void persist()
+  syncAvatarToFirestore('image', '', uri)
   emit()
 }
 
 export function clearAvatar(): void {
   profile = { ...profile, avatarType: 'initial', avatarEmoji: '', avatarImage: '' }
   void persist()
+  syncAvatarToFirestore('initial', '', '')
   emit()
 }
 

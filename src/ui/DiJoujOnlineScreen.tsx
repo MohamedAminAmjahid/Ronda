@@ -169,7 +169,12 @@ export function DiJoujOnlineScreen() {
     setPendingWild(null)
   }
 
-  const handleLeave = useCallback(() => { restart(); router.back() }, [restart])
+  const [confirmLeave, setConfirmLeave] = useState(false)
+
+  const handleLeave = useCallback(() => {
+    if (connectionStatus === 'playing') { setConfirmLeave(true); return }
+    restart(); router.back()
+  }, [connectionStatus, restart])
 
   // ── Dérivés status ────────────────────────────────────────────────────────
 
@@ -301,6 +306,27 @@ export function DiJoujOnlineScreen() {
   return (
     <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+
+        {/* ── Modale confirmation quitter ──────────────────────────────────── */}
+        <Modal visible={confirmLeave} transparent animationType="fade" onRequestClose={() => setConfirmLeave(false)}>
+          <View style={s.quitBackdrop}>
+            <View style={s.quitCard}>
+              <Text style={s.quitTitle}>{t('quitConfirm')}</Text>
+              <Text style={s.quitSub}>{t('quitOnline')}</Text>
+              <View style={s.quitActions}>
+                <TouchableOpacity style={s.stayBtn} onPress={() => setConfirmLeave(false)}>
+                  <Text style={s.stayTxt}>{t('stay')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={s.leaveBtn}
+                  onPress={() => { setConfirmLeave(false); restart(); router.back() }}
+                >
+                  <Text style={s.leaveTxt}>{t('leave')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={s.header}>
           <TouchableOpacity onPress={handleLeave} activeOpacity={0.7} style={s.backBtn}>
@@ -629,4 +655,27 @@ const s = StyleSheet.create({
   },
   backFromOverlay:    { marginTop: 4 },
   backFromOverlayTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
+
+  // Modale quitter
+  quitBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28,
+  },
+  quitCard: {
+    width: '100%', maxWidth: 340, backgroundColor: C.surface, borderRadius: 18, padding: 24, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  quitTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone, textAlign: 'center' },
+  quitSub:   { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, textAlign: 'center', lineHeight: 18 },
+  quitActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  stayBtn: {
+    flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+  },
+  stayTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff },
+  leaveBtn: {
+    flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+    backgroundColor: 'rgba(229,57,53,0.20)', borderWidth: 1, borderColor: 'rgba(229,57,53,0.45)',
+  },
+  leaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: '#E53935' },
 })

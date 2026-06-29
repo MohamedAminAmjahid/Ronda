@@ -1,6 +1,7 @@
 import {
   getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, limit, serverTimestamp,
+  onSnapshot, increment, writeBatch, orderBy,
 } from 'firebase/firestore'
 import { firebaseApp } from './config'
 import type { User } from './auth'
@@ -15,12 +16,18 @@ export interface UserDoc {
   gamesPlayed: number
   gamesWon: number
   usernameChanges: number
+  avatarType: string
+  avatarEmoji: string
+  avatarImage: string
 }
 
 export interface FriendDoc {
   uid: string
   username: string
   status: 'pending' | 'accepted'
+  avatarType: string
+  avatarEmoji: string
+  avatarImage: string
 }
 
 /** Profil local utilisé pour initialiser le document Firebase au 1er login. */
@@ -118,6 +125,29 @@ export async function updateUsernameChanges(uid: string, count: number): Promise
   await updateDoc(userRef(uid), { usernameChanges: count })
 }
 
+/** Lit l'avatar d'un utilisateur (type, emoji, image). */
+export async function getUserAvatar(uid: string): Promise<{
+  avatarType: string; avatarEmoji: string; avatarImage: string
+}> {
+  const snap = await getDoc(userRef(uid))
+  const d = snap.data() ?? {}
+  return {
+    avatarType:  (d.avatarType  as string) ?? 'initial',
+    avatarEmoji: (d.avatarEmoji as string) ?? '',
+    avatarImage: (d.avatarImage as string) ?? '',
+  }
+}
+
+/** Synchronise l'avatar dans le document utilisateur Firestore. */
+export async function updateAvatar(
+  uid: string,
+  avatarType: string,
+  avatarEmoji: string,
+  avatarImage: string,
+): Promise<void> {
+  await updateDoc(userRef(uid), { avatarType, avatarEmoji, avatarImage })
+}
+
 /** Recherche un utilisateur par username (insensible à la casse). null si introuvable. */
 export async function searchUserByUsername(username: string): Promise<UserDoc | null> {
   const q = query(
@@ -137,6 +167,9 @@ export async function searchUserByUsername(username: string): Promise<UserDoc | 
     gamesPlayed: (data.gamesPlayed as number) ?? 0,
     gamesWon: (data.gamesWon as number) ?? 0,
     usernameChanges: (data.usernameChanges as number) ?? 0,
+    avatarType: (data.avatarType as string) ?? 'initial',
+    avatarEmoji: (data.avatarEmoji as string) ?? '',
+    avatarImage: (data.avatarImage as string) ?? '',
   }
 }
 
@@ -149,13 +182,24 @@ function friendRef(ownerUid: string, friendUid: string) {
 /** Envoie une demande d'ami : crée une entrée 'pending' chez la cible. */
 export async function sendFriendRequest(myUid: string, targetUid: string): Promise<void> {
   if (myUid === targetUid) throw new Error("Impossible de s'ajouter soi-même.")
+
+  // Vérifie qu'une demande n'existe pas déjà (évite l'erreur de doublons).
+  const existing = await getDoc(friendRef(targetUid, myUid))
+  if (existing.exists()) throw new Error('already_sent')
+
   const myUsername = await getUsername(myUid)
-  await setDoc(friendRef(targetUid, myUid), {
-    uid: myUid,
-    username: myUsername,
-    status: 'pending',
-    createdAt: serverTimestamp(),
-  })
+  try {
+    await setDoc(friendRef(targetUid, myUid), {
+      uid: myUid,
+      username: myUsername,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+    })
+  } catch (e) {
+    // Aide au diagnostic : log l'erreur Firestore réelle dans la console
+    console.error('[sendFriendRequest] Firestore error:', e)
+    throw e
+  }
 }
 
 /** Accepte une demande : passe les deux côtés en 'accepted'. */
@@ -172,14 +216,24 @@ export async function declineFriendRequest(myUid: string, fromUid: string): Prom
   await deleteDoc(friendRef(myUid, fromUid))
 }
 
-function readFriends(ownerUid: string, status: FriendDoc['status']): Promise<FriendDoc[]> {
+async function readFriends(ownerUid: string, status: FriendDoc['status']): Promise<FriendDoc[]> {
   const q = query(collection(db, 'users', ownerUid, 'friends'), where('status', '==', status))
-  return getDocs(q).then((res) =>
-    res.docs.map((d) => {
-      const data = d.data()
-      return { uid: data.uid as string, username: data.username as string, status }
-    }),
-  )
+  const res = await getDocs(q)
+  const base = res.docs.map((d) => {
+    const data = d.data()
+    return { uid: data.uid as string, username: data.username as string, status }
+  })
+  // Fetch avatar from each friend's user doc in parallel
+  const profiles = await Promise.all(base.map((f) => getDoc(userRef(f.uid))))
+  return base.map((f, i) => {
+    const pd = profiles[i].data() ?? {}
+    return {
+      ...f,
+      avatarType:  (pd.avatarType  as string) ?? 'initial',
+      avatarEmoji: (pd.avatarEmoji as string) ?? '',
+      avatarImage: (pd.avatarImage as string) ?? '',
+    }
+  })
 }
 
 /** Liste des amis acceptés. */
@@ -190,4 +244,134 @@ export function getFriends(uid: string): Promise<FriendDoc[]> {
 /** Demandes d'amis en attente (entrantes). */
 export function getPendingRequests(uid: string): Promise<FriendDoc[]> {
   return readFriends(uid, 'pending')
+}
+
+/** Écoute en temps réel le nombre de demandes en attente. */
+export function subscribePendingCount(
+  myUid: string,
+  callback: (count: number) => void,
+): () => void {
+  const q = query(
+    collection(db, 'users', myUid, 'friends'),
+    where('status', '==', 'pending'),
+  )
+  return onSnapshot(q, (snap) => callback(snap.size), () => callback(0))
+}
+
+// ── Chat (messages privés entre amis) ──────────────────────────────────────────
+
+/** chatId déterministe : [uid1, uid2] triés, séparés par '_'. */
+export function getChatId(uid1: string, uid2: string): string {
+  return [uid1, uid2].sort().join('_')
+}
+
+export interface MessageDoc {
+  id: string
+  fromUid: string
+  text: string
+  createdAt: Date | null
+}
+
+/** Envoie un message (crée le doc chat si nécessaire). */
+export async function sendMessage(
+  myUid: string,
+  friendUid: string,
+  text: string,
+): Promise<void> {
+  const chatId = getChatId(myUid, friendUid)
+  const chatRef = doc(db, 'chats', chatId)
+  const msgRef = doc(collection(db, 'chats', chatId, 'messages'))
+  const chatSnap = await getDoc(chatRef)
+  const batch = writeBatch(db)
+  if (!chatSnap.exists()) {
+    batch.set(chatRef, {
+      participants: [myUid, friendUid],
+      [`unread_${myUid}`]: 0,
+      [`unread_${friendUid}`]: 1,
+      lastText: text,
+      lastFrom: myUid,
+      lastAt: serverTimestamp(),
+    })
+  } else {
+    batch.update(chatRef, {
+      [`unread_${friendUid}`]: increment(1),
+      lastText: text,
+      lastFrom: myUid,
+      lastAt: serverTimestamp(),
+    })
+  }
+  batch.set(msgRef, { fromUid: myUid, text, createdAt: serverTimestamp() })
+  await batch.commit()
+}
+
+/** Écoute les messages d'un chat en temps réel (triés chronologiquement). */
+export function subscribeMessages(
+  chatId: string,
+  callback: (messages: MessageDoc[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'chats', chatId, 'messages'),
+    orderBy('createdAt', 'asc'),
+  )
+  return onSnapshot(q, (snap) =>
+    callback(
+      snap.docs.map((d) => {
+        const data = d.data()
+        return {
+          id: d.id,
+          fromUid: data.fromUid as string,
+          text: data.text as string,
+          createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+        }
+      }),
+    ),
+  )
+}
+
+/** Remet à 0 le compteur de non-lus pour myUid dans ce chat. */
+export function markChatRead(chatId: string, myUid: string): Promise<void> {
+  return updateDoc(doc(db, 'chats', chatId), {
+    [`unread_${myUid}`]: 0,
+  }).catch(() => {})
+}
+
+/** Écoute le total de messages non-lus (tous amis confondus). */
+export function subscribeTotalUnread(
+  myUid: string,
+  callback: (count: number) => void,
+): () => void {
+  const q = query(collection(db, 'chats'), where('participants', 'array-contains', myUid))
+  return onSnapshot(
+    q,
+    (snap) => {
+      let total = 0
+      for (const d of snap.docs) {
+        total += ((d.data()[`unread_${myUid}`] as number) ?? 0)
+      }
+      callback(total)
+    },
+    () => callback(0),
+  )
+}
+
+/** Écoute les non-lus par ami : { [friendUid]: count }. */
+export function subscribeFriendUnreadCounts(
+  myUid: string,
+  callback: (counts: Record<string, number>) => void,
+): () => void {
+  const q = query(collection(db, 'chats'), where('participants', 'array-contains', myUid))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const counts: Record<string, number> = {}
+      for (const d of snap.docs) {
+        const data = d.data()
+        const parts = data.participants as string[]
+        const friendUid = parts.find((p) => p !== myUid)
+        if (friendUid) counts[friendUid] = (data[`unread_${myUid}`] as number) ?? 0
+      }
+      callback(counts)
+    },
+    () => callback({}),
+  )
 }

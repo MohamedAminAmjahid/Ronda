@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, ScrollView } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, ScrollView, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import { router, type Href } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { useI18n } from '../i18n/useI18n'
@@ -42,6 +43,32 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { username } = useProfile()
   const { t, lang, setLang } = useI18n()
 
+  // ── Animation de fond (pulsation subtile) ─────────────────────────────────
+  const bgPulse = useRef(new Animated.Value(0)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(bgPulse, { toValue: 1, duration: 4000, useNativeDriver: false }),
+        Animated.timing(bgPulse, { toValue: 0, duration: 4000, useNativeDriver: false }),
+      ]),
+    ).start()
+  }, [bgPulse])
+  const bgColor = bgPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['#0D0D1A', '#110D22'],
+  })
+
+  // ── Badge "NOUVEAU" animé ─────────────────────────────────────────────────
+  const newBadge = useRef(new Animated.Value(1)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(newBadge, { toValue: 1.12, duration: 600, useNativeDriver: true }),
+        Animated.timing(newBadge, { toValue: 1, duration: 600, useNativeDriver: true }),
+      ]),
+    ).start()
+  }, [newBadge])
+
   // ── Reconnexion à une partie en cours ──────────────────────────────────────
   const [resumeRoom, setResumeRoom] = useState<ActiveRoom | null>(null)
   const [resuming, setResuming] = useState(false)
@@ -80,6 +107,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   }
 
   return (
+    <Animated.View style={[s.rootBg, { backgroundColor: bgColor }]}>
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
 
@@ -130,6 +158,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
               <Text style={s.platformTM}>TM</Text>
             </View>
             <Text style={s.platformAr}>دار الورقة</Text>
+            <View style={s.divider} />
             <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
           </View>
 
@@ -140,8 +169,13 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           <TouchableOpacity
             style={[s.gameCard, s.rondaCard]}
             onPress={() => router.push(RONDA_ROUTE)}
-            activeOpacity={0.88}
+            activeOpacity={0.85}
           >
+            {/* Shimmer laiton en haut */}
+            <LinearGradient
+              colors={['rgba(201,162,39,0.28)', 'transparent']}
+              style={s.cardShimmer}
+            />
             <View style={s.cardTop}>
               <View>
                 <Text style={s.cardTitle}>RONDA</Text>
@@ -161,15 +195,24 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           <TouchableOpacity
             style={[s.gameCard, s.dijoujCard]}
             onPress={() => router.push(DIJOUJ_ROUTE)}
-            activeOpacity={0.88}
+            activeOpacity={0.85}
           >
+            <LinearGradient
+              colors={['rgba(139,26,74,0.40)', 'transparent']}
+              style={s.cardShimmer}
+            />
             <View style={s.cardTop}>
               <View>
                 <Text style={s.cardTitle}>DI JOUJ</Text>
                 <Text style={s.cardTitleAr}>ديجوج</Text>
               </View>
-              <View style={[s.cardBadge, s.dijoujBadge]}>
-                <Text style={s.cardBadgeTxt}>{t('comingSoon')}</Text>
+              <View style={s.cardTopRight}>
+                <View style={[s.cardBadge, s.dijoujBadge]}>
+                  <Text style={s.cardBadgeTxt}>{t('comingSoon')}</Text>
+                </View>
+                <Animated.View style={[s.newBadge, { transform: [{ scale: newBadge }] }]}>
+                  <Text style={s.newBadgeTxt}>NOUVEAU</Text>
+                </Animated.View>
               </View>
             </View>
             <Text style={s.cardDesc}>{t('dijoujCardDesc')}</Text>
@@ -220,13 +263,15 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
         </ScrollView>
       </View>
     </SafeAreaView>
+    </Animated.View>
   )
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.bg, alignItems: 'center' },
+  rootBg: { flex: 1 },
+  root: { flex: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
 
   // Scrollable
@@ -234,29 +279,40 @@ const s = StyleSheet.create({
   scrollContent: { gap: 14, paddingBottom: 28, paddingTop: 8 },
 
   // Hero
-  hero: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  hero: { alignItems: 'center', paddingVertical: 28, gap: 6 },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   platformTitle: {
     fontFamily: 'Cairo_600SemiBold',
-    fontSize: 32,
+    fontSize: 38,
     color: C.bone,
     letterSpacing: 1.5,
+    textShadowColor: 'rgba(201,162,39,0.45)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
   },
   platformTM: {
     fontFamily: 'Cairo_600SemiBold',
-    fontSize: 13,
+    fontSize: 14,
     color: C.boneOff,
     letterSpacing: 2,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   platformAr: {
     fontFamily: 'ReemKufi_700Bold',
-    fontSize: 22,
+    fontSize: 24,
     color: C.brass,
     letterSpacing: 1,
+    textShadowColor: 'rgba(201,162,39,0.30)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  divider: {
+    width: 40, height: 1,
+    backgroundColor: 'rgba(201,162,39,0.25)',
+    marginVertical: 6,
   },
   helloTxt: {
-    fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)', marginTop: 4,
+    fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)',
   },
 
   // Section label
@@ -272,24 +328,36 @@ const s = StyleSheet.create({
 
   // Game cards
   gameCard: {
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 18,
     gap: 10,
     borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.40,
+    shadowRadius: 14,
+    elevation: 8,
   },
   rondaCard: {
     backgroundColor: C.ronda,
-    borderColor: 'rgba(201,162,39,0.30)',
+    borderColor: 'rgba(201,162,39,0.35)',
   },
   dijoujCard: {
     backgroundColor: C.dijouj,
-    borderColor: 'rgba(139,26,74,0.40)',
+    borderColor: 'rgba(139,26,74,0.50)',
+  },
+  cardShimmer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 60,
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  cardTopRight: { alignItems: 'flex-end', gap: 4 },
   cardTitle: {
     fontFamily: 'Cairo_600SemiBold',
     fontSize: 22,
@@ -367,6 +435,17 @@ const s = StyleSheet.create({
   author: {
     fontFamily: 'Cairo_400Regular', fontSize: 11,
     color: 'rgba(244,236,216,0.28)', letterSpacing: 0.3, textDecorationLine: 'underline',
+  },
+
+  // Badge "NOUVEAU"
+  newBadge: {
+    backgroundColor: '#E53935',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  newBadgeTxt: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 9, color: '#fff', letterSpacing: 1,
   },
 
   // Modal reconnexion

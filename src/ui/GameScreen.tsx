@@ -527,6 +527,10 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   // la partie se termine (incrémente les stats + crédite l'or si victoire).
   const [winReward, setWinReward] = useState(0)
   const resultRecorded = useRef(false)
+
+  // Pulsation du bouton Ronda/Tringa
+  const rondaPulse = useRef(new Animated.Value(1)).current
+  const rondaPulseAnim = useRef<Animated.CompositeAnimation | null>(null)
   useEffect(() => {
     if (view.isGameOver) {
       if (!resultRecorded.current) {
@@ -720,6 +724,23 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   const { state, isHumanTurn, canDeclare, canContest, contestValue, isGameOver, isDealEnd, isBotThinking } = view
   const human = state.players[HUMAN_ID]
   const bot   = state.players[BOT_ID]
+
+  // Pulsation Ronda : démarre quand disponible, s'arrête sinon
+  useEffect(() => {
+    if (canDeclare) {
+      rondaPulseAnim.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(rondaPulse, { toValue: 1.08, duration: 500, useNativeDriver: true }),
+          Animated.timing(rondaPulse, { toValue: 1,    duration: 500, useNativeDriver: true }),
+        ]),
+      )
+      rondaPulseAnim.current.start()
+    } else {
+      rondaPulseAnim.current?.stop()
+      rondaPulse.setValue(1)
+    }
+    return () => { rondaPulseAnim.current?.stop() }
+  }, [canDeclare, rondaPulse])
 
   if (isGameOver) {
     return (
@@ -975,10 +996,16 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       <View style={styles.actionBar}>
         <View style={styles.abLeft}>
           {canDeclare && !flying && (
-            <TouchableOpacity style={styles.btnRonda} onPress={handleDeclare}>
-              <Text style={styles.btnRondaAr}>{comboTerm.ar}</Text>
-              <Text style={styles.btnRondaLa}>{comboTerm.la}</Text>
-            </TouchableOpacity>
+            <Animated.View style={{ transform: [{ scale: rondaPulse }] }}>
+              <TouchableOpacity
+                style={styles.btnRonda}
+                onPress={handleDeclare}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnRondaAr}>{comboTerm.ar}</Text>
+                <Text style={styles.btnRondaLa}>{comboTerm.la}</Text>
+              </TouchableOpacity>
+            </Animated.View>
           )}
           {canContest && contestValue !== null && !flying && (
             <TouchableOpacity style={styles.btnContre} onPress={() => contest(contestValue)}>
@@ -1011,13 +1038,20 @@ const styles = StyleSheet.create({
 
   // Score bar
   scorebar: {
-    backgroundColor: C.deep,
+    backgroundColor: 'rgba(9,64,47,0.92)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(201,162,39,0.1)',
+    borderBottomColor: 'rgba(201,162,39,0.22)',
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
   },
   scorebarInner: {
     flex: 1,
@@ -1383,10 +1417,15 @@ const styles = StyleSheet.create({
   // Bouton Ronda / Tringa
   btnRonda: {
     backgroundColor: C.brass,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     alignItems: 'center',
+    shadowColor: C.brass,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    elevation: 6,
   },
   btnRondaAr: {
     fontFamily: 'ReemKufi_700Bold',
