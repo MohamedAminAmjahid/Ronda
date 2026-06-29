@@ -44,7 +44,8 @@ function drawCards(
  * - Pendant un draw2 en attente : seul un autre 2 peut être joué (empilement).
  * - Pendant un skip en attente  : seul un As peut être joué (empilement).
  * - Sinon : même couleur OU même valeur que le sommet de la défausse.
- * - Le 7 de Oros est toujours jouable (joker de couleur).
+ * - Le 7 de Oros suit la même règle (même couleur/valeur) ; sa spécialité est
+ *   uniquement de choisir la prochaine couleur après avoir été posé.
  */
 export function isPlayable(
   card:          Card,
@@ -54,8 +55,6 @@ export function isPlayable(
 ): boolean {
   if (pendingEffect?.type === 'draw2') return card.value === 2
   if (pendingEffect?.type === 'skip')  return card.value === 1
-
-  if (card.value === 7 && card.suit === 'oros') return true   // joker
 
   const effectiveSuit = chosenSuit ?? topCard.suit
   return card.suit === effectiveSuit || card.value === topCard.value

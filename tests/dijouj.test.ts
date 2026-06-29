@@ -140,9 +140,21 @@ describe('isPlayable', () => {
     expect(isPlayable(c('copas', 3), top, null, null)).toBe(false)
   })
 
-  it('7 de Oros est toujours jouable (joker)', () => {
-    expect(isPlayable(c('oros', 7), c('bastos', 12), null, null)).toBe(true)
-    expect(isPlayable(c('oros', 7), c('espadas', 2), 'copas', null)).toBe(true)
+  it('7 de Oros jouable sur même couleur (oros)', () => {
+    expect(isPlayable(c('oros', 7), c('oros', 5),   null, null)).toBe(true)
+  })
+
+  it('7 de Oros jouable sur même valeur (7)', () => {
+    expect(isPlayable(c('oros', 7), c('bastos', 7), null, null)).toBe(true)
+  })
+
+  it('7 de Oros NON jouable si ni même couleur ni même valeur', () => {
+    expect(isPlayable(c('oros', 7), c('bastos', 12), null,    null)).toBe(false)
+    expect(isPlayable(c('oros', 7), c('espadas', 2), 'copas', null)).toBe(false)
+  })
+
+  it('7 de Oros jouable si chosenSuit === oros', () => {
+    expect(isPlayable(c('oros', 7), c('copas', 3), 'oros', null)).toBe(true)
   })
 
   it('chosenSuit remplace la couleur du sommet', () => {
@@ -292,8 +304,8 @@ describe('applyPlayCard — As', () => {
 // ── 8. applyPlayCard — 7 de Oros ─────────────────────────────────────────────
 
 describe('applyPlayCard — 7 de Oros', () => {
-  it('impose la couleur choisie', () => {
-    const s = makeState({ humanHand: [c('oros', 7), c('oros', 6)], discardTop: c('bastos', 12) })
+  it('impose la couleur choisie (posé sur même couleur oros)', () => {
+    const s = makeState({ humanHand: [c('oros', 7), c('oros', 6)], discardTop: c('oros', 5) })
     const r = applyPlayCard(s, 0, c('oros', 7), 'copas')
     expect(r.chosenSuit).toBe('copas')
     expect(r.pendingEffect).toBeNull()
@@ -321,12 +333,12 @@ describe('applyPlayCard — 7 de Oros', () => {
     expect(applyPlayCard(s, 1, c('bastos', 3))).toBe(s)
   })
 
-  it('un autre 7 de Oros est jouable quelle que soit la couleur imposée', () => {
+  it('7 de Oros jouable sur même valeur 7 même si chosenSuit est différente', () => {
     const s = makeState({
       botHand:       [c('oros', 7), c('espadas', 6)],
-      discardTop:    c('copas', 5),
+      discardTop:    c('copas', 7),
       currentPlayer: 1,
-      chosenSuit:    'espadas',
+      chosenSuit:    null,
     })
     const r = applyPlayCard(s, 1, c('oros', 7), 'bastos')
     expect(r.chosenSuit).toBe('bastos')
@@ -443,14 +455,14 @@ describe('bot', () => {
     if (a.type === 'play') expect(a.card.value).toBe(1)
   })
 
-  it('7 de Oros : choisit la couleur la plus représentée', () => {
+  it('7 de Oros : choisit la couleur la plus représentée (posé sur oros)', () => {
     const s = makeState({
       botHand: [
         c('oros', 7),
         c('copas', 3), c('copas', 4), c('copas', 5),
         c('bastos', 6),
       ],
-      discardTop:    c('espadas', 2),
+      discardTop:    c('oros', 3),
       currentPlayer: 1,
     })
     const a = botPlay(s, 1)
