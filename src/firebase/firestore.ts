@@ -183,9 +183,14 @@ function friendRef(ownerUid: string, friendUid: string) {
 export async function sendFriendRequest(myUid: string, targetUid: string): Promise<void> {
   if (myUid === targetUid) throw new Error("Impossible de s'ajouter soi-même.")
 
-  // Vérifie qu'une demande n'existe pas déjà (évite l'erreur de doublons).
+  // Vérifie qu'une demande n'existe pas déjà.
+  // On n'interdit que si le statut est pending ou accepted —
+  // un statut résiduel (ex. doc non supprimé après removeFriend) laisse passer.
   const existing = await getDoc(friendRef(targetUid, myUid))
-  if (existing.exists()) throw new Error('already_sent')
+  if (existing.exists()) {
+    const st = existing.data()?.status as string | undefined
+    if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
+  }
 
   const myUsername = await getUsername(myUid)
   try {
