@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Rect, Polygon } from 'react-native-svg'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -61,40 +62,41 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function RitualPickerScreen({ onSelect, onBack }: Props) {
+  const { t } = useI18n()
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Qui commence ?</Text>
-          <Text style={s.subtitle}>Choisissez un rituel de tirage</Text>
+          <Text style={s.title}>{t('whoStarts')}</Text>
+          <Text style={s.subtitle}>{t('chooseRitual')}</Text>
         </View>
 
         <View style={s.options}>
           <TouchableOpacity style={s.option} onPress={() => onSelect('card_draw')}>
             <View style={s.optionIcon}><IconCard /></View>
             <View style={s.optionBody}>
-              <Text style={s.optionTitle}>Tirer une carte</Text>
-              <Text style={s.optionDesc}>La plus haute l'emporte — la couleur ne compte pas</Text>
+              <Text style={s.optionTitle}>{t('drawCard')}</Text>
+              <Text style={s.optionDesc}>{t('drawCardDesc')}</Text>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.option} onPress={() => onSelect('coin_flip')}>
             <View style={s.optionIcon}><IconCoin /></View>
             <View style={s.optionBody}>
-              <Text style={s.optionTitle}>Pile ou Face</Text>
-              <Text style={s.optionDesc}>Choisissez votre côté et tentez la chance</Text>
+              <Text style={s.optionTitle}>{t('coinFlip')}</Text>
+              <Text style={s.optionDesc}>{t('coinFlipDesc')}</Text>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.option} onPress={() => onSelect('rps')}>
             <View style={s.optionIcon}><IconRps /></View>
             <View style={s.optionBody}>
-              <Text style={s.optionTitle}>Pierre-Feuille-Ciseaux</Text>
-              <Text style={s.optionDesc}>Défiez le bot — égalité si match nul</Text>
+              <Text style={s.optionTitle}>{t('rps')}</Text>
+              <Text style={s.optionDesc}>{t('rpsDesc')}</Text>
             </View>
           </TouchableOpacity>
         </View>

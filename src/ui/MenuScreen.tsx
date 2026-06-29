@@ -85,7 +85,7 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
       if (user) {
         const available = await isUsernameAvailable(clean, user.uid)
         if (!available) {
-          setUsernameError('Ce pseudo est déjà pris')
+          setUsernameError(t('usernameTaken'))
           return
         }
       }
@@ -124,7 +124,7 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
       }
     } catch {
       clearActiveRoom()
-      setResumeError('Reconnexion impossible — la partie a peut-être expiré.')
+      setResumeError(t('reconnectFailed'))
     } finally {
       setResuming(false)
     }
@@ -151,7 +151,7 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
               <Text style={s.profileEmail} numberOfLines={1}>{user.email}</Text>
             ) : (
               <TouchableOpacity onPress={() => router.push('/auth' as Href)} activeOpacity={0.7}>
-                <Text style={s.profileSignIn}>Se connecter</Text>
+                <Text style={s.profileSignIn}>{t('signInLink')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -184,40 +184,40 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
         <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
           <View style={s.modalBackdrop}>
             <View style={s.modalCard}>
-              <Text style={s.modalTitle}>Ton pseudo</Text>
+              <Text style={s.modalTitle}>{t('yourUsername')}</Text>
               <TextInput
                 style={s.modalInput}
                 value={draft}
-                onChangeText={(t) => setDraft(t.slice(0, 16))}
-                placeholder="Pseudo"
+                onChangeText={(v) => setDraft(v.slice(0, 16))}
+                placeholder={t('usernamePlaceholder')}
                 placeholderTextColor={C.boneOff}
                 maxLength={16}
                 autoFocus
                 autoCorrect={false}
               />
-              <Text style={s.modalHint}>16 caractères max.</Text>
+              <Text style={s.modalHint}>{t('usernameMaxChars')}</Text>
               {isFreeChange
-                ? <Text style={s.costFree}>Première modification gratuite ✓</Text>
-                : <Text style={s.costPaid}>Coût : 🪙 {USERNAME_CHANGE_COST}</Text>
+                ? <Text style={s.costFree}>{t('firstChangeFree')}</Text>
+                : <Text style={s.costPaid}>{t('changeCost').replace('{n}', String(USERNAME_CHANGE_COST))}</Text>
               }
               {usernameError ? <Text style={s.usernameErrorTxt}>{usernameError}</Text> : null}
               <View style={s.statsRow}>
                 <View style={s.statBox}>
                   <Text style={s.statNum}>{gamesPlayed}</Text>
-                  <Text style={s.statLbl}>Parties</Text>
+                  <Text style={s.statLbl}>{t('gamesPlayed')}</Text>
                 </View>
                 <View style={s.statBox}>
                   <Text style={s.statNum}>{gamesWon}</Text>
-                  <Text style={s.statLbl}>Victoires</Text>
+                  <Text style={s.statLbl}>{t('gamesWon')}</Text>
                 </View>
                 <View style={s.statBox}>
                   <Text style={s.statNum}>{winRate}%</Text>
-                  <Text style={s.statLbl}>Réussite</Text>
+                  <Text style={s.statLbl}>{t('winRateLabel')}</Text>
                 </View>
               </View>
               <View style={s.modalActions}>
                 <TouchableOpacity style={s.modalCancel} onPress={() => setEditing(false)}>
-                  <Text style={s.modalCancelTxt}>Annuler</Text>
+                  <Text style={s.modalCancelTxt}>{t('cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -229,10 +229,10 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
                 >
                   <Text style={s.modalSaveTxt}>
                     {saving
-                      ? 'Vérification…'
+                      ? t('verifying')
                       : !canAfford
-                      ? `Gold insuffisant (${USERNAME_CHANGE_COST} 🪙 requis)`
-                      : 'Sauvegarder'}
+                      ? t('insufficientGold').replace('{n}', String(USERNAME_CHANGE_COST))
+                      : t('save')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -244,7 +244,7 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
         <Modal visible={resumeRoom !== null} transparent animationType="fade" onRequestClose={onForfeit}>
           <View style={s.modalBackdrop}>
             <View style={s.modalCard}>
-              <Text style={s.modalTitle}>Partie en cours</Text>
+              <Text style={s.modalTitle}>{t('activeGame')}</Text>
               {resumeError ? (
                 <>
                   <Text style={s.resumeText}>{resumeError}</Text>
@@ -257,18 +257,18 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
               ) : (
                 <>
                   <Text style={s.resumeText}>
-                    Tu as une partie en cours{resumeRoom?.code ? ` (code : ${resumeRoom.code})` : ''}. Veux-tu reprendre ?
+                    {t('resumeGameMsg').replace('{code}', resumeRoom?.code ? ` (code : ${resumeRoom.code})` : '')}
                   </Text>
                   <View style={s.modalActions}>
                     <TouchableOpacity style={s.modalCancel} onPress={onForfeit} disabled={resuming}>
-                      <Text style={s.modalCancelTxt}>Abandonner</Text>
+                      <Text style={s.modalCancelTxt}>{t('abandon')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[s.modalSave, resuming && s.btnDisabledOpacity]}
                       onPress={onResume}
                       disabled={resuming}
                     >
-                      <Text style={s.modalSaveTxt}>{resuming ? 'Connexion…' : 'Reprendre'}</Text>
+                      <Text style={s.modalSaveTxt}>{resuming ? t('connecting') : t('resume')}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -285,7 +285,7 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
             <Text style={s.titleSub}>{TERMS.ronda.ar}</Text>
           </View>
           <View style={s.divider} />
-          <Text style={s.tagline}>Jeu de cartes marocain</Text>
+          <Text style={s.tagline}>{t('tagline')}</Text>
         </View>
 
         {/* ── Actions ──────────────────────────────────────────── */}

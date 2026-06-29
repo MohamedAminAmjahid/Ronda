@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import type { PlayerId, Value, Suit } from '../engine/types'
 import { HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export function CardDrawScreen({ onStart, onBack }: Props) {
+  const { t } = useI18n()
   const [phase,       setPhase]       = useState<DrawPhase>('ready')
   const [humanCard,   setHumanCard]   = useState<{ value: Value; suit: Suit } | null>(null)
   const [botCard,     setBotCard]     = useState<{ value: Value; suit: Suit } | null>(null)
@@ -99,16 +101,16 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Rituels</Text>
+            <Text style={s.backTxt}>{t('backRituals')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Tirer une carte</Text>
-          <Text style={s.subtitle}>La plus haute l'emporte — la couleur ne compte pas</Text>
+          <Text style={s.title}>{t('drawCard')}</Text>
+          <Text style={s.subtitle}>{t('drawCardDesc')}</Text>
         </View>
 
         {/* ── Deux cartes ───────────────────────────────────── */}
         <View style={s.cardsRow}>
           <View style={s.cardSlot}>
-            <Text style={s.slotLabel}>Vous</Text>
+            <Text style={s.slotLabel}>{t('you')}</Text>
             <Animated.View style={{ transform: [{ scaleX: humanScaleX }] }}>
               {humanFaceUp && humanCard
                 ? <CardFace card={humanCard} size="lg" />
@@ -122,7 +124,7 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
           <Text style={s.vsTxt}>VS</Text>
 
           <View style={s.cardSlot}>
-            <Text style={s.slotLabel}>Bot</Text>
+            <Text style={s.slotLabel}>{t('bot')}</Text>
             <Animated.View style={{ transform: [{ scaleX: botScaleX }] }}>
               {botFaceUp && botCard
                 ? <CardFace card={botCard} size="lg" />
@@ -139,7 +141,7 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
         {/* ── Actions ───────────────────────────────────────── */}
         {phase === 'ready' && (
           <TouchableOpacity style={s.btnPrimary} onPress={handleDraw}>
-            <Text style={s.btnPrimaryTxt}>Tirer les cartes</Text>
+            <Text style={s.btnPrimaryTxt}>{t('drawCards')}</Text>
           </TouchableOpacity>
         )}
 
@@ -147,19 +149,17 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
           <View style={s.outcome}>
             <View style={s.outcomeBox}>
               <Text style={s.outcomeTitle}>
-                {humanWon ? 'Vous avez gagné !' : 'Le bot a gagné.'}
+                {humanWon ? t('youWon') : t('botWon')}
               </Text>
               <Text style={s.outcomeSub}>
-                {humanWon
-                  ? 'Vous êtes donneur — le bot pose la première carte.'
-                  : 'Le bot est donneur — vous posez la première carte.'}
+                {humanWon ? t('youAreDealer') : t('botIsDealer')}
               </Text>
             </View>
             <TouchableOpacity
               style={s.btnPrimary}
               onPress={() => onStart(humanWon ? HUMAN_ID : BOT_ID)}
             >
-              <Text style={s.btnPrimaryTxt}>Commencer la partie</Text>
+              <Text style={s.btnPrimaryTxt}>{t('startGame')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -167,14 +167,14 @@ export function CardDrawScreen({ onStart, onBack }: Props) {
         {phase === 'tie' && (
           <View style={s.outcome}>
             <View style={s.outcomeBox}>
-              <Text style={s.outcomeTitle}>Égalité !</Text>
+              <Text style={s.outcomeTitle}>{t('drawTie')}</Text>
               <Text style={s.outcomeSub}>
-                Vous {humanCard?.value} — Bot {botCard?.value}
+                {t('you')} {humanCard?.value} — {t('bot')} {botCard?.value}
               </Text>
-              <Text style={s.outcomeSub}>On tire à nouveau.</Text>
+              <Text style={s.outcomeSub}>{t('drawAgainNote')}</Text>
             </View>
             <TouchableOpacity style={s.btnPrimary} onPress={handleRedraw}>
-              <Text style={s.btnPrimaryTxt}>Tirer à nouveau</Text>
+              <Text style={s.btnPrimaryTxt}>{t('drawAgainBtn')}</Text>
             </TouchableOpacity>
           </View>
         )}

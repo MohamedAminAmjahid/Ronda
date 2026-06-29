@@ -8,6 +8,7 @@ import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   getFriends, getPendingRequests, type FriendDoc, type UserDoc,
 } from '../firebase/firestore'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -29,6 +30,7 @@ interface Props {
 
 export function FriendsScreen({ onBack }: Props) {
   const { user, loading: authLoading } = useAuth()
+  const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('friends')
 
   const [friends, setFriends] = useState<FriendDoc[]>([])
@@ -64,10 +66,10 @@ export function FriendsScreen({ onBack }: Props) {
     setAddMsg(null)
     try {
       const u = await searchUserByUsername(search)
-      if (!u) setAddMsg('Aucun joueur trouvé.')
+      if (!u) setAddMsg(t('noPlayerFound'))
       else setResult(u)
     } catch {
-      setAddMsg('Recherche impossible.')
+      setAddMsg(t('searchFailed'))
     } finally {
       setSearching(false)
     }
@@ -75,14 +77,14 @@ export function FriendsScreen({ onBack }: Props) {
 
   const add = async (target: UserDoc) => {
     if (!user) return
-    if (target.uid === user.uid) { setAddMsg("C'est toi 🙂"); return }
+    if (target.uid === user.uid) { setAddMsg(t('thatIsYou')); return }
     try {
       await sendFriendRequest(user.uid, target.uid)
-      setAddMsg(`Demande envoyée à ${target.username}.`)
+      setAddMsg(t('requestSent').replace('{name}', target.username))
       setResult(null)
       setSearch('')
     } catch {
-      setAddMsg('Envoi impossible.')
+      setAddMsg(t('sendFailed'))
     }
   }
 
@@ -99,7 +101,7 @@ export function FriendsScreen({ onBack }: Props) {
 
   const invite = async (friend: FriendDoc) => {
     try {
-      await Share.share({ message: `Viens jouer à la Ronda avec moi, ${friend.username} ! 🎴 ${GAME_URL}` })
+      await Share.share({ message: `🎴 ${GAME_URL}` })
     } catch { /* annulé */ }
   }
 
@@ -109,9 +111,9 @@ export function FriendsScreen({ onBack }: Props) {
     return (
       <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
         <View style={s.center}>
-          <Text style={s.empty}>Connecte-toi pour gérer tes amis.</Text>
+          <Text style={s.empty}>{t('friendsLoginRequired')}</Text>
           <TouchableOpacity style={s.btnPrimary} onPress={onBack}>
-            <Text style={s.btnPrimaryTxt}>Retour</Text>
+            <Text style={s.btnPrimaryTxt}>{t('backShort')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -119,9 +121,9 @@ export function FriendsScreen({ onBack }: Props) {
   }
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'friends', label: 'Amis' },
-    { key: 'requests', label: `Demandes${requests.length ? ` (${requests.length})` : ''}` },
-    { key: 'add', label: 'Ajouter' },
+    { key: 'friends', label: t('friendsTab') },
+    { key: 'requests', label: `${t('requestsTab')}${requests.length ? ` (${requests.length})` : ''}` },
+    { key: 'add', label: t('addTab') },
   ]
 
   return (
@@ -129,19 +131,19 @@ export function FriendsScreen({ onBack }: Props) {
       <View style={s.column}>
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Amis</Text>
+          <Text style={s.title}>{t('friendsTab')}</Text>
         </View>
 
         <View style={s.tabs}>
-          {TABS.map((t) => (
+          {TABS.map((tb) => (
             <TouchableOpacity
-              key={t.key}
-              style={[s.tab, tab === t.key && s.tabActive]}
-              onPress={() => setTab(t.key)}
+              key={tb.key}
+              style={[s.tab, tab === tb.key && s.tabActive]}
+              onPress={() => setTab(tb.key)}
             >
-              <Text style={[s.tabTxt, tab === t.key && s.tabTxtActive]}>{t.label}</Text>
+              <Text style={[s.tabTxt, tab === tb.key && s.tabTxtActive]}>{tb.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -151,12 +153,12 @@ export function FriendsScreen({ onBack }: Props) {
 
           {tab === 'friends' && !loading && (
             friends.length === 0
-              ? <Text style={s.empty}>Aucun ami pour l'instant. Ajoute-en via l'onglet « Ajouter ».</Text>
+              ? <Text style={s.empty}>{t('noFriends')}</Text>
               : friends.map((f) => (
                 <View key={f.uid} style={s.row}>
                   <Text style={s.rowName} numberOfLines={1}>{f.username}</Text>
                   <TouchableOpacity style={s.btnSmall} onPress={() => invite(f)}>
-                    <Text style={s.btnSmallTxt}>Inviter à jouer</Text>
+                    <Text style={s.btnSmallTxt}>{t('inviteToPlay')}</Text>
                   </TouchableOpacity>
                 </View>
               ))
@@ -164,16 +166,16 @@ export function FriendsScreen({ onBack }: Props) {
 
           {tab === 'requests' && !loading && (
             requests.length === 0
-              ? <Text style={s.empty}>Aucune demande en attente.</Text>
+              ? <Text style={s.empty}>{t('noRequests')}</Text>
               : requests.map((r) => (
                 <View key={r.uid} style={s.row}>
                   <Text style={s.rowName} numberOfLines={1}>{r.username}</Text>
                   <View style={s.rowActions}>
                     <TouchableOpacity style={s.btnAccept} onPress={() => accept(r.uid)}>
-                      <Text style={s.btnAcceptTxt}>Accepter</Text>
+                      <Text style={s.btnAcceptTxt}>{t('acceptBtn')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={s.btnDecline} onPress={() => decline(r.uid)}>
-                      <Text style={s.btnDeclineTxt}>Refuser</Text>
+                      <Text style={s.btnDeclineTxt}>{t('declineBtn')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -182,13 +184,13 @@ export function FriendsScreen({ onBack }: Props) {
 
           {tab === 'add' && (
             <>
-              <Text style={s.label}>Rechercher par pseudo</Text>
+              <Text style={s.label}>{t('searchByUsername')}</Text>
               <View style={s.searchRow}>
                 <TextInput
                   style={s.input}
                   value={search}
                   onChangeText={setSearch}
-                  placeholder="Pseudo exact"
+                  placeholder={t('exactUsername')}
                   placeholderTextColor={C.boneOff}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -196,7 +198,7 @@ export function FriendsScreen({ onBack }: Props) {
                   returnKeyType="search"
                 />
                 <TouchableOpacity style={s.btnSearch} onPress={doSearch} disabled={searching}>
-                  <Text style={s.btnSearchTxt}>{searching ? '…' : 'Chercher'}</Text>
+                  <Text style={s.btnSearchTxt}>{searching ? '…' : t('searchBtn')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -204,7 +206,7 @@ export function FriendsScreen({ onBack }: Props) {
                 <View style={s.row}>
                   <Text style={s.rowName} numberOfLines={1}>{result.username}</Text>
                   <TouchableOpacity style={s.btnSmall} onPress={() => add(result)}>
-                    <Text style={s.btnSmallTxt}>Ajouter</Text>
+                    <Text style={s.btnSmallTxt}>{t('addBtn')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

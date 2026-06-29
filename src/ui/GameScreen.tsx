@@ -57,17 +57,16 @@ function sortTableCards(cards: readonly Card[]): Card[] {
 // ── Indicateur "le bot réfléchit / joue" ─────────────────────────────────────
 
 export function BotThinking({ name }: { name?: string }) {
-  // Alterne le libellé toutes les 800 ms. `name` = pseudo adversaire (online) ;
-  // sinon « Le bot » (solo vs IA).
+  const { t } = useI18n()
   const [alt, setAlt] = useState(false)
   useEffect(() => {
     const id = setInterval(() => setAlt(a => !a), 800)
     return () => clearInterval(id)
   }, [])
-  const who = name ?? 'Le bot'
+  const who = name ?? t('bot')
   return (
     <Text style={styles.botThinking}>
-      {alt ? `${who} joue…` : `${who} réfléchit…`}
+      {alt ? t('botPlays').replace('{name}', who) : t('botThinks').replace('{name}', who)}
     </Text>
   )
 }
@@ -85,6 +84,7 @@ function DealerToken() {
 // ── Overlay annonce "Donne N" ─────────────────────────────────────────────────
 
 function DealAnnounce({ dealNumber, starterText }: { dealNumber: number; starterText: string }) {
+  const { t } = useI18n()
   const opacity = useRef(new Animated.Value(0)).current
   const scale = useRef(new Animated.Value(0.85)).current
 
@@ -106,7 +106,7 @@ function DealAnnounce({ dealNumber, starterText }: { dealNumber: number; starter
       style={[styles.dealAnnounceRoot, { opacity, transform: [{ scale }] }]}
       pointerEvents="none"
     >
-      <Text style={styles.dealAnnounceLabel}>DONNE</Text>
+      <Text style={styles.dealAnnounceLabel}>{t('dealLabel')}</Text>
       <Text style={styles.dealAnnounceNum}>{dealNumber}</Text>
       <Text style={styles.dealAnnounceStarter}>{starterText}</Text>
     </Animated.View>
@@ -120,7 +120,7 @@ export function DealEndScreen({
   scores,
   deltas,
   onContinue,
-  labels = ['Toi', 'Bot'],
+  labels,
 }: {
   dealNumber: number
   scores: [number, number]
@@ -129,6 +129,8 @@ export function DealEndScreen({
   /** Libellés des deux camps (défaut 1v1 : Toi / Bot ; 2v2 : Équipe A / Équipe B). */
   labels?: [string, string]
 }) {
+  const { t } = useI18n()
+  const resolvedLabels = labels ?? [t('you'), t('bot')]
   const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`)
   const deltaColor = (n: number) => (n > 0 ? C.table : n < 0 ? C.clay : C.boneOff)
 
@@ -136,7 +138,7 @@ export function DealEndScreen({
     <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
       <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 0, paddingHorizontal: 28 }]}>
 
-        <Text style={styles.dealEndLabel}>Donne {dealNumber}</Text>
+        <Text style={styles.dealEndLabel}>{t('dealLabel')} {dealNumber}</Text>
 
         <Text style={styles.dealEndAr}>{TERMS.mab9ach.ar}</Text>
         <Text style={styles.dealEndLa}>{TERMS.mab9ach.la}</Text>
@@ -144,7 +146,7 @@ export function DealEndScreen({
         <View style={styles.dealEndRow}>
           {([0, 1] as const).map((i) => (
             <View key={i} style={styles.dealEndCell}>
-              <Text style={styles.dealEndPlayerName}>{labels[i]}</Text>
+              <Text style={styles.dealEndPlayerName}>{resolvedLabels[i]}</Text>
               <Text style={[styles.dealEndDelta, { color: deltaColor(deltas[i]) }]}>
                 {fmt(deltas[i])}
               </Text>
@@ -154,7 +156,7 @@ export function DealEndScreen({
         </View>
 
         <TouchableOpacity style={[styles.btnPrimary, { marginTop: 36 }]} onPress={onContinue}>
-          <Text style={styles.btnPrimaryTxt}>Continuer</Text>
+          <Text style={styles.btnPrimaryTxt}>{t('continueBtn')}</Text>
         </TouchableOpacity>
 
       </View>
@@ -206,7 +208,7 @@ export function GameOverScreen({
     <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
       <View style={[styles.column, { alignItems: 'center', justifyContent: 'center', gap: 24 }]}>
         <ReAnimated.Text style={[styles.gameOverTitle, titleStyle]}>
-          {won ? 'Bravo !' : 'Perdu.'}
+          {won ? t('won') : t('lost')}
         </ReAnimated.Text>
         <ReAnimated.View style={[{ alignItems: 'center', gap: 24 }, bodyStyle]}>
           <Text style={styles.gameOverScore}>{scoreText}</Text>
@@ -223,10 +225,11 @@ export function GameOverScreen({
 }
 
 function GameOver({ scores, onReplay, goldReward = 0 }: { scores: [number, number]; onReplay: () => void; goldReward?: number }) {
+  const { t } = useI18n()
   return (
     <GameOverScreen
       won={scores[HUMAN_ID] >= 41}
-      scoreText={`Toi ${scores[HUMAN_ID]} — Bot ${scores[BOT_ID]}`}
+      scoreText={`${t('you')} ${scores[HUMAN_ID]} — ${t('bot')} ${scores[BOT_ID]}`}
       onReplay={onReplay}
       goldReward={goldReward}
     />
@@ -791,7 +794,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
         <View style={styles.scorebarInner}>
           <View>
             <View style={styles.sbNameRow}>
-              <Text style={styles.sbName}>Toi</Text>
+              <Text style={styles.sbName}>{t('you')}</Text>
               {state.dealer === HUMAN_ID && <DealerToken />}
             </View>
             <Text style={styles.sbScore}>{human.score}</Text>
@@ -803,7 +806,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
           <View style={{ alignItems: 'flex-end' }}>
             <View style={styles.sbNameRow}>
               {state.dealer === BOT_ID && <DealerToken />}
-              <Text style={styles.sbName}>{opponentName ?? 'Bot'}</Text>
+              <Text style={styles.sbName}>{opponentName ?? t('bot')}</Text>
             </View>
             <Text style={styles.sbScore}>{bot.score}</Text>
           </View>
@@ -812,7 +815,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
         <TouchableOpacity
           style={styles.muteBtn}
           onPress={toggleMute}
-          accessibilityLabel={muted ? 'Activer le son' : 'Couper le son'}
+          accessibilityLabel={muted ? t('unmute') : t('mute')}
         >
           <Text style={styles.muteIcon}>{muted ? '🔇' : '🔊'}</Text>
         </TouchableOpacity>
@@ -870,7 +873,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       {/* ── 3. Zone de table ───────────────────────────────── */}
       <View style={styles.tableZone}>
         {state.table.length === 0 && !flying ? (
-          <Text style={styles.tableEmpty}>Table vide</Text>
+          <Text style={styles.tableEmpty}>{t('tableEmpty')}</Text>
         ) : (
           <View style={styles.tableCards}>
             {sortedTable.map((card) => {
@@ -978,7 +981,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       {dealAnnouncing !== null && (
         <DealAnnounce
           dealNumber={dealAnnouncing}
-          starterText={starterIsHuman ? 'Vous commencez' : `${opponentName ?? 'Le bot'} commence`}
+          starterText={starterIsHuman ? t('youStart') : t('opponentStarts').replace('{name}', opponentName ?? t('bot'))}
         />
       )}
 

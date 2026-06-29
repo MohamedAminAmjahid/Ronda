@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import type { PlayerId } from '../engine/types'
 import { HUMAN_ID, BOT_ID } from '../game'
+import { useI18n } from '../i18n/useI18n'
+import type { TranslationKey } from '../i18n/translations'
 
 const C = {
   table:    '#0E5C4A',
@@ -22,10 +24,10 @@ type Result = 'player' | 'bot' | 'tie'
 
 const CHOICES: Choice[] = ['pierre', 'feuille', 'ciseaux']
 
-const LABELS: Record<Choice, { symbol: string; label: string; beats: Choice }> = {
-  pierre:  { symbol: '✊', label: 'Pierre',  beats: 'ciseaux' },
-  feuille: { symbol: '✋', label: 'Feuille', beats: 'pierre'  },
-  ciseaux: { symbol: '✌', label: 'Ciseaux', beats: 'feuille' },
+const LABELS: Record<Choice, { symbol: string; key: TranslationKey; beats: Choice }> = {
+  pierre:  { symbol: '✊', key: 'rock',     beats: 'ciseaux' },
+  feuille: { symbol: '✋', key: 'paper',    beats: 'pierre'  },
+  ciseaux: { symbol: '✌', key: 'scissors', beats: 'feuille' },
 }
 
 function resolve(player: Choice, bot: Choice): Result {
@@ -45,6 +47,7 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function RpsScreen({ onStart, onBack }: Props) {
+  const { t } = useI18n()
   const [phase,       setPhase]       = useState<Phase>('choosing')
   const [playerChoice, setPlayerChoice] = useState<Choice | null>(null)
   const [botChoice,    setBotChoice]    = useState<Choice | null>(null)
@@ -80,21 +83,21 @@ export function RpsScreen({ onStart, onBack }: Props) {
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Rituels</Text>
+            <Text style={s.backTxt}>{t('backRituals')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Pierre-Feuille-Ciseaux</Text>
-          <Text style={s.subtitle}>Le gagnant est donneur</Text>
+          <Text style={s.title}>{t('rps')}</Text>
+          <Text style={s.subtitle}>{t('dealerNote')}</Text>
         </View>
 
         {/* ── Phase choix ───────────────────────────────────── */}
         {phase === 'choosing' && (
           <View style={s.choicesArea}>
-            <Text style={s.prompt}>Choisissez votre arme</Text>
+            <Text style={s.prompt}>{t('chooseWeapon')}</Text>
             <View style={s.choicesRow}>
               {CHOICES.map(c => (
                 <TouchableOpacity key={c} style={s.choiceBtn} onPress={() => handlePick(c)}>
                   <Text style={s.choiceSymbol}>{LABELS[c].symbol}</Text>
-                  <Text style={s.choiceLabel}>{LABELS[c].label}</Text>
+                  <Text style={s.choiceLabel}>{t(LABELS[c].key)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -107,20 +110,20 @@ export function RpsScreen({ onStart, onBack }: Props) {
             {/* Confrontation */}
             <View style={s.faceoff}>
               <View style={s.faceSlot}>
-                <Text style={s.faceLabel}>Vous</Text>
+                <Text style={s.faceLabel}>{t('you')}</Text>
                 <View style={[s.faceCard, result === 'player' && s.faceCardWin]}>
                   <Text style={s.faceSymbol}>{LABELS[playerChoice].symbol}</Text>
-                  <Text style={s.faceChoice}>{LABELS[playerChoice].label}</Text>
+                  <Text style={s.faceChoice}>{t(LABELS[playerChoice].key)}</Text>
                 </View>
               </View>
 
               <Text style={s.faceSep}>VS</Text>
 
               <View style={s.faceSlot}>
-                <Text style={s.faceLabel}>Bot</Text>
+                <Text style={s.faceLabel}>{t('bot')}</Text>
                 <View style={[s.faceCard, result === 'bot' && s.faceCardWin]}>
                   <Text style={s.faceSymbol}>{LABELS[botChoice].symbol}</Text>
-                  <Text style={s.faceChoice}>{LABELS[botChoice].label}</Text>
+                  <Text style={s.faceChoice}>{t(LABELS[botChoice].key)}</Text>
                 </View>
               </View>
             </View>
@@ -128,26 +131,24 @@ export function RpsScreen({ onStart, onBack }: Props) {
             {/* Verdict */}
             {result === 'tie' ? (
               <View style={s.outcomeBox}>
-                <Text style={s.outcomeTitle}>Égalité !</Text>
-                <Text style={s.outcomeSub}>On rejoue…</Text>
+                <Text style={s.outcomeTitle}>{t('drawRps')}</Text>
+                <Text style={s.outcomeSub}>{t('drawAgainRps')}</Text>
               </View>
             ) : (
               <View style={s.outcomeGroup}>
                 <View style={s.outcomeBox}>
                   <Text style={s.outcomeTitle}>
-                    {humanWon ? 'Vous avez gagné !' : 'Le bot a gagné.'}
+                    {humanWon ? t('youWon') : t('botWon')}
                   </Text>
                   <Text style={s.outcomeSub}>
-                    {humanWon
-                      ? 'Vous êtes donneur — le bot pose la première carte.'
-                      : 'Le bot est donneur — vous posez la première carte.'}
+                    {humanWon ? t('youAreDealer') : t('botIsDealer')}
                   </Text>
                 </View>
                 <TouchableOpacity
                   style={s.btnPrimary}
                   onPress={() => onStart(humanWon ? HUMAN_ID : BOT_ID)}
                 >
-                  <Text style={s.btnPrimaryTxt}>Commencer la partie</Text>
+                  <Text style={s.btnPrimaryTxt}>{t('startGame')}</Text>
                 </TouchableOpacity>
               </View>
             )}

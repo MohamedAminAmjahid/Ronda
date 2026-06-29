@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { Svg, Circle, Polygon } from 'react-native-svg'
 import type { PlayerId } from '../engine/types'
 import { HUMAN_ID, BOT_ID } from '../game'
+import { useI18n } from '../i18n/useI18n'
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,7 @@ interface Props {
 }
 
 export function CoinFlipScreen({ onStart, onBack }: Props) {
+  const { t } = useI18n()
   const [phase,  setPhase]  = useState<FlipPhase>('choosing')
   const [choice, setChoice] = useState<CoinSide | null>(null)
   const [result, setResult] = useState<CoinSide | null>(null)
@@ -124,10 +126,10 @@ export function CoinFlipScreen({ onStart, onBack }: Props) {
         {/* ── En-tête ──────────────────────────────────────────── */}
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Pile ou Face ?</Text>
-          <Text style={s.subtitle}>Le gagnant est donneur</Text>
+          <Text style={s.title}>{t('coinFlipTitle')}</Text>
+          <Text style={s.subtitle}>{t('dealerNote')}</Text>
         </View>
 
         {/* ── Pièce ────────────────────────────────────────────── */}
@@ -148,26 +150,26 @@ export function CoinFlipScreen({ onStart, onBack }: Props) {
         {/* ── Choix ────────────────────────────────────────────── */}
         {phase === 'choosing' && (
           <View style={s.choices}>
-            <Text style={s.choicePrompt}>Choisissez votre côté</Text>
+            <Text style={s.choicePrompt}>{t('chooseYourSide')}</Text>
             <View style={s.btnsRow}>
               <TouchableOpacity
                 style={s.choiceBtn}
                 onPress={() => handleChoice('pile')}
               >
-                <Text style={s.choiceBtnTxt}>Pile</Text>
+                <Text style={s.choiceBtnTxt}>{t('heads')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={s.choiceBtn}
                 onPress={() => handleChoice('face')}
               >
-                <Text style={s.choiceBtnTxt}>Face</Text>
+                <Text style={s.choiceBtnTxt}>{t('tails')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
         {phase === 'flipping' && (
-          <Text style={s.flippingTxt}>Tirage en cours…</Text>
+          <Text style={s.flippingTxt}>{t('flipping')}</Text>
         )}
 
         {/* ── Résultat ─────────────────────────────────────────── */}
@@ -175,17 +177,15 @@ export function CoinFlipScreen({ onStart, onBack }: Props) {
           <View style={s.outcome}>
             <View style={s.outcomeBox}>
               <Text style={s.outcomeTitle}>
-                {humanWon ? 'Vous avez gagné !' : 'Le bot a gagné.'}
+                {humanWon ? t('youWon') : t('botWon')}
               </Text>
               <Text style={s.outcomeSub}>
-                {humanWon
-                  ? 'Vous êtes donneur — le bot pose la première carte.'
-                  : 'Le bot est donneur — c\'est vous qui posez la première carte.'}
+                {humanWon ? t('youAreDealer') : t('botIsDealer')}
               </Text>
             </View>
 
             <TouchableOpacity style={s.startBtn} onPress={handleStart}>
-              <Text style={s.startBtnTxt}>Commencer la partie</Text>
+              <Text style={s.startBtnTxt}>{t('startGame')}</Text>
             </TouchableOpacity>
           </View>
         )}

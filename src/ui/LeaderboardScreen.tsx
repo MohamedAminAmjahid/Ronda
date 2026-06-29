@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfile } from '../profile/useProfile'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -48,6 +49,7 @@ interface Props {
 
 export function LeaderboardScreen({ onBack }: Props) {
   const { username } = useProfile()
+  const { t } = useI18n()
 
   const [userLeague, setUserLeague] = useState<string>('Bronze')
   const [selected, setSelected] = useState<string>('Bronze')
@@ -92,7 +94,7 @@ export function LeaderboardScreen({ onBack }: Props) {
         const data = await fetchWeeklyLeaderboard(selected)
         if (!cancelled) setEntries(data)
       } catch {
-        if (!cancelled) setError('Classement indisponible.')
+        if (!cancelled) setError(t('leaderboardError'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -104,11 +106,11 @@ export function LeaderboardScreen({ onBack }: Props) {
   const myRank = myEntries.findIndex((e) => e.username === username)
   const myTotal = myEntries.length
   const progression = (() => {
-    if (myRank < 0) return 'Aucune partie cette semaine — joue une partie misée pour entrer au classement.'
+    if (myRank < 0) return t('noGamesThisWeek')
     const rank = myRank + 1
-    if (rank <= TOP_N && userLeague !== 'Légende') return `${rank}ᵉ sur ${myTotal} — top 3 → promotion !`
-    if (rank > myTotal - TOP_N && userLeague !== 'Bronze') return `${rank}ᵉ sur ${myTotal} — bottom 3 → relégation`
-    return `${rank}ᵉ sur ${myTotal}`
+    if (rank <= TOP_N && userLeague !== 'Légende') return t('rankPromotion').replace('{rank}', String(rank)).replace('{total}', String(myTotal))
+    if (rank > myTotal - TOP_N && userLeague !== 'Bronze') return t('rankRelegation').replace('{rank}', String(rank)).replace('{total}', String(myTotal))
+    return t('rankSimple').replace('{rank}', String(rank)).replace('{total}', String(myTotal))
   })()
 
   return (
@@ -116,10 +118,10 @@ export function LeaderboardScreen({ onBack }: Props) {
       <View style={s.column}>
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <View style={s.headerRow}>
-            <Text style={s.title}>Classement</Text>
+            <Text style={s.title}>{t('leaderboard')}</Text>
             <Text style={s.countdown}>⏳ {formatCountdown(countdown)}</Text>
           </View>
         </View>
@@ -150,7 +152,7 @@ export function LeaderboardScreen({ onBack }: Props) {
           ) : error ? (
             <Text style={s.empty}>{error}</Text>
           ) : entries.length === 0 ? (
-            <Text style={s.empty}>Aucun joueur dans cette ligue cette semaine.</Text>
+            <Text style={s.empty}>{t('noLeaderboardPlayers')}</Text>
           ) : (
             entries.map((e, i) => {
               const me = e.username === username
@@ -158,7 +160,7 @@ export function LeaderboardScreen({ onBack }: Props) {
                 <View key={e.username} style={[s.row, me && s.rowMe]}>
                   <Text style={s.rank}>{i < 3 ? MEDALS[i] : `${i + 1}`}</Text>
                   <Text style={[s.name, me && s.nameMe]} numberOfLines={1}>
-                    {e.username}{me ? ' (toi)' : ''}
+                    {e.username}{me ? ' ' + t('youParens') : ''}
                   </Text>
                   <Text style={s.wagered}>🪙 {e.gold_wagered}</Text>
                 </View>
@@ -170,7 +172,7 @@ export function LeaderboardScreen({ onBack }: Props) {
         {/* Encart « Ta ligue » */}
         <View style={s.myCard}>
           <View style={s.myCardHead}>
-            <Text style={s.myCardLabel}>Ta ligue</Text>
+            <Text style={s.myCardLabel}>{t('yourLeague')}</Text>
             <View style={s.leagueBadge}>
               <Text style={s.leagueBadgeTxt}>{userLeague}</Text>
             </View>

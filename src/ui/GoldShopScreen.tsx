@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfile } from '../profile/useProfile'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useI18n } from '../i18n/useI18n'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
 
@@ -59,6 +60,7 @@ interface Props {
 }
 
 export function GoldShopScreen({ onBack }: Props) {
+  const { t } = useI18n()
   const { gold, addGold } = useProfile()
 
   const [shareCount, setShareCount] = useState(0)
@@ -106,7 +108,7 @@ export function GoldShopScreen({ onBack }: Props) {
   const onShareGame = async () => {
     if (shareCount >= SHARE_DAILY_LIMIT) return
     try {
-      const result = await Share.share({ message: `Joue à la Ronda ! 🎴 ${GAME_URL}` })
+      const result = await Share.share({ message: `🎴 ${GAME_URL}` })
       if (result.action === Share.sharedAction) {
         const next = shareCount + 1
         setShareCount(next)
@@ -150,10 +152,10 @@ export function GoldShopScreen({ onBack }: Props) {
       <View style={s.column}>
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <View style={s.headerRow}>
-            <Text style={s.title}>Boutique</Text>
+            <Text style={s.title}>{t('shop')}</Text>
             <View style={s.goldPill}>
               <Text style={s.goldCoin}>🪙</Text>
               <Text style={s.goldAmount}>{gold}</Text>
@@ -165,20 +167,20 @@ export function GoldShopScreen({ onBack }: Props) {
 
           {/* 0. Soutenir le développeur */}
           <View style={s.card}>
-            <Text style={s.cardTitle}>☕ Soutenir le développeur</Text>
-            <Text style={s.cardDesc}>Aide à maintenir le jeu en ligne.</Text>
+            <Text style={s.cardTitle}>{t('supportDev')}</Text>
+            <Text style={s.cardDesc}>{t('supportDevDesc')}</Text>
             <View style={s.supportRow}>
               <TouchableOpacity
                 style={[s.btnSecondary, s.supportBtn]}
                 onPress={() => Linking.openURL(BMC_URL)}
               >
-                <Text style={s.btnSecondaryTxt}>☕ Un café — 2€</Text>
+                <Text style={s.btnSecondaryTxt}>{t('supportCoffee')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.btnSecondary, s.supportBtn]}
                 onPress={() => Linking.openURL(`${BMC_URL}?amount=500`)}
               >
-                <Text style={s.btnSecondaryTxt}>🍕 Un repas — 5€</Text>
+                <Text style={s.btnSecondaryTxt}>{t('supportMeal')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -186,53 +188,57 @@ export function GoldShopScreen({ onBack }: Props) {
           {/* 1. Partager le jeu */}
           <View style={s.card}>
             <View style={s.cardHead}>
-              <Text style={s.cardTitle}>Partager le jeu</Text>
+              <Text style={s.cardTitle}>{t('shareGame')}</Text>
               <Text style={s.reward}>🪙 +{SHARE_REWARD}</Text>
             </View>
-            <Text style={s.cardDesc}>Partage Ronda et gagne de l'or (max {SHARE_DAILY_LIMIT}× par jour).</Text>
+            <Text style={s.cardDesc}>{t('shareGameDesc').replace('{n}', String(SHARE_DAILY_LIMIT))}</Text>
             <TouchableOpacity
               style={[s.btnPrimary, quotaReached && s.btnDisabled]}
               onPress={onShareGame}
               disabled={quotaReached}
             >
               <Text style={[s.btnPrimaryTxt, quotaReached && s.btnDisabledTxt]}>
-                {quotaReached ? 'Revient demain' : 'Partager le jeu'}
+                {quotaReached ? t('comeBackTomorrow') : t('shareGame')}
               </Text>
             </TouchableOpacity>
-            <Text style={s.counter}>{shareCount}/{SHARE_DAILY_LIMIT} aujourd'hui</Text>
+            <Text style={s.counter}>{t('todayCount').replace('{count}', String(shareCount)).replace('{limit}', String(SHARE_DAILY_LIMIT))}</Text>
           </View>
 
           {/* 2. Facebook */}
           <FollowCard
-            label="Suivre sur Facebook"
+            label={t('followFb')}
             reward={FOLLOW_REWARD}
             claimed={fbClaimed}
             onPress={() => openFollow('fb')}
+            claimedTxt={t('claimed')}
+            onceTxt={t('followOnce')}
           />
 
           {/* 3. Instagram */}
           <FollowCard
-            label="Suivre sur Instagram"
+            label={t('followIg')}
             reward={FOLLOW_REWARD}
             claimed={igClaimed}
             onPress={() => openFollow('ig')}
+            claimedTxt={t('claimed')}
+            onceTxt={t('followOnce')}
           />
 
           {/* Regarder une vidéo (AdMob plus tard — affichage uniquement) */}
           <View style={s.card}>
             <View style={s.cardHead}>
-              <Text style={s.cardTitle}>🎬 Regarder une vidéo</Text>
+              <Text style={s.cardTitle}>{t('watchVideo')}</Text>
               <Text style={s.reward}>🪙 +50</Text>
             </View>
-            <Text style={s.cardDesc}>+50 gold par vidéo</Text>
+            <Text style={s.cardDesc}>{t('watchVideoDesc')}</Text>
             <View style={[s.btnPrimary, s.btnDisabled]}>
-              <Text style={[s.btnPrimaryTxt, s.btnDisabledTxt]}>🔒 Bientôt</Text>
+              <Text style={[s.btnPrimaryTxt, s.btnDisabledTxt]}>{t('comingSoon')}</Text>
             </View>
-            <Text style={s.counter}>Disponible sur mobile bientôt</Text>
+            <Text style={s.counter}>{t('mobileComingSoon')}</Text>
           </View>
 
           {/* 4. Packs payants (affichage uniquement) */}
-          <Text style={s.sectionLabel}>Packs d'or</Text>
+          <Text style={s.sectionLabel}>{t('goldPacks')}</Text>
           <View style={s.packGrid}>
             {PACKS.map((p) => (
               <View key={p.gold} style={s.pack}>
@@ -240,7 +246,7 @@ export function GoldShopScreen({ onBack }: Props) {
                 <Text style={s.packGold}>{p.gold}</Text>
                 <Text style={s.packPrice}>{p.price}</Text>
                 <View style={s.packBtn}>
-                  <Text style={s.packBtnTxt}>🔒 Bientôt</Text>
+                  <Text style={s.packBtnTxt}>{t('comingSoon')}</Text>
                 </View>
               </View>
             ))}
@@ -248,7 +254,7 @@ export function GoldShopScreen({ onBack }: Props) {
 
           {/* Montant personnalisé */}
           <View style={s.customCard}>
-            <Text style={s.customTitle}>Montant personnalisé</Text>
+            <Text style={s.customTitle}>{t('customAmount')}</Text>
             <View style={s.customInputRow}>
               <Text style={s.customCoin}>🪙</Text>
               <TextInput
@@ -262,7 +268,7 @@ export function GoldShopScreen({ onBack }: Props) {
               />
             </View>
             {customGold.length > 0 && !customValid ? (
-              <Text style={s.customErr}>Minimum {MIN_CUSTOM_GOLD} gold</Text>
+              <Text style={s.customErr}>{t('minGold').replace('{n}', String(MIN_CUSTOM_GOLD))}</Text>
             ) : (
               <Text style={s.customPrice}>
                 {customValid
@@ -271,7 +277,7 @@ export function GoldShopScreen({ onBack }: Props) {
               </Text>
             )}
             <View style={[s.packBtn, s.customBtn, !customValid && s.customBtnDisabled]}>
-              <Text style={s.packBtnTxt}>🔒 Bientôt</Text>
+              <Text style={s.packBtnTxt}>{t('comingSoon')}</Text>
             </View>
           </View>
 
@@ -282,14 +288,14 @@ export function GoldShopScreen({ onBack }: Props) {
       <Modal visible={askClaim !== null} transparent animationType="fade" onRequestClose={() => setAskClaim(null)}>
         <View style={s.modalBackdrop}>
           <View style={s.modalCard}>
-            <Text style={s.modalTitle}>As-tu suivi la page ?</Text>
-            <Text style={s.modalText}>Confirme pour recevoir 🪙 +{FOLLOW_REWARD}.</Text>
+            <Text style={s.modalTitle}>{t('followConfirmTitle')}</Text>
+            <Text style={s.modalText}>{t('followConfirmMsg').replace('{n}', String(FOLLOW_REWARD))}</Text>
             <View style={s.modalActions}>
               <TouchableOpacity style={s.modalCancel} onPress={() => setAskClaim(null)}>
-                <Text style={s.modalCancelTxt}>Non</Text>
+                <Text style={s.modalCancelTxt}>{t('no')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.modalSave} onPress={confirmFollow}>
-                <Text style={s.modalSaveTxt}>Oui</Text>
+                <Text style={s.modalSaveTxt}>{t('yes')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -302,18 +308,18 @@ export function GoldShopScreen({ onBack }: Props) {
 // ── Carte « suivre un réseau » ──────────────────────────────────────────────────
 
 function FollowCard({
-  label, reward, claimed, onPress,
-}: { label: string; reward: number; claimed: boolean; onPress: () => void }) {
+  label, reward, claimed, onPress, claimedTxt, onceTxt,
+}: { label: string; reward: number; claimed: boolean; onPress: () => void; claimedTxt: string; onceTxt: string }) {
   return (
     <View style={s.card}>
       <View style={s.cardHead}>
         <Text style={s.cardTitle}>{label}</Text>
         <Text style={s.reward}>🪙 +{reward}</Text>
       </View>
-      <Text style={s.cardDesc}>Une seule fois — récompense à vie.</Text>
+      <Text style={s.cardDesc}>{onceTxt}</Text>
       {claimed ? (
         <View style={[s.btnPrimary, s.btnClaimed]}>
-          <Text style={s.btnClaimedTxt}>✓ Réclamé</Text>
+          <Text style={s.btnClaimedTxt}>{claimedTxt}</Text>
         </View>
       ) : (
         <TouchableOpacity style={s.btnSecondary} onPress={onPress}>

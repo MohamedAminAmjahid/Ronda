@@ -44,10 +44,10 @@ export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Jouer</Text>
-          <Text style={s.subtitle}>Contre l'ordinateur</Text>
+          <Text style={s.title}>{t('play')}</Text>
+          <Text style={s.subtitle}>{t('vsComputer')}</Text>
         </View>
 
         <View style={s.body}>
@@ -69,13 +69,13 @@ export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {
             })}
           </View>
           <TouchableOpacity style={s.btnPrimary} onPress={onPlay1v1} activeOpacity={0.85}>
-            <Text style={s.btnPrimaryTxt}>1 contre 1</Text>
-            <Text style={s.btnPrimarySub}>Toi contre l'IA</Text>
+            <Text style={s.btnPrimaryTxt}>{t('oneVsOne')}</Text>
+            <Text style={s.btnPrimarySub}>{t('youVsAI')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.btnSecondary} onPress={onPlay2v2} activeOpacity={0.85}>
-            <Text style={s.btnSecondaryTxt}>2 contre 2</Text>
-            <Text style={s.btnSecondarySub}>Toi + IA alliée contre 2 IA</Text>
+            <Text style={s.btnSecondaryTxt}>{t('twoVsTwo')}</Text>
+            <Text style={s.btnSecondarySub}>{t('twoVsTwoDesc')}</Text>
           </TouchableOpacity>
         </View>
 

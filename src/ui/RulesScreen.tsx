@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TERMS } from './terms'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -18,109 +19,160 @@ interface Props {
 }
 
 export function RulesScreen({ onBack }: Props) {
+  const { t, lang } = useI18n()
+  const isFr = lang === 'fr'
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Règles</Text>
-          <Text style={s.subtitle}>Ronda marocaine</Text>
+          <Text style={s.title}>{t('rules')}</Text>
+          <Text style={s.subtitle}>{t('rulesSubtitle')}</Text>
         </View>
 
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
 
-          <Section title="Le jeu">
-            <P>
-              La Ronda se joue avec un jeu espagnol de <B>40 cartes</B>, réparties en
-              <B> 4 couleurs</B> : oros, copas, espadas, bastos.
-            </P>
-            <P>
-              Les valeurs vont de <B>1 à 7</B>, puis <B>10</B> (Sota), <B>11</B> (Caballo)
-              et <B>12</B> (Rey). Il n'y a ni 8 ni 9.
-            </P>
-            <P>
-              Au début d'une donne, chaque joueur reçoit 3 cartes et 4 cartes sont posées
-              sur la table.
-            </P>
+          <Section title={t('rulesSec1')}>
+            {isFr ? (
+              <>
+                <P>
+                  La Ronda se joue avec un jeu espagnol de <B>40 cartes</B>, réparties en
+                  <B> 4 couleurs</B> : oros, copas, espadas, bastos.
+                </P>
+                <P>
+                  Les valeurs vont de <B>1 à 7</B>, puis <B>10</B> (Sota), <B>11</B> (Caballo)
+                  et <B>12</B> (Rey). Il n'y a ni 8 ni 9.
+                </P>
+                <P>
+                  Au début d'une donne, chaque joueur reçoit 3 cartes et 4 cartes sont posées
+                  sur la table.
+                </P>
+              </>
+            ) : (
+              <>
+                <P>{t('rulesGame1')}</P>
+                <P>{t('rulesGame2')}</P>
+                <P>{t('rulesGame3')}</P>
+              </>
+            )}
           </Section>
 
-          <Section title="Déroulement d'un tour">
-            <P>
-              À ton tour, tu poses une carte. Si elle a la <B>même valeur</B> qu'une carte
-              de la table, tu la <B>captures</B> (les deux vont dans ta pile).
-            </P>
-            <P>
-              Sinon, ta carte reste sur la table. Les joueurs jouent en alternance ; quand
-              les mains sont vides, on redistribue 3 cartes tant qu'il reste de la pioche.
-            </P>
+          <Section title={t('rulesSec2')}>
+            {isFr ? (
+              <>
+                <P>
+                  À ton tour, tu poses une carte. Si elle a la <B>même valeur</B> qu'une carte
+                  de la table, tu la <B>captures</B> (les deux vont dans ta pile).
+                </P>
+                <P>
+                  Sinon, ta carte reste sur la table. Les joueurs jouent en alternance ; quand
+                  les mains sont vides, on redistribue 3 cartes tant qu'il reste de la pioche.
+                </P>
+              </>
+            ) : (
+              <>
+                <P>{t('rulesTurn1')}</P>
+                <P>{t('rulesTurn2')}</P>
+              </>
+            )}
           </Section>
 
-          <Section title="L'escalier">
-            <P>
-              Après avoir capturé une carte, si la valeur <B>consécutive suivante</B> est
-              aussi sur la table, tu la prends — et tu continues tant que la suite s'enchaîne.
-            </P>
-            <P>
-              L'ordre est <B>1·2·3·4·5·6·7·10·11·12</B> : le <B>7 et le 10 sont consécutifs</B>
-              (il n'y a pas de 8 ni 9). Exemple : poser un 6 peut rafler 6·7·10·11·12 d'un coup.
-            </P>
+          <Section title={t('rulesSec3')}>
+            {isFr ? (
+              <>
+                <P>
+                  Après avoir capturé une carte, si la valeur <B>consécutive suivante</B> est
+                  aussi sur la table, tu la prends — et tu continues tant que la suite s'enchaîne.
+                </P>
+                <P>
+                  L'ordre est <B>1·2·3·4·5·6·7·10·11·12</B> : le <B>7 et le 10 sont consécutifs</B>
+                  (il n'y a pas de 8 ni 9). Exemple : poser un 6 peut rafler 6·7·10·11·12 d'un coup.
+                </P>
+              </>
+            ) : (
+              <>
+                <P>{t('rulesStair1')}</P>
+                <P>{t('rulesStair2')}</P>
+              </>
+            )}
           </Section>
 
-          <Section title="Caída — la chaîne">
-            <Rule term={TERMS.araWahd}  pts="+1"  desc="Capturer la carte que l'adversaire vient EXACTEMENT de poser (même valeur ET couleur)." />
-            <Rule term={TERMS.araKhamssa} pts="+5" desc="2e caída d'affilée sur la même valeur : l'adversaire repose cette valeur et tu la reprends." />
-            <Rule term={TERMS.ara3achra} pts="+10" desc="3e caída sur la même valeur. Maximum de la chaîne (il n'y a que 4 cartes par valeur)." />
-            <P>La chaîne se brise dès qu'un coup ne capture pas, ou capture une autre valeur.</P>
+          <Section title={t('rulesSec4')}>
+            <Rule term={TERMS.araWahd}    pts="+1"  desc={t('rulesCaida1')} />
+            <Rule term={TERMS.araKhamssa} pts="+5"  desc={t('rulesCaida2')} />
+            <Rule term={TERMS.ara3achra}  pts="+10" desc={t('rulesCaida3')} />
+            <P>{t('rulesCaida4')}</P>
           </Section>
 
-          <Section title="Missa — le balayage">
-            <Rule term={TERMS.missa} pts="+1" desc="Vider entièrement la table en une capture rapporte un point bonus." />
+          <Section title={t('rulesSec5')}>
+            <Rule term={TERMS.missa} pts="+1" desc={t('rulesMissaDesc')} />
           </Section>
 
-          <Section title="Combinaisons en main">
-            <Rule term={TERMS.ronda}  pts="+1" desc="Deux cartes de même valeur dans ta main." />
-            <Rule term={TERMS.tringa} pts="+5" desc="Trois cartes de même valeur dans ta main." />
-            <P>
-              Tu peux <B>déclarer</B> ta combinaison pour marquer les points. Tu peux aussi
-              la <B>dissimuler</B> pour piéger l'adversaire — mais si tu joues une de ses cartes
-              sans avoir déclaré, tu perds le droit de la déclarer.
-            </P>
+          <Section title={t('rulesSec6')}>
+            <Rule term={TERMS.ronda}  pts="+1" desc={t('rulesRondaDesc')} />
+            <Rule term={TERMS.tringa} pts="+5" desc={t('rulesTringaDesc')} />
+            {isFr ? (
+              <P>
+                Tu peux <B>déclarer</B> ta combinaison pour marquer les points. Tu peux aussi
+                la <B>dissimuler</B> pour piéger l'adversaire — mais si tu joues une de ses cartes
+                sans avoir déclaré, tu perds le droit de la déclarer.
+              </P>
+            ) : (
+              <P>{t('rulesCombos1')}</P>
+            )}
           </Section>
 
-          <Section title="Contre-ronda">
-            <P>
-              Si tu soupçonnes l'adversaire d'avoir dissimulé une ronda, tu peux la
-              <B> contester</B>. Si l'accusation est juste, tu marques à sa place ; sinon
-              tu es pénalisé.
-            </P>
+          <Section title={t('rulesSec7')}>
+            {isFr ? (
+              <P>
+                Si tu soupçonnes l'adversaire d'avoir dissimulé une ronda, tu peux la
+                <B> contester</B>. Si l'accusation est juste, tu marques à sa place ; sinon
+                tu es pénalisé.
+              </P>
+            ) : (
+              <P>{t('rulesContre1')}</P>
+            )}
           </Section>
 
-          <Section title="Mab9ach — la dernière manche">
+          <Section title={t('rulesSec8')}>
             <View style={s.ruleHead}>
               <Text style={s.ruleAr}>{TERMS.mab9ach.ar}</Text>
               <Text style={s.ruleLa}>{TERMS.mab9ach.la}</Text>
             </View>
-            <P>
-              Quand la pioche est épuisée, on joue la <B>dernière redistribution</B>. Le
-              <B> donneur</B> reçoit un bonus selon sa dernière prise de la partie :
-            </P>
-            <Bonus sign="+5" color={C.brass} label="dernière prise avec un Rey (12)" />
-            <Bonus sign="−5" color={C.clay}  label="dernière prise avec un As (1), ou aucune prise" />
-            <P>Les cartes restées sur la table reviennent au dernier joueur ayant capturé.</P>
+            {isFr ? (
+              <P>
+                Quand la pioche est épuisée, on joue la <B>dernière redistribution</B>. Le
+                <B> donneur</B> reçoit un bonus selon sa dernière prise de la partie :
+              </P>
+            ) : (
+              <P>{t('rulesMab1')}</P>
+            )}
+            <Bonus sign="+5" color={C.brass} label={t('rulesMabBonus1')} />
+            <Bonus sign="−5" color={C.clay}  label={t('rulesMabBonus2')} />
+            <P>{t('rulesMab2')}</P>
           </Section>
 
-          <Section title="Décompte & victoire">
-            <P>
-              En fin de donne, on compte les cartes capturées : <B>+1 point par carte
-              au-dessus de 20</B>. À 20–20, personne ne marque sur ce décompte.
-            </P>
-            <P>
-              Les scores s'accumulent de donne en donne. Le <B>premier à 41 points</B>
-              remporte la partie.
-            </P>
+          <Section title={t('rulesSec9')}>
+            {isFr ? (
+              <>
+                <P>
+                  En fin de donne, on compte les cartes capturées : <B>+1 point par carte
+                  au-dessus de 20</B>. À 20–20, personne ne marque sur ce décompte.
+                </P>
+                <P>
+                  Les scores s'accumulent de donne en donne. Le <B>premier à 41 points</B>
+                  remporte la partie.
+                </P>
+              </>
+            ) : (
+              <>
+                <P>{t('rulesScore1')}</P>
+                <P>{t('rulesScore2')}</P>
+              </>
+            )}
           </Section>
 
           <View style={{ height: 8 }} />

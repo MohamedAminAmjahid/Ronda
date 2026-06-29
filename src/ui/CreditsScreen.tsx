@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Linking } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useI18n } from '../i18n/useI18n'
 
 const C = {
   table:   '#0E5C4A',
@@ -16,31 +17,32 @@ interface Props {
 }
 
 export function CreditsScreen({ onBack }: Props) {
+  const { t } = useI18n()
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
 
         <View style={s.header}>
           <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
+            <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>Crédits</Text>
+          <Text style={s.title}>{t('credits')}</Text>
         </View>
 
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
 
-          <Section title="Cartes espagnoles">
+          <Section title={t('creditsSpanishCards')}>
             <CreditRow
-              label="Artiste"
+              label={t('creditsArtist')}
               value="gjenkins20"
             />
             <CreditRow
-              label="Dépôt"
+              label={t('creditsRepo')}
               value="spanish-playing-cards-svg"
               link="https://github.com/gjenkins20/spanish-playing-cards-svg"
             />
             <CreditRow
-              label="Licence"
+              label={t('creditsLicense')}
               value="Creative Commons BY-SA 3.0"
             />
             <Text style={s.licenceNote}>
@@ -49,15 +51,15 @@ export function CreditsScreen({ onBack }: Props) {
             </Text>
           </Section>
 
-          <Section title="Polices">
+          <Section title={t('creditsFonts')}>
             <CreditRow label="Reem Kufi"  value="Google Fonts / Khaled Hosny — OFL" />
             <CreditRow label="Cairo"      value="Google Fonts / Mohamed Gaber — OFL" />
           </Section>
 
-          <Section title="Sons">
-            <CreditRow label="Effets"   value="Générés procéduralement pour le jeu" />
-            <CreditRow label="Auteur"   value="Projet Ronda" />
-            <CreditRow label="Licence"  value="Domaine public (CC0)" />
+          <Section title={t('creditsSounds')}>
+            <CreditRow label={t('creditsEffects')}  value="Générés procéduralement pour le jeu" />
+            <CreditRow label={t('creditsAuthor')}   value="Projet Ronda" />
+            <CreditRow label={t('creditsLicense')}  value="Domaine public (CC0)" />
             <Text style={s.licenceNote}>
               Les effets sonores (distribution, pose, capture, annonces, Mab9ach) sont
               synthétisés et libres de droits. Ils peuvent être remplacés par des sons
@@ -65,15 +67,15 @@ export function CreditsScreen({ onBack }: Props) {
             </Text>
           </Section>
 
-          <Section title="Application">
-            <CreditRow label="Moteur"    value="TypeScript pur — fonctions pures" />
-            <CreditRow label="UI"        value="Expo + React Native" />
-            <CreditRow label="Version"   value="1.0 — solo vs IA" />
+          <Section title={t('creditsApp')}>
+            <CreditRow label={t('creditsEngine')}  value="TypeScript pur — fonctions pures" />
+            <CreditRow label="UI"                  value="Expo + React Native" />
+            <CreditRow label={t('creditsVersion')} value="1.0 — solo vs IA" />
           </Section>
 
-          <Section title="Développeur">
+          <Section title={t('creditsDev')}>
             <CreditRow
-              label="Auteur"
+              label={t('creditsAuthor')}
               value="Amjahid Mohamed Amin"
               link="https://www.linkedin.com/in/amjahid-mohamed-amin"
             />
