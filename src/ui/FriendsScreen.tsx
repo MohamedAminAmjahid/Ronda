@@ -195,6 +195,8 @@ export function FriendsScreen({ onBack }: Props) {
       if (inv.status === 'declined') {
         setInvitePhase('declined')
       } else if (inv.status === 'accepted') {
+        console.log('[invite] ami a accepté, création room...')
+        console.log('[invite] game:', game, 'bet:', bet)
         setInvitePhase('creating')
         try {
           let roomCode: string | null = null
@@ -206,6 +208,7 @@ export function FriendsScreen({ onBack }: Props) {
             await connectFriendHost(pseudo, bet)
             roomCode = getRondaSnap().roomCode
           }
+          console.log('[invite] roomCode:', roomCode)
           if (!roomCode) throw new Error('no room code')
           if (bet > 0) removeGold(bet)
           await updateInviteRoomCode(id, roomCode)
@@ -213,7 +216,8 @@ export function FriendsScreen({ onBack }: Props) {
           setInvitePhase('setup')
           setPendingInvite(null)
           router.push((game === 'dijouj' ? '/dijouj-online' : '/online') as never)
-        } catch {
+        } catch (e) {
+          console.error('[invite] erreur création room:', JSON.stringify(e), e)
           setInviteError('Impossible de créer la partie. Vérifiez votre connexion.')
           setInvitePhase('error')
         }
