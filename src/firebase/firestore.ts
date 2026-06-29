@@ -3,6 +3,7 @@ import {
   collection, query, where, getDocs, limit, serverTimestamp,
   onSnapshot, increment, orderBy,
 } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
 import { firebaseApp } from './config'
 import type { User } from './auth'
 
@@ -45,7 +46,9 @@ function userRef(uid: string) {
 
 async function getUsername(uid: string): Promise<string> {
   const snap = await getDoc(userRef(uid))
-  return (snap.exists() ? (snap.data().username as string) : '') || 'Joueur'
+  if (snap.exists() && snap.data().username) return snap.data().username as string
+  const authUser = getAuth(firebaseApp).currentUser
+  return authUser?.displayName || 'Joueur'
 }
 
 /**
@@ -192,7 +195,7 @@ export async function sendFriendRequest(myUid: string, targetUid: string): Promi
     if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
   }
 
-  const myUsername = await getUsername(myUid)
+  const myUsername = (await getUsername(myUid)) || 'Joueur'
   try {
     await setDoc(friendRef(targetUid, myUid), {
       uid: myUid,
@@ -201,8 +204,7 @@ export async function sendFriendRequest(myUid: string, targetUid: string): Promi
       createdAt: serverTimestamp(),
     })
   } catch (e) {
-    // Aide au diagnostic : log l'erreur Firestore réelle dans la console
-    console.error('[sendFriendRequest] Firestore error:', e)
+    console.error('[sendFriendRequest] error:', JSON.stringify(e), e)
     throw e
   }
 }
