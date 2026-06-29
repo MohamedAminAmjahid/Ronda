@@ -184,19 +184,34 @@ function friendRef(ownerUid: string, friendUid: string) {
 
 /** Envoie une demande d'ami : crée une entrée 'pending' chez la cible. */
 export async function sendFriendRequest(myUid: string, targetUid: string): Promise<void> {
-  if (myUid === targetUid) throw new Error("Impossible de s'ajouter soi-même.")
-
-  // Vérifie qu'une demande n'existe pas déjà.
-  // On n'interdit que si le statut est pending ou accepted —
-  // un statut résiduel (ex. doc non supprimé après removeFriend) laisse passer.
-  const existing = await getDoc(friendRef(targetUid, myUid))
-  if (existing.exists()) {
-    const st = existing.data()?.status as string | undefined
-    if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
-  }
-
-  const myUsername = (await getUsername(myUid)) || 'Joueur'
+  console.log('[sendFriendRequest] start', { myUid, targetUid })
   try {
+    if (myUid === targetUid) throw new Error("Impossible de s'ajouter soi-même.")
+
+    // Vérifie qu'une demande n'existe pas déjà.
+    // On n'interdit que si le statut est pending ou accepted —
+    // un statut résiduel (ex. doc non supprimé après removeFriend) laisse passer.
+    const existing = await getDoc(friendRef(targetUid, myUid))
+    if (existing.exists()) {
+      const st = existing.data()?.status as string | undefined
+      if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
+    }
+
+    // S'assure que le document users/{myUid} existe avant de lire le username.
+    // setDoc merge:true ne crase pas les champs existants.
+    const authUser = getAuth(firebaseApp).currentUser
+    if (authUser) {
+      const displayName = authUser.displayName || 'Joueur'
+      await setDoc(userRef(myUid), {
+        username: displayName,
+        usernameLower: displayName.toLowerCase(),
+        lastSeen: serverTimestamp(),
+      }, { merge: true })
+    }
+
+    const myUsername = (await getUsername(myUid)) || 'Joueur'
+    console.log('[sendFriendRequest] username:', myUsername)
+
     await setDoc(friendRef(targetUid, myUid), {
       uid: myUid,
       username: myUsername,
