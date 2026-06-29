@@ -8,6 +8,7 @@ import { useOnlineGame } from '../online/useOnlineGame'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
+import { VoiceButton } from '../voice/VoiceButton'
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
 
@@ -106,6 +107,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             <Text style={s.discSub}>En attente de reconnexion…</Text>
           </View>
         )}
+        <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
       </View>
     )
   }

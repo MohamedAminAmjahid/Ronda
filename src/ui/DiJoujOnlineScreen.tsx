@@ -12,6 +12,7 @@ import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
+import { VoiceButton } from '../voice/VoiceButton'
 
 const C = {
   gradTop: '#1A0008' as const,
@@ -304,6 +305,7 @@ export function DiJoujOnlineScreen() {
   // ── Jeu ───────────────────────────────────────────────────────────────────
 
   return (
+    <View style={s.root}>
     <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
@@ -504,6 +506,8 @@ export function DiJoujOnlineScreen() {
 
       </SafeAreaView>
     </LinearGradient>
+    <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
+    </View>
   )
 }
 
