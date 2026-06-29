@@ -6,12 +6,14 @@ import { getCardImage } from '../assets/cards'
 
 // ── Tailles ──────────────────────────────────────────────────────────────────
 
-export type CardSize = 'sm' | 'md' | 'lg'
+export type CardSize = 'sm' | 'md' | 'lg' | 'xl' | 'xxl'
 
 const DIM = {
-  sm: { w: 46, h: 69  },
-  md: { w: 58, h: 87  },
-  lg: { w: 72, h: 108 },
+  sm:  { w: 46,  h: 69  },
+  md:  { w: 58,  h: 87  },
+  lg:  { w: 72,  h: 108 },
+  xl:  { w: 80,  h: 120 },
+  xxl: { w: 100, h: 150 },
 } as const
 
 // ── Face de carte ─────────────────────────────────────────────────────────────
