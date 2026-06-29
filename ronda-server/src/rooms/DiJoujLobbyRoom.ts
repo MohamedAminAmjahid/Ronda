@@ -3,7 +3,6 @@ import { Schema, type, MapSchema } from '@colyseus/schema'
 import { createInitialState } from '../engine-dijouj/deal'
 import { applyPlayCard, applyDraw } from '../engine-dijouj/game'
 import type { GameState, Card, Suit } from '../engine-dijouj/types'
-import { botPlay } from '../ai-dijouj/bot'
 import { generateCode, registerCode, unregisterCode } from './registry'
 
 // ── Schéma Colyseus (état public du lobby) ────────────────────────────────────
@@ -17,10 +16,9 @@ class DiJoujSlot extends Schema {
 }
 
 class DiJoujLobbyState extends Schema {
-  @type('string')             code        = ''
-  @type('string')             phase       = 'WAITING'
-  @type('uint8')              playerCount = 2
-  @type({ map: DiJoujSlot }) slots       = new MapSchema<DiJoujSlot>()
+  @type('string')             code  = ''
+  @type('string')             phase = 'WAITING'
+  @type({ map: DiJoujSlot }) slots = new MapSchema<DiJoujSlot>()
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -39,6 +37,7 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
   maxClients = 4
 
   private engine!: GameState
+  private pc = 0
   private sessionBySeat: (string | null)[] = []
   private pseudoBySeat:  string[]           = []
   private isBotSeat:     boolean[]          = []
@@ -55,16 +54,6 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
     this.state.code = code
     this.setMetadata({ code })
     registerCode(code, this.roomId, 'dijouj-lobby')
-
-    this.onMessage('set_player_count', (client, msg: { count: 2 | 4 }) => {
-      if (this.state.phase !== 'WAITING') return
-      const slot = this.state.slots.get(client.sessionId)
-      if (!slot?.isAdmin) return
-      if (msg.count === 2 || msg.count === 4) {
-        this.state.playerCount = msg.count
-        this.maxClients = msg.count
-      }
-    })
 
     this.onMessage('start_game', (client) => this.handleStart(client))
 
@@ -166,43 +155,27 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
   // ── Démarrage ─────────────────────────────────────────────────────────────────
 
   private startGame(): void {
-    const pc = this.state.playerCount as 2 | 4
-
-    // Assign seats to humans first
+    // Lobby ami : seulement les humains connectés, sans bots
     const humans = [...this.state.slots.entries()].filter(([, s]) => s.connected && !s.isBot)
+    const pc = humans.length
+
     this.sessionBySeat = new Array(pc).fill(null)
     this.pseudoBySeat  = new Array(pc).fill('')
     this.isBotSeat     = new Array(pc).fill(false)
 
     humans.forEach(([sid, s], i) => {
-      if (i >= pc) return
       this.sessionBySeat[i] = sid
       this.pseudoBySeat[i]  = s.pseudo
       s.seat = i
     })
 
-    // Fill remaining seats with bots
-    let botIdx = 0
-    for (let seat = 0; seat < pc; seat++) {
-      if (this.sessionBySeat[seat] !== null) continue
-      botIdx++
-      const botId  = `bot-${seat}-${botIdx}`
-      const botSlot = new DiJoujSlot()
-      botSlot.pseudo    = `Bot ${botIdx}`
-      botSlot.isBot     = true
-      botSlot.connected = true
-      botSlot.seat      = seat
-      this.state.slots.set(botId, botSlot)
-      this.pseudoBySeat[seat] = `Bot ${botIdx}`
-      this.isBotSeat[seat]    = true
-    }
-
+    this.pc = pc
     this.engine = createInitialState(pc, makeRng(Date.now()))
     this.state.phase = 'PLAYING'
 
     this.broadcast('game_start', { code: this.state.code })
     this.sendPrivateStateToAll()
-    this.scheduleBotIfNeeded()
+    // Pas de bots → pas besoin de scheduleBotIfNeeded
   }
 
   // ── Après chaque changement moteur ────────────────────────────────────────────
@@ -214,29 +187,7 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
     if (this.engine.isOver) {
       this.finishGame(this.engine.winnerId ?? undefined)
       this.clock.setTimeout(() => this.disconnect(), 5000)
-    } else {
-      this.scheduleBotIfNeeded()
     }
-  }
-
-  // ── Bot ───────────────────────────────────────────────────────────────────────
-
-  private scheduleBotIfNeeded(): void {
-    if (!this.engine || this.engine.isOver) return
-    const seat = this.engine.currentPlayerId
-    if (!this.isBotSeat[seat]) return
-
-    const delay = Math.floor(makeRng(Date.now())() * 1000) + 1500 // 1500–2500ms
-    this.clock.setTimeout(() => {
-      if (!this.engine || this.engine.isOver || this.engine.currentPlayerId !== seat) return
-      const action = botPlay(this.engine, seat)
-      if (action.type === 'draw') {
-        this.engine = applyDraw(this.engine, seat, makeRng(Date.now()))
-      } else {
-        this.engine = applyPlayCard(this.engine, seat, action.card, action.chosenSuit)
-      }
-      this.afterEngineChange()
-    }, delay)
   }
 
   // ── Fin de partie ─────────────────────────────────────────────────────────────
@@ -258,10 +209,9 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
   private sendPrivateStateTo(client: Client, seat: number): void {
     const e   = this.engine
     const top = e.discardPile[e.discardPile.length - 1]
-    const pc  = this.state.playerCount
 
     const opponents = []
-    for (let s = 0; s < pc; s++) {
+    for (let s = 0; s < this.pc; s++) {
       if (s === seat) continue
       const isBot = this.isBotSeat[s]
       let connected = true

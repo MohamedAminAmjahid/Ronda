@@ -18,7 +18,6 @@ export type LobbyPhase = 'idle' | 'connecting' | 'waiting' | 'playing' | 'error'
 export interface LobbyDjSnapshot {
   phase:       LobbyPhase
   code:        string | null
-  playerCount: 2 | 4
   slots:       DjLobbySlot[]
   mySessionId: string | null
   error:       string | null
@@ -29,7 +28,6 @@ export interface LobbyDjSnapshot {
 let snapshot: LobbyDjSnapshot = {
   phase:       'idle',
   code:        null,
-  playerCount: 2,
   slots:       [],
   mySessionId: null,
   error:       null,
@@ -65,7 +63,6 @@ function wireRoom(r: Room, pseudo: string): void {
   r.onStateChange((state: {
     code?: string
     phase?: string
-    playerCount?: number
     slots?: Map<string, { pseudo: string; isAdmin: boolean; isBot: boolean; connected: boolean; seat: number }>
   }) => {
     const slots: DjLobbySlot[] = []
@@ -81,11 +78,7 @@ function wireRoom(r: Room, pseudo: string): void {
         })
       })
     }
-    set({
-      code:        state.code ?? snapshot.code,
-      playerCount: (state.playerCount === 4 ? 4 : 2) as 2 | 4,
-      slots,
-    })
+    set({ code: state.code ?? snapshot.code, slots })
   })
 
   r.onMessage('game_start', () => {
@@ -134,10 +127,6 @@ export async function joinLobbyByCode(pseudo: string, code: string): Promise<voi
   return connect(() => joinByCode(pseudo, code), pseudo)
 }
 
-export function setPlayerCount(count: 2 | 4): void {
-  room?.send('set_player_count', { count })
-}
-
 export function startGame(): void {
   room?.send('start_game')
 }
@@ -148,7 +137,6 @@ export function leaveLobby(): void {
   set({
     phase:       'idle',
     code:        null,
-    playerCount: 2,
     slots:       [],
     mySessionId: null,
     error:       null,

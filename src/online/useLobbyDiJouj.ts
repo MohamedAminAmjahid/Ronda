@@ -6,58 +6,42 @@ import {
   getSnapshot,
   createLobby,
   joinLobbyByCode,
-  setPlayerCount,
   startGame,
   leaveLobby,
   registerNavigate,
 } from './lobbyDiJouj'
 
-const DJ_ONLINE: Href = '/dijouj-online' as Href
-
 export function useLobbyDiJouj() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
-  // Register navigate function on mount
   useEffect(() => {
     registerNavigate((path) => router.push(path as Href))
     return () => registerNavigate(() => {})
   }, [])
 
-  const connect = useCallback((pseudo: string) => {
-    return createLobby(pseudo)
-  }, [])
+  const connect = useCallback((pseudo: string) => createLobby(pseudo), [])
 
-  const joinByCode = useCallback((pseudo: string, code: string) => {
-    return joinLobbyByCode(pseudo, code)
-  }, [])
+  const joinByCode = useCallback((pseudo: string, code: string) => joinLobbyByCode(pseudo, code), [])
 
-  const changePlayerCount = useCallback((count: 2 | 4) => {
-    setPlayerCount(count)
-  }, [])
+  const launch = useCallback(() => startGame(), [])
 
-  const launch = useCallback(() => {
-    startGame()
-  }, [])
-
-  const leave = useCallback(() => {
-    leaveLobby()
-  }, [])
+  const leave = useCallback(() => leaveLobby(), [])
 
   const mySlot = snap.slots.find(s => s.sessionId === snap.mySessionId)
   const isAdmin = mySlot?.isAdmin ?? false
+  const adminSlot = snap.slots.find(s => s.isAdmin)
 
   return {
     phase:       snap.phase,
     code:        snap.code,
-    playerCount: snap.playerCount,
     slots:       snap.slots,
     mySessionId: snap.mySessionId,
     isAdmin,
+    adminPseudo: adminSlot?.pseudo ?? '',
     error:       snap.error,
     connect,
     joinByCode,
-    setPlayerCount: changePlayerCount,
-    startGame:      launch,
+    startGame:   launch,
     leave,
   }
 }

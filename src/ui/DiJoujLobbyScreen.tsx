@@ -10,34 +10,30 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { useLobbyDiJouj } from '../online/useLobbyDiJouj'
 
-// ── Palette (bordeaux Di Jouj) ─────────────────────────────────────────────────
+const MAX_PLAYERS = 4
 
 const C = {
-  gradTop:  '#1A0008' as const,
-  gradBot:  '#2D0A1E' as const,
-  surface:  '#3D1030',
-  acc:      '#8B1A4A',
-  brass:    '#C9A227',
-  bone:     '#F4ECD8',
-  boneOff:  'rgba(244,236,216,0.50)',
-  ghost:    'rgba(244,236,216,0.12)',
-  red:      '#C0392B',
-  green:    '#27AE60',
+  gradTop: '#1A0008' as const,
+  gradBot: '#2D0A1E' as const,
+  surface: '#3D1030',
+  acc:     '#8B1A4A',
+  brass:   '#C9A227',
+  bone:    '#F4ECD8',
+  boneOff: 'rgba(244,236,216,0.50)',
+  ghost:   'rgba(244,236,216,0.12)',
+  red:     '#C0392B',
+  green:   '#27AE60',
 } as const
-
-// ── Screen ────────────────────────────────────────────────────────────────────
 
 export function DiJoujLobbyScreen() {
   const { t }        = useI18n()
   const { username } = useProfile()
   const {
-    phase, code, playerCount, slots, isAdmin, error,
-    connect, joinByCode: joinLobbyByCode, setPlayerCount, startGame, leave,
+    phase, code, slots, isAdmin, adminPseudo, error,
+    connect, joinByCode: joinLobbyByCode, startGame, leave,
   } = useLobbyDiJouj()
 
   const [joinCode, setJoinCode] = useState('')
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleCreate = useCallback(() => {
     connect(username || 'Joueur')
@@ -61,7 +57,7 @@ export function DiJoujLobbyScreen() {
     router.back()
   }, [leave])
 
-  // ── IDLE ──────────────────────────────────────────────────────────────────
+  // ── Idle / Error ──────────────────────────────────────────────────────────
 
   if (phase === 'idle' || phase === 'error') {
     return (
@@ -82,11 +78,7 @@ export function DiJoujLobbyScreen() {
               <Text style={s.errorTxt}>{error}</Text>
             )}
 
-            <TouchableOpacity
-              style={[s.mainBtn, { backgroundColor: C.acc }]}
-              onPress={handleCreate}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={s.mainBtn} onPress={handleCreate} activeOpacity={0.8}>
               <Text style={s.mainBtnTxt}>{t('createGame')}</Text>
             </TouchableOpacity>
 
@@ -121,7 +113,7 @@ export function DiJoujLobbyScreen() {
     )
   }
 
-  // ── CONNECTING ────────────────────────────────────────────────────────────
+  // ── Connecting ────────────────────────────────────────────────────────────
 
   if (phase === 'connecting') {
     return (
@@ -142,10 +134,17 @@ export function DiJoujLobbyScreen() {
     )
   }
 
-  // ── WAITING (lobby actif) ─────────────────────────────────────────────────
+  // ── Waiting (lobby actif) ─────────────────────────────────────────────────
 
-  const humanSlots = slots.filter(s => !s.isBot)
-  const pc = playerCount
+  const humanSlots   = slots.filter(s => !s.isBot && s.connected)
+  const connectedCnt = humanSlots.length
+  const canLaunch    = connectedCnt >= 2
+  const isFull       = connectedCnt >= MAX_PLAYERS
+
+  let statusMsg: string
+  if (isFull)        statusMsg = `${MAX_PLAYERS} joueurs max atteint`
+  else if (canLaunch) statusMsg = `${connectedCnt} joueurs connectés — tu peux lancer !`
+  else               statusMsg = 'En attente d\'au moins 2 joueurs...'
 
   return (
     <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
@@ -159,93 +158,68 @@ export function DiJoujLobbyScreen() {
           <View style={s.headerSpacer} />
         </View>
 
-        <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={s.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ── Code de la room ──────────────────────────────────────────── */}
+          <View style={s.codeBox}>
+            <Text style={s.codeLabel}>Code de la partie</Text>
+            <Text style={s.codeValue}>{code ?? '------'}</Text>
+            <TouchableOpacity onPress={handleShare} activeOpacity={0.7} style={s.shareBtn}>
+              <Text style={s.shareTxt}>⬆ {t('share')}</Text>
+            </TouchableOpacity>
+          </View>
 
-          {/* ── Code de la partie ────────────────────────────────────────────── */}
-          {code && (
-            <View style={s.codeBox}>
-              <Text style={s.codeLabel}>{t('copy')}</Text>
-              <Text style={s.codeValue}>{code}</Text>
-              <TouchableOpacity onPress={handleShare} activeOpacity={0.7} style={s.shareBtn}>
-                <Text style={s.shareTxt}>{t('share')}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* ── Sélecteur nombre de joueurs (admin seulement) ────────────────── */}
-          {isAdmin && (
-            <View style={s.countSection}>
-              <Text style={s.countLabel}>{t('djPlayers')}</Text>
-              <View style={s.countBtns}>
-                {([2, 4] as const).map(n => (
-                  <TouchableOpacity
-                    key={n}
-                    style={[s.countBtn, pc === n && s.countBtnActive]}
-                    onPress={() => setPlayerCount(n)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[s.countBtnTxt, pc === n && s.countBtnTxtActive]}>{n}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={s.botsInfo}>{t('djBotsInfo')}</Text>
-            </View>
-          )}
-
-          {/* ── Slots joueurs ─────────────────────────────────────────────────── */}
+          {/* ── Liste des joueurs (max 4 slots) ──────────────────────────── */}
           <View style={s.slotsList}>
-            {Array.from({ length: pc }).map((_, i) => {
+            {Array.from({ length: MAX_PLAYERS }).map((_, i) => {
               const slot = humanSlots[i]
+              if (slot) {
+                return (
+                  <View key={slot.sessionId} style={s.slotRow}>
+                    <Text style={[s.slotIcon, { color: C.green }]}>✓</Text>
+                    <Text style={s.slotName}>{slot.pseudo}</Text>
+                    {slot.isAdmin && (
+                      <View style={s.adminBadge}>
+                        <Text style={s.adminBadgeTxt}>{t('djAdmin')}</Text>
+                      </View>
+                    )}
+                  </View>
+                )
+              }
               return (
-                <View key={i} style={s.slotRow}>
-                  <View style={[s.slotDot, slot ? s.slotDotFilled : s.slotDotEmpty]} />
-                  <Text style={s.slotName}>
-                    {slot ? slot.pseudo : '...'}
-                  </Text>
-                  {slot?.isAdmin && (
-                    <View style={s.adminBadge}>
-                      <Text style={s.adminBadgeTxt}>{t('djAdmin')}</Text>
-                    </View>
-                  )}
-                  {slot && !slot.connected && (
-                    <View style={[s.adminBadge, { backgroundColor: C.red }]}>
-                      <Text style={s.adminBadgeTxt}>⚠</Text>
-                    </View>
-                  )}
+                <View key={`empty-${i}`} style={[s.slotRow, s.slotRowEmpty]}>
+                  <Text style={[s.slotIcon, { color: C.boneOff }]}>⏳</Text>
+                  <Text style={s.slotNameEmpty}>En attente d'un joueur...</Text>
                 </View>
               )
             })}
-            {/* Bots que l'on va ajouter au démarrage */}
-            {Array.from({ length: Math.max(0, pc - humanSlots.length) }).map((_, i) => (
-              <View key={`bot-${i}`} style={[s.slotRow, { opacity: 0.5 }]}>
-                <View style={[s.slotDot, s.slotDotBot]} />
-                <Text style={s.slotName}>Bot</Text>
-              </View>
-            ))}
           </View>
 
-          {/* ── Bouton Lancer (admin seulement) ─────────────────────────────── */}
-          {isAdmin && (
+          {/* ── Message de statut ─────────────────────────────────────────── */}
+          <View style={[s.statusBox, canLaunch && s.statusBoxActive]}>
+            <Text style={[s.statusTxt, canLaunch && s.statusTxtActive]}>{statusMsg}</Text>
+          </View>
+
+          {/* ── Bouton lancer (admin) / message attente (non-admin) ──────── */}
+          {isAdmin ? (
             <TouchableOpacity
-              style={[
-                s.launchBtn,
-                humanSlots.length < 2 && s.launchBtnDim,
-              ]}
+              style={[s.launchBtn, !canLaunch && s.launchBtnDim]}
               onPress={startGame}
               activeOpacity={0.8}
-              disabled={humanSlots.length < 2}
+              disabled={!canLaunch}
             >
               <Text style={s.launchBtnTxt}>{t('djLaunch')}</Text>
             </TouchableOpacity>
-          )}
-
-          {!isAdmin && (
+          ) : (
             <View style={s.waitingRow}>
               <ActivityIndicator color={C.brass} size="small" />
-              <Text style={s.waitingTxt}>{t('waitingOpponent')}</Text>
+              <Text style={s.waitingTxt}>
+                En attente que {adminPseudo || 'l\'hôte'} lance la partie...
+              </Text>
             </View>
           )}
-
         </ScrollView>
       </SafeAreaView>
     </LinearGradient>
@@ -273,17 +247,15 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
 
   sectionLabel: {
-    fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 20,
-    textAlign: 'center', marginBottom: 24,
+    fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 20, textAlign: 'center', marginBottom: 24,
   },
   errorTxt: {
-    fontFamily: 'Cairo_400Regular', color: C.red, fontSize: 14,
-    textAlign: 'center', marginBottom: 16,
+    fontFamily: 'Cairo_400Regular', color: C.red, fontSize: 14, textAlign: 'center', marginBottom: 16,
   },
 
   mainBtn: {
     width: '100%', paddingVertical: 16, paddingHorizontal: 24,
-    borderRadius: 14, alignItems: 'center',
+    borderRadius: 14, alignItems: 'center', backgroundColor: C.acc,
   },
   mainBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16, letterSpacing: 0.4 },
 
@@ -300,60 +272,65 @@ const s = StyleSheet.create({
     fontSize: 18, letterSpacing: 4, textAlign: 'center',
     borderWidth: 1, borderColor: C.ghost,
   },
-  joinBtn: {
-    paddingVertical: 14, paddingHorizontal: 16, backgroundColor: C.acc, borderRadius: 10,
-  },
+  joinBtn:    { paddingVertical: 14, paddingHorizontal: 16, backgroundColor: C.acc, borderRadius: 10 },
   joinBtnDim: { opacity: 0.45 },
   joinBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13 },
 
-  // Lobby actif
+  // ── Lobby actif ──────────────────────────────────────────────────────────
   scrollContent: { padding: 20, gap: 20 },
 
   codeBox: {
-    backgroundColor: C.surface, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 24,
-    alignItems: 'center', gap: 8,
+    backgroundColor: C.surface, borderRadius: 16, paddingVertical: 24, paddingHorizontal: 24,
+    alignItems: 'center', gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
   },
-  codeLabel: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12 },
-  codeValue: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 30, letterSpacing: 6 },
-  shareBtn:  { paddingVertical: 6, paddingHorizontal: 18, backgroundColor: C.acc, borderRadius: 8 },
-  shareTxt:  { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13 },
-
-  countSection: { alignItems: 'center', gap: 10 },
-  countLabel:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
-  countBtns:    { flexDirection: 'row', gap: 12 },
-  countBtn: {
-    width: 64, height: 48, backgroundColor: C.surface, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: C.ghost,
+  codeLabel: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12, letterSpacing: 0.5 },
+  codeValue: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 36, letterSpacing: 10,
+    textShadowColor: 'rgba(201,162,39,0.4)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
   },
-  countBtnActive: { borderColor: C.brass, backgroundColor: '#5A1A3A' },
-  countBtnTxt:    { fontFamily: 'Cairo_600SemiBold', color: C.boneOff, fontSize: 18 },
-  countBtnTxtActive: { color: C.brass },
-  botsInfo: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, textAlign: 'center' },
+  shareBtn: { paddingVertical: 8, paddingHorizontal: 22, backgroundColor: C.acc, borderRadius: 10 },
+  shareTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13 },
 
-  slotsList: { gap: 12 },
+  slotsList: { gap: 10 },
   slotRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: C.surface, borderRadius: 10,
-    paddingVertical: 12, paddingHorizontal: 16,
+    backgroundColor: C.surface, borderRadius: 12,
+    paddingVertical: 14, paddingHorizontal: 16,
+    borderWidth: 1, borderColor: C.ghost,
   },
-  slotDot: { width: 10, height: 10, borderRadius: 5 },
-  slotDotFilled: { backgroundColor: C.green },
-  slotDotEmpty:  { backgroundColor: C.ghost },
-  slotDotBot:    { backgroundColor: C.boneOff },
-  slotName: { flex: 1, fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14 },
+  slotRowEmpty: { opacity: 0.55 },
+  slotIcon:     { fontSize: 16, width: 20, textAlign: 'center' },
+  slotName: {
+    flex: 1, fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 15,
+  },
+  slotNameEmpty: {
+    flex: 1, fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, fontStyle: 'italic',
+  },
   adminBadge: {
     paddingVertical: 2, paddingHorizontal: 8, backgroundColor: C.brass, borderRadius: 6,
   },
   adminBadgeTxt: { fontFamily: 'Cairo_400Regular', color: '#1A0008', fontSize: 11 },
 
-  launchBtn: {
-    marginTop: 8, backgroundColor: C.acc, borderRadius: 14,
-    paddingVertical: 18, alignItems: 'center',
+  statusBox: {
+    backgroundColor: C.ghost, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: 'transparent',
   },
-  launchBtnDim: { opacity: 0.45 },
-  launchBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 17, letterSpacing: 0.5 },
+  statusBoxActive: { backgroundColor: 'rgba(39,174,96,0.12)', borderColor: 'rgba(39,174,96,0.3)' },
+  statusTxt:       { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13, textAlign: 'center' },
+  statusTxtActive: { color: '#27AE60', fontFamily: 'Cairo_600SemiBold' },
 
-  waitingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  waitingTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
+  launchBtn: {
+    backgroundColor: C.brass, borderRadius: 14,
+    paddingVertical: 18, alignItems: 'center',
+    shadowColor: C.brass, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8,
+  },
+  launchBtnDim: { opacity: 0.38, shadowOpacity: 0 },
+  launchBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: '#1A0008', fontSize: 17, letterSpacing: 0.5 },
+
+  waitingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 12,
+  },
+  waitingTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13, flexShrink: 1 },
 })
