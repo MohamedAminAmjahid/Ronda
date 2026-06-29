@@ -330,7 +330,9 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
                 onPress={() => setLang(lg)}
                 accessibilityLabel={lg}
               >
-                <Text style={s.langFlag}>{lg === 'ar' ? '🇲🇦' : lg === 'fr' ? '🇫🇷' : '🇬🇧'}</Text>
+                <Text style={[s.langLabel, lang === lg && s.langLabelActive]}>
+                  {lg.toUpperCase()}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -552,7 +554,13 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.12)', backgroundColor: 'rgba(0,0,0,0.18)',
   },
   langBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.18)' },
-  langFlag: { fontSize: 20 },
+  langLabel: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 13,
+    color: 'rgba(244,236,216,0.3)',
+    letterSpacing: 0.5,
+  },
+  langLabelActive: { color: C.brass },
 
   // Boutons
   actions: {

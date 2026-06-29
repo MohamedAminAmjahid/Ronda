@@ -314,12 +314,10 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
 
   // Résultat de donne (après le délai).
   if (isDealEnd && showDealEnd) {
-    const deltas: [number, number] = [teamCapturedCount[0] - 20, teamCapturedCount[1] - 20]
     return (
       <DealEndScreen
         dealNumber={state.dealNumber + 1}
         scores={[teamScores[0], teamScores[1]]}
-        deltas={deltas}
         labels={['Vous', 'Adversaires']}
         onContinue={nextDeal}
       />

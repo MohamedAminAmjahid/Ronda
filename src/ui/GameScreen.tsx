@@ -118,21 +118,17 @@ function DealAnnounce({ dealNumber, starterText }: { dealNumber: number; starter
 export function DealEndScreen({
   dealNumber,
   scores,
-  deltas,
   onContinue,
   labels,
 }: {
   dealNumber: number
   scores: [number, number]
-  deltas: [number, number]
   onContinue: () => void
   /** Libellés des deux camps (défaut 1v1 : Toi / Bot ; 2v2 : Équipe A / Équipe B). */
   labels?: [string, string]
 }) {
   const { t } = useI18n()
   const resolvedLabels = labels ?? [t('you'), t('bot')]
-  const fmt = (n: number) => (n > 0 ? `+${n}` : `${n}`)
-  const deltaColor = (n: number) => (n > 0 ? C.table : n < 0 ? C.clay : C.boneOff)
 
   return (
     <SafeAreaView style={[styles.root, { justifyContent: 'center' }]}>
@@ -147,9 +143,6 @@ export function DealEndScreen({
           {([0, 1] as const).map((i) => (
             <View key={i} style={styles.dealEndCell}>
               <Text style={styles.dealEndPlayerName}>{resolvedLabels[i]}</Text>
-              <Text style={[styles.dealEndDelta, { color: deltaColor(deltas[i]) }]}>
-                {fmt(deltas[i])}
-              </Text>
               <Text style={styles.dealEndTotal}>{scores[i]} pts</Text>
             </View>
           ))}
@@ -739,17 +732,10 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   }
 
   if (isDealEnd && showDealEnd) {
-    // Résultat du décompte de cartes uniquement (cartes capturées − 20),
-    // indépendant des points de ronda/caída/missa.
-    const deltas: [number, number] = [
-      human.captured.length - 20,
-      bot.captured.length - 20,
-    ]
     return (
       <DealEndScreen
         dealNumber={state.dealNumber + 1}
         scores={[human.score, bot.score]}
-        deltas={deltas}
         onContinue={nextDeal}
       />
     )
