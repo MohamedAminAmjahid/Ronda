@@ -46,7 +46,7 @@ const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos:
 
 export function DiJoujScreen() {
   const { t } = useI18n()
-  const { state, isHumanTurn, isBotThinking, playCard, draw, isGameOver, winner, restart } =
+  const { state, isHumanTurn, isBotThinking, isAutoSkipping, playCard, draw, isGameOver, winner, restart } =
     useDiJoujGame()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
@@ -210,6 +210,9 @@ export function DiJoujScreen() {
         {bannerText !== null && (
           <View style={[s.banner, { backgroundColor: bannerBg }]}>
             <Text style={s.bannerTxt}>{bannerText}</Text>
+            {isAutoSkipping && (
+              <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>
+            )}
           </View>
         )}
 
@@ -401,6 +404,12 @@ const s = StyleSheet.create({
     color:        C.bone,
     fontSize:     13,
     letterSpacing: 0.5,
+  },
+  autoSkipTxt: {
+    fontFamily: 'Cairo_400Regular',
+    color:      'rgba(244,236,216,0.75)',
+    fontSize:   11,
+    marginTop:  2,
   },
 
   // Table zone

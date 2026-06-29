@@ -7,7 +7,8 @@ import { botPlay } from '../ai-dijouj/bot'
 export const DJ_HUMAN_ID = 0
 export const DJ_BOT_ID   = 1
 
-const BOT_DELAY_MS = 1500
+const BOT_DELAY_MS    = 1500
+const AUTO_SKIP_MS    = 1100
 
 export function useDiJoujGame() {
   const [state, setState] = useState<GameState>(() =>
@@ -18,6 +19,25 @@ export function useDiJoujGame() {
   const botActed = useRef(false)
 
   const isHumanTurn = !state.isOver && state.currentPlayerId === DJ_HUMAN_ID
+
+  // ── Auto-skip : résolution automatique quand l'humain n'a pas de contre ──
+
+  const isAutoSkipping = Boolean(
+    isHumanTurn &&
+    state.pendingEffect &&
+    (state.pendingEffect.type === 'draw2'
+      ? !state.players[DJ_HUMAN_ID].hand.some(c => c.value === 2)
+      : !state.players[DJ_HUMAN_ID].hand.some(c => c.value === 1)),
+  )
+
+  useEffect(() => {
+    if (!isAutoSkipping) return
+    const tid = setTimeout(
+      () => setState(s => applyDraw(s, DJ_HUMAN_ID)),
+      AUTO_SKIP_MS,
+    )
+    return () => clearTimeout(tid)
+  }, [isAutoSkipping])
 
   // ── Boucle bot ────────────────────────────────────────────────────────────
 
@@ -86,6 +106,7 @@ export function useDiJoujGame() {
     state,
     isHumanTurn,
     isBotThinking,
+    isAutoSkipping,
     playCard,
     draw,
     isGameOver: state.isOver,
