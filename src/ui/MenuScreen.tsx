@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, TextInput } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { Svg, Circle, Polygon } from 'react-native-svg'
 import { router, type Href } from 'expo-router'
-import { TERMS } from './terms'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
@@ -15,45 +13,29 @@ import { updateUsername, isUsernameAvailable } from '../firebase/firestore'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 
+const RONDA_ROUTE: Href = '/ronda' as Href
+const DIJOUJ_ROUTE: Href = '/dijouj' as Href
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
 const C = {
-  table:    '#0E5C4A',
-  deep:     '#09402F',
-  brass:    '#C9A227',
-  bone:     '#F4ECD8',
-  ink:      '#1C2622',
-  boneOff:  'rgba(244,236,216,0.45)',
-  disabled: 'rgba(244,236,216,0.12)',
-  disabledTxt: 'rgba(244,236,216,0.3)',
+  bg:          '#0D0D1A',
+  night:       '#1A0D2E',
+  brass:       '#C9A227',
+  brassBorder: 'rgba(201,162,39,0.30)',
+  bone:        '#F4ECD8',
+  boneOff:     'rgba(244,236,216,0.45)',
+  boneGhost:   'rgba(244,236,216,0.12)',
+  ink:         '#1C2622',
+  ronda:       '#0E5C4A',
+  dijouj:      '#2D0A1E',
+  dijoujAcc:   '#8B1A4A',
 } as const
-
-// ── Logo khatam ───────────────────────────────────────────────────────────────
-
-function KhatamLogo() {
-  return (
-    <Svg width={72} height={72} viewBox="0 0 72 72">
-      <Circle cx="36" cy="36" r="34" fill={C.deep} stroke={C.brass} strokeWidth="2" />
-      <Polygon
-        points={
-          '36,10 39.2,23.4 51.8,17.4 45.8,29 60,36 ' +
-          '45.8,43 51.8,54.6 39.2,48.6 36,62 32.8,48.6 ' +
-          '20.2,54.6 26.2,43 12,36 26.2,29 20.2,17.4 32.8,23.4'
-        }
-        fill={C.brass}
-      />
-    </Svg>
-  )
-}
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  onPlay:        () => void
-  onPlayOnline:  () => void
-  onPlayFriend:  () => void
   onLeaderboard: () => void
   onRules:       () => void
   onCredits:     () => void
@@ -61,7 +43,7 @@ interface Props {
 
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
-export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
+export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { username, gold, gamesPlayed, gamesWon, usernameChanges, setUsername, removeGold } = useProfile()
   const { user } = useAuth()
   const { t, lang, setLang } = useI18n()
@@ -139,46 +121,6 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
-
-        {/* ── Barre de profil ──────────────────────────────────── */}
-        <View style={s.profileBar}>
-          <View style={s.profileLeft}>
-            <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
-              <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
-              <Text style={s.profileEdit}>✎</Text>
-            </TouchableOpacity>
-            {user ? (
-              <Text style={s.profileEmail} numberOfLines={1}>{user.email}</Text>
-            ) : (
-              <TouchableOpacity onPress={() => router.push('/auth' as Href)} activeOpacity={0.7}>
-                <Text style={s.profileSignIn}>{t('signInLink')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={s.profileRight}>
-            {user && (
-              <TouchableOpacity
-                style={s.friendsBtn}
-                onPress={() => router.push('/friends' as Href)}
-                activeOpacity={0.7}
-                accessibilityLabel="Amis"
-              >
-                <Text style={s.friendsIcon}>👥</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={s.goldPill}
-              onPress={() => router.push('/gold-shop' as Href)}
-              activeOpacity={0.7}
-              accessibilityLabel="Ouvrir la boutique d'or"
-            >
-              <Text style={s.goldCoin}>🪙</Text>
-              <Text style={s.goldAmount}>{gold}</Text>
-              <Text style={s.goldPlus}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
         {/* ── Modale d'édition du pseudo ───────────────────────── */}
         <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
@@ -277,51 +219,119 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
           </View>
         </Modal>
 
-        {/* ── Identité ─────────────────────────────────────────── */}
-        <View style={s.hero}>
-          <KhatamLogo />
-          <View style={s.titleBlock}>
-            <Text style={s.title}>RONDA</Text>
-            <Text style={s.titleSub}>{TERMS.ronda.ar}</Text>
+        {/* ── Barre de profil ──────────────────────────────────── */}
+        <View style={s.profileBar}>
+          <View style={s.profileLeft}>
+            <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
+              <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
+              <Text style={s.profileEdit}>✎</Text>
+            </TouchableOpacity>
+            {user ? (
+              <Text style={s.profileEmail} numberOfLines={1}>{user.email}</Text>
+            ) : (
+              <TouchableOpacity onPress={() => router.push('/auth' as Href)} activeOpacity={0.7}>
+                <Text style={s.profileSignIn}>{t('signInLink')}</Text>
+              </TouchableOpacity>
+            )}
           </View>
-          <View style={s.divider} />
-          <Text style={s.tagline}>{t('tagline')}</Text>
+
+          <View style={s.profileRight}>
+            {user && (
+              <TouchableOpacity
+                style={s.friendsBtn}
+                onPress={() => router.push('/friends' as Href)}
+                activeOpacity={0.7}
+                accessibilityLabel="Amis"
+              >
+                <Text style={s.friendsIcon}>👥</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity
+              style={s.goldPill}
+              onPress={() => router.push('/gold-shop' as Href)}
+              activeOpacity={0.7}
+              accessibilityLabel="Ouvrir la boutique d'or"
+            >
+              <Text style={s.goldCoin}>🪙</Text>
+              <Text style={s.goldAmount}>{gold}</Text>
+              <Text style={s.goldPlus}>+</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* ── Actions ──────────────────────────────────────────── */}
-        <View style={s.actions}>
+        {/* ── Contenu scrollable ────────────────────────────────── */}
+        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* Jouer (vs IA) — ouvre le choix 1v1 / 2v2 */}
-          <TouchableOpacity style={s.btnPrimary} onPress={onPlay}>
-            <Text style={s.btnPrimaryTxt}>{t('play')}</Text>
+          {/* ── Titre plateforme ──────────────────────────────────── */}
+          <View style={s.hero}>
+            <View style={s.titleRow}>
+              <Text style={s.platformTitle}>Dar Lwar9a</Text>
+              <Text style={s.platformTM}>TM</Text>
+            </View>
+            <Text style={s.platformAr}>دار الورقة</Text>
+          </View>
+
+          {/* ── Section Jeux ─────────────────────────────────────── */}
+          <Text style={s.sectionLabel}>{t('platformGames')}</Text>
+
+          {/* ── Carte Ronda ──────────────────────────────────────── */}
+          <TouchableOpacity
+            style={[s.gameCard, s.rondaCard]}
+            onPress={() => router.push(RONDA_ROUTE)}
+            activeOpacity={0.88}
+          >
+            <View style={s.cardTop}>
+              <View>
+                <Text style={s.cardTitle}>RONDA</Text>
+                <Text style={s.cardTitleAr}>رُنْدة</Text>
+              </View>
+              <View style={s.cardBadge}>
+                <Text style={s.cardBadgeTxt}>1v1 · 2v2</Text>
+              </View>
+            </View>
+            <Text style={s.cardDesc}>{t('rondaCardDesc')}</Text>
+            <View style={[s.cardBtn, s.rondaBtn]}>
+              <Text style={s.cardBtnTxt}>{t('play')}</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* Jouer en ligne — partie rapide (matchmaking) */}
-          <TouchableOpacity style={s.btnSecondary} onPress={onPlayOnline}>
-            <Text style={s.btnSecondaryTxt}>{t('playOnline')}</Text>
+          {/* ── Carte Di Jouj ────────────────────────────────────── */}
+          <TouchableOpacity
+            style={[s.gameCard, s.dijoujCard]}
+            onPress={() => router.push(DIJOUJ_ROUTE)}
+            activeOpacity={0.88}
+          >
+            <View style={s.cardTop}>
+              <View>
+                <Text style={s.cardTitle}>DI JOUJ</Text>
+                <Text style={s.cardTitleAr}>ديجوج</Text>
+              </View>
+              <View style={[s.cardBadge, s.dijoujBadge]}>
+                <Text style={s.cardBadgeTxt}>{t('comingSoon')}</Text>
+              </View>
+            </View>
+            <Text style={s.cardDesc}>{t('dijoujCardDesc')}</Text>
+            <View style={[s.cardBtn, s.dijoujBtn]}>
+              <Text style={[s.cardBtnTxt, s.dijoujBtnTxt]}>{t('play')}</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* Jouer avec un ami — créer / rejoindre par code */}
-          <TouchableOpacity style={s.btnSecondary} onPress={onPlayFriend}>
-            <Text style={s.btnSecondaryTxt}>{t('playWithFriend')}</Text>
-          </TouchableOpacity>
-
-          {/* Classement + Règles + Crédits — liens discrets */}
+          {/* ── Liens texte ──────────────────────────────────────── */}
           <View style={s.textLinks}>
-            <TouchableOpacity style={s.btnCredits} onPress={onLeaderboard}>
-              <Text style={s.btnCreditsTxt}>{t('leaderboard')}</Text>
+            <TouchableOpacity style={s.linkBtn} onPress={onLeaderboard}>
+              <Text style={s.linkTxt}>{t('leaderboard')}</Text>
             </TouchableOpacity>
             <Text style={s.linkSep}>·</Text>
-            <TouchableOpacity style={s.btnCredits} onPress={onRules}>
-              <Text style={s.btnCreditsTxt}>{t('rules')}</Text>
+            <TouchableOpacity style={s.linkBtn} onPress={onRules}>
+              <Text style={s.linkTxt}>{t('rules')}</Text>
             </TouchableOpacity>
             <Text style={s.linkSep}>·</Text>
-            <TouchableOpacity style={s.btnCredits} onPress={onCredits}>
-              <Text style={s.btnCreditsTxt}>{t('credits')}</Text>
+            <TouchableOpacity style={s.linkBtn} onPress={onCredits}>
+              <Text style={s.linkTxt}>{t('credits')}</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Sélecteur de langue */}
+          {/* ── Sélecteur de langue ──────────────────────────────── */}
           <View style={s.langRow}>
             {(['ar', 'fr', 'en'] as const).map((lg) => (
               <TouchableOpacity
@@ -337,16 +347,15 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
             ))}
           </View>
 
-        </View>
+          {/* ── Pied ─────────────────────────────────────────────── */}
+          <View style={s.footer}>
+            <Text style={s.footerTxt}>v1.0</Text>
+            <TouchableOpacity onPress={() => Linking.openURL(LINKEDIN_URL)}>
+              <Text style={s.author}>Made by Amjahid Mohamed Amin</Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* ── Pied de page ─────────────────────────────────────── */}
-        <View style={s.footer}>
-          <Text style={s.footerTxt}>v1.0 — solo</Text>
-          <TouchableOpacity onPress={() => Linking.openURL(LINKEDIN_URL)}>
-            <Text style={s.author}>Made by Amjahid Mohamed Amin</Text>
-          </TouchableOpacity>
-        </View>
-
+        </ScrollView>
       </View>
     </SafeAreaView>
   )
@@ -355,17 +364,8 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: C.table,
-    alignItems: 'center',
-  },
-  column: {
-    flex: 1,
-    width: '100%',
-    maxWidth: 430,
-    paddingHorizontal: 28,
-  },
+  root: { flex: 1, backgroundColor: C.bg, alignItems: 'center' },
+  column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
 
   // Barre de profil
   profileBar: {
@@ -373,58 +373,26 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   profileLeft: { flexShrink: 1, gap: 2 },
   profileRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  profileEmail: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 11,
-    color: 'rgba(244,236,216,0.4)',
-  },
+  profileEmail: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.35)' },
   profileSignIn: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 11,
-    color: C.brass,
-    textDecorationLine: 'underline',
+    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.brass, textDecorationLine: 'underline',
   },
   friendsBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.35)',
+    width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
   },
   friendsIcon: { fontSize: 16 },
-  profileNameWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
-  },
-  profileName: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 15,
-    color: C.bone,
-    letterSpacing: 0.3,
-  },
-  profileEdit: {
-    fontSize: 12,
-    color: C.boneOff,
-  },
+  profileNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  profileName: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone, letterSpacing: 0.3 },
+  profileEdit: { fontSize: 12, color: C.boneOff },
   goldPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.35)',
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
   },
   goldCoin: { fontSize: 14 },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
@@ -434,41 +402,159 @@ const s = StyleSheet.create({
     textAlign: 'center', lineHeight: 18, overflow: 'hidden',
   },
 
-  // Modale d'édition du pseudo
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(9,64,47,0.85)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
+  // Scrollable
+  scroll: { flex: 1 },
+  scrollContent: { gap: 14, paddingBottom: 28 },
+
+  // Hero
+  hero: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  platformTitle: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 32,
+    color: C.bone,
+    letterSpacing: 1.5,
   },
-  modalCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: C.deep,
-    borderRadius: 16,
-    padding: 22,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.3)',
-  },
-  modalTitle: {
+  platformTM: {
     fontFamily: 'Cairo_600SemiBold',
     fontSize: 13,
     color: C.boneOff,
-    letterSpacing: 1.5,
+    letterSpacing: 2,
+    marginBottom: 6,
+  },
+  platformAr: {
+    fontFamily: 'ReemKufi_700Bold',
+    fontSize: 22,
+    color: C.brass,
+    letterSpacing: 1,
+  },
+
+  // Section label
+  sectionLabel: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 10,
+    color: 'rgba(244,236,216,0.22)',
+    letterSpacing: 3,
     textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: -2,
+  },
+
+  // Game cards
+  gameCard: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 10,
+    borderWidth: 1,
+  },
+  rondaCard: {
+    backgroundColor: C.ronda,
+    borderColor: 'rgba(201,162,39,0.30)',
+  },
+  dijoujCard: {
+    backgroundColor: C.dijouj,
+    borderColor: 'rgba(139,26,74,0.40)',
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  cardTitle: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 22,
+    color: C.bone,
+    letterSpacing: 3,
+  },
+  cardTitleAr: {
+    fontFamily: 'ReemKufi_700Bold',
+    fontSize: 16,
+    color: C.brass,
+    marginTop: 2,
+  },
+  cardBadge: {
+    backgroundColor: 'rgba(201,162,39,0.18)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.28)',
+  },
+  dijoujBadge: {
+    backgroundColor: 'rgba(139,26,74,0.28)',
+    borderColor: 'rgba(139,26,74,0.40)',
+  },
+  cardBadgeTxt: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.bone, letterSpacing: 0.4,
+  },
+  cardDesc: {
+    fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 19,
+  },
+  cardBtn: {
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  rondaBtn: { backgroundColor: C.brass },
+  dijoujBtn: {
+    backgroundColor: 'rgba(139,26,74,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(139,26,74,0.55)',
+  },
+  cardBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, letterSpacing: 0.3 },
+  dijoujBtnTxt: { color: C.boneOff },
+
+  // Text links
+  textLinks: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, marginTop: 4,
+  },
+  linkSep: { color: 'rgba(244,236,216,0.18)', fontSize: 12 },
+  linkBtn: { paddingVertical: 8, paddingHorizontal: 10 },
+  linkTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.26)',
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+
+  // Language selector
+  langRow: { flexDirection: 'row', justifyContent: 'center', gap: 12 },
+  langBtn: {
+    width: 44, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.10)', backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  langBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.15)' },
+  langLabel: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: 'rgba(244,236,216,0.26)', letterSpacing: 0.5,
+  },
+  langLabelActive: { color: C.brass },
+
+  // Footer
+  footer: { alignItems: 'center', paddingTop: 4, gap: 4 },
+  footerTxt: {
+    fontSize: 10, color: 'rgba(244,236,216,0.14)', letterSpacing: 1, textTransform: 'uppercase',
+  },
+  author: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11,
+    color: 'rgba(244,236,216,0.28)', letterSpacing: 0.3, textDecorationLine: 'underline',
+  },
+
+  // Modals
+  modalBackdrop: {
+    flex: 1, backgroundColor: 'rgba(13,13,26,0.90)',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28,
+  },
+  modalCard: {
+    width: '100%', maxWidth: 360, backgroundColor: C.night, borderRadius: 16, padding: 22, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  modalTitle: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff, letterSpacing: 1.5, textTransform: 'uppercase',
   },
   modalInput: {
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 16,
-    color: C.bone,
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.30)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13,
+    fontFamily: 'Cairo_400Regular', fontSize: 16, color: C.bone, borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.20)',
   },
   modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
   costFree: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#4CAF50' },
@@ -476,196 +562,20 @@ const s = StyleSheet.create({
   usernameErrorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#E57373' },
   resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
   statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 6,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(244,236,216,0.1)',
+    flexDirection: 'row', justifyContent: 'space-around', marginTop: 6, paddingTop: 12,
+    borderTopWidth: 1, borderTopColor: 'rgba(244,236,216,0.10)',
   },
   statBox: { alignItems: 'center', gap: 2 },
   statNum: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.brass },
   statLbl: {
-    fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff,
-    letterSpacing: 0.5, textTransform: 'uppercase',
+    fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff, letterSpacing: 0.5, textTransform: 'uppercase',
   },
   modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 6,
+    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 6,
   },
   modalCancel: { paddingVertical: 12, paddingHorizontal: 16 },
   modalCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
-  modalSave: {
-    backgroundColor: C.brass,
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 22,
-  },
+  modalSave: { backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22 },
   modalSaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
   btnDisabledOpacity: { opacity: 0.4 },
-
-  // Identité
-  hero: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingTop: 20,
-  },
-  titleBlock: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  title: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 48,
-    color: C.bone,
-    letterSpacing: 10,
-    textTransform: 'uppercase',
-  },
-  titleSub: {
-    fontFamily: 'ReemKufi_700Bold',
-    fontSize: 24,
-    color: C.brass,
-    letterSpacing: 2,
-  },
-  divider: {
-    width: 48,
-    height: 2,
-    backgroundColor: C.brass,
-    opacity: 0.5,
-    borderRadius: 1,
-  },
-  tagline: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 13,
-    color: C.boneOff,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-
-  // Sélecteur de langue
-  langRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 4 },
-  langBtn: {
-    width: 44, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.12)', backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  langBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.18)' },
-  langLabel: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 13,
-    color: 'rgba(244,236,216,0.3)',
-    letterSpacing: 0.5,
-  },
-  langLabelActive: { color: C.brass },
-
-  // Boutons
-  actions: {
-    gap: 14,
-    paddingBottom: 32,
-  },
-  btnPrimary: {
-    backgroundColor: C.brass,
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    shadowColor: C.ink,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  btnPrimaryTxt: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 16,
-    color: C.ink,
-    letterSpacing: 0.4,
-  },
-  btnSecondary: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: C.brass,
-  },
-  btnSecondaryTxt: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 16,
-    color: C.brass,
-    letterSpacing: 0.4,
-  },
-  btnDisabled: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.disabled,
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  btnDisabledIcon: {
-    fontSize: 14,
-  },
-  btnDisabledTxt: {
-    fontFamily: 'Cairo_400Regular',
-    flex: 1,
-    fontSize: 15,
-    color: C.disabledTxt,
-  },
-  btnDisabledBadge: {
-    fontSize: 10,
-    color: C.disabledTxt,
-    borderWidth: 1,
-    borderColor: C.disabledTxt,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-
-  textLinks: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-  },
-  linkSep: {
-    color: 'rgba(244,236,216,0.25)',
-    fontSize: 12,
-  },
-  btnCredits: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  btnCreditsTxt: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 12,
-    color: 'rgba(244,236,216,0.3)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-
-  // Pied
-  footer: {
-    alignItems: 'center',
-    paddingBottom: 12,
-    gap: 6,
-  },
-  footerTxt: {
-    fontSize: 10,
-    color: 'rgba(244,236,216,0.2)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  author: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 12,
-    color: 'rgba(244,236,216,0.45)',
-    letterSpacing: 0.3,
-    textDecorationLine: 'underline',
-  },
 })

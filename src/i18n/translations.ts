@@ -229,6 +229,11 @@ export const translations = {
     rulesMissaDesc: 'تفريغ الطاولة بالكامل في التقاطة واحدة يمنح نقطة مكافأة.',
     rulesRondaDesc: 'بطاقتان من نفس القيمة في يدك.',
     rulesTringaDesc: 'ثلاث بطاقات من نفس القيمة في يدك.',
+    // ── Plateforme ────────────────────────────────────────────────────────────
+    platformGames: 'الألعاب',
+    rondaCardDesc: 'لعبة ورق مغربية كلاسيكية',
+    dijoujCardDesc: 'لعبة ورق شعبية مغربية',
+    dijoujSoon: 'القواعد قادمة قريباً…',
   },
   fr: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -458,6 +463,11 @@ export const translations = {
     rulesMissaDesc: 'Vider entièrement la table en une capture rapporte un point bonus.',
     rulesRondaDesc: 'Deux cartes de même valeur dans ta main.',
     rulesTringaDesc: 'Trois cartes de même valeur dans ta main.',
+    // ── Plateforme ────────────────────────────────────────────────────────────
+    platformGames: 'Jeux',
+    rondaCardDesc: 'Jeu de cartes marocain classique',
+    dijoujCardDesc: 'Jeu de cartes populaire marocain',
+    dijoujSoon: 'Les règles arrivent bientôt…',
   },
   en: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -687,6 +697,11 @@ export const translations = {
     rulesMissaDesc: 'Emptying the entire table in one capture earns a bonus point.',
     rulesRondaDesc: 'Two cards of the same value in your hand.',
     rulesTringaDesc: 'Three cards of the same value in your hand.',
+    // ── Platform ──────────────────────────────────────────────────────────────
+    platformGames: 'Games',
+    rondaCardDesc: 'Classic Moroccan card game',
+    dijoujCardDesc: 'Popular Moroccan card game',
+    dijoujSoon: 'Rules coming soon…',
   },
 } as const
 
