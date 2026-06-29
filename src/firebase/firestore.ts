@@ -188,15 +188,6 @@ export async function sendFriendRequest(myUid: string, targetUid: string): Promi
   try {
     if (myUid === targetUid) throw new Error("Impossible de s'ajouter soi-même.")
 
-    // Vérifie qu'une demande n'existe pas déjà.
-    // On n'interdit que si le statut est pending ou accepted —
-    // un statut résiduel (ex. doc non supprimé après removeFriend) laisse passer.
-    const existing = await getDoc(friendRef(targetUid, myUid))
-    if (existing.exists()) {
-      const st = existing.data()?.status as string | undefined
-      if (st === 'pending' || st === 'accepted') throw new Error('already_sent')
-    }
-
     const authUser = getAuth(firebaseApp).currentUser
     const myUsername = (await getUsername(myUid).catch(() => null))
       || authUser?.displayName
