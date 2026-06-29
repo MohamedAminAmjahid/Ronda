@@ -18,8 +18,8 @@ export function httpBase(): string {
 }
 
 /** Partie rapide : rejoint la 1re room publique en attente, ou en crée une. */
-export function joinOrCreate(pseudo: string): Promise<Room> {
-  return getClient().joinOrCreate('ronda', { pseudo })
+export function joinOrCreate(pseudo: string, bet = 0): Promise<Room> {
+  return getClient().joinOrCreate('ronda', { pseudo, bet })
 }
 
 /** Crée une partie privée (code partagé). */
@@ -41,8 +41,8 @@ export function createLobby2v2(pseudo: string): Promise<Room> {
 }
 
 /** Partie rapide Di Jouj (matchmaking public). */
-export function joinDiJoujQuick(pseudo: string): Promise<Room> {
-  return getClient().joinOrCreate('dijouj', { pseudo })
+export function joinDiJoujQuick(pseudo: string, bet = 0): Promise<Room> {
+  return getClient().joinOrCreate('dijouj', { pseudo, bet })
 }
 
 /** Partie privée Di Jouj (code à partager). */
@@ -56,17 +56,32 @@ export function createDiJoujLobby(pseudo: string): Promise<Room> {
 }
 
 export interface WeeklyEntry {
-  username: string
+  username:   string
   week_start: string
-  gold_wagered: number
-  league: string
+  totalGold:  number
+  rondaGold:  number
+  dijoujGold: number
+  league:     string
 }
 
-/** Classement hebdomadaire d'une ligue (semaine courante). */
+export interface WeeklyStats {
+  rondaGold:  number
+  dijoujGold: number
+  totalGold:  number
+}
+
+/** Classement hebdomadaire agrégé (Ronda + Di Jouj) d'une ligue. */
 export async function fetchWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
   const res = await fetch(`${httpBase()}/leaderboard/weekly?league=${encodeURIComponent(league)}`)
   if (!res.ok) throw new Error('Classement indisponible.')
   return (await res.json()) as WeeklyEntry[]
+}
+
+/** Détail par jeu pour un joueur cette semaine. */
+export async function fetchWeeklyStats(username: string): Promise<WeeklyStats> {
+  const res = await fetch(`${httpBase()}/leaderboard/weekly/stats/${encodeURIComponent(username)}`)
+  if (!res.ok) return { rondaGold: 0, dijoujGold: 0, totalGold: 0 }
+  return (await res.json()) as WeeklyStats
 }
 
 /** Ligue courante d'un joueur. */

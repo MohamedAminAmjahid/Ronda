@@ -4,6 +4,7 @@ import { createInitialState } from '../engine-dijouj/deal'
 import { applyPlayCard, applyDraw } from '../engine-dijouj/game'
 import type { GameState, Card, Suit } from '../engine-dijouj/types'
 import { generateCode, registerCode, unregisterCode } from './registry'
+import { addWageredGold } from '../db/queries'
 
 // ── Schéma Colyseus (état public du lobby) ────────────────────────────────────
 
@@ -38,6 +39,7 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
 
   private engine!: GameState
   private pc = 0
+  private bet = 0
   private sessionBySeat: (string | null)[] = []
   private pseudoBySeat:  string[]           = []
   private isBotSeat:     boolean[]          = []
@@ -46,9 +48,10 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
 
   // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-  onCreate(): void {
+  onCreate(options?: { bet?: number }): void {
     this.state = new DiJoujLobbyState()
     this.setPrivate(true)
+    this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
 
     const code = generateCode()
     this.state.code = code
@@ -197,10 +200,18 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
     this.finished = true
     if (this.state.phase !== 'GAME_OVER') this.state.phase = 'GAME_OVER'
     this.sendPrivateStateToAll()
+
+    const winnerPseudo = winnerSeat !== undefined ? (this.pseudoBySeat[winnerSeat] ?? null) : null
+    const goldWon = this.bet > 0 ? this.bet * this.pc : 0
+    if (this.bet > 0 && winnerPseudo) {
+      addWageredGold(winnerPseudo, goldWon, 'dijouj')
+    }
+
     this.broadcast('game_over', {
-      aborted:      false,
+      aborted:     false,
       winnerSeat,
-      winnerPseudo: winnerSeat !== undefined ? (this.pseudoBySeat[winnerSeat] ?? null) : null,
+      winnerPseudo,
+      goldWon,
     })
   }
 

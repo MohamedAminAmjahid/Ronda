@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Platform, I18nManager } from 'react-native'
+import { Platform, I18nManager, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { ReemKufi_700Bold } from '@expo-google-fonts/reem-kufi'
@@ -7,6 +7,7 @@ import { Cairo_400Regular, Cairo_600SemiBold } from '@expo-google-fonts/cairo'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFirebaseProfileSync } from '../firebase/sync'
 import { useI18n } from '../i18n/useI18n'
+import { BottomNav } from '../ui/BottomNav'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -41,5 +42,10 @@ export default function RootLayout() {
     return null
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }} />
+      <BottomNav />
+    </View>
+  )
 }

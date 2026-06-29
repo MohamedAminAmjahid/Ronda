@@ -5,6 +5,7 @@ import { applyPlayCard, applyDraw } from '../engine-dijouj/game'
 import type { GameState, Card, Suit } from '../engine-dijouj/types'
 import { botPlay } from '../ai-dijouj/bot'
 import { generateCode, registerCode, unregisterCode } from './registry'
+import { addWageredGold } from '../db/queries'
 
 // ── Schéma Colyseus (état PUBLIC) ─────────────────────────────────────────────
 
@@ -53,16 +54,19 @@ export class DiJoujRoom extends Room<DiJoujState> {
   private botSeat:       0 | 1 | null                   = null
   private reconnectSeconds = Number(process.env.RECONNECT_SECONDS ?? 60)
   private finished = false
+  private bet = 0
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean; withBot?: boolean }): void {
+  onCreate(options: { private?: boolean; withBot?: boolean; bet?: number }): void {
     this.state = new DiJoujState()
 
     const code = generateCode()
     this.state.code = code
     this.setMetadata({ code })
     registerCode(code, this.roomId, 'dijouj')
+
+    this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
 
     if (options?.private) this.setPrivate(true)
 
@@ -229,10 +233,17 @@ export class DiJoujRoom extends Room<DiJoujState> {
     this.syncPublic()
     this.sendPrivateStateToAll()
 
+    const winnerPseudo = winnerSeat !== undefined ? this.pseudoBySeat[winnerSeat] : null
+    const goldWon = this.bet > 0 ? this.bet * 2 : 0
+    if (this.bet > 0 && winnerPseudo) {
+      addWageredGold(winnerPseudo, goldWon, 'dijouj')
+    }
+
     this.broadcast('game_over', {
-      aborted:      false,
+      aborted:     false,
       winnerSeat,
-      winnerPseudo: winnerSeat !== undefined ? this.pseudoBySeat[winnerSeat] : null,
+      winnerPseudo,
+      goldWon,
     })
   }
 

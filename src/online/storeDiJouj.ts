@@ -1,6 +1,7 @@
 import type { Room } from 'colyseus.js'
 import type { Suit, Value, PendingEffect } from '../engine-dijouj/types'
 import { joinDiJoujQuick, createDiJoujPrivate } from './client'
+import { addGold } from '../profile/profile'
 
 // ── Types des messages serveur ────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ export interface DjGameOverPayload {
   aborted:       boolean
   winnerSeat?:   number | null
   winnerPseudo?: string | null
+  goldWon?:      number
   reason?:       string
 }
 
@@ -44,6 +46,7 @@ export interface DjSnapshot {
   status:               ConnectionStatus
   roomCode:             string | null
   mySeat:               number | null
+  bet:                  number
   server:               DjServerState | null
   opponentDisconnected: boolean
   gameOver:             DjGameOverPayload | null
@@ -56,6 +59,7 @@ let snapshot: DjSnapshot = {
   status:               'idle',
   roomCode:             null,
   mySeat:               null,
+  bet:                  0,
   server:               null,
   opponentDisconnected: false,
   gameOver:             null,
@@ -107,6 +111,13 @@ function wireRoom(r: Room): void {
     if (payload.aborted) {
       set({ status: 'disconnected', error: 'Partie annulée (adversaire absent).' })
     }
+    // Créditer l'or gagné si le joueur local a gagné
+    if (!payload.aborted && payload.goldWon && payload.goldWon > 0) {
+      const mySeat = snapshot.mySeat
+      if (mySeat !== null && payload.winnerSeat === mySeat) {
+        addGold(payload.goldWon)
+      }
+    }
   })
 
   r.onMessage('opponent_disconnected', () => set({ opponentDisconnected: true }))
@@ -139,8 +150,9 @@ async function connect(factory: () => Promise<Room>): Promise<void> {
 
 // ── Actions exposées ──────────────────────────────────────────────────────────
 
-export function connectDiJoujQuick(pseudo: string): Promise<void> {
-  return connect(() => joinDiJoujQuick(pseudo))
+export function connectDiJoujQuick(pseudo: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => joinDiJoujQuick(pseudo, bet))
 }
 
 export function connectDiJoujPrivate(pseudo: string): Promise<void> {
@@ -173,6 +185,7 @@ export function reset(): void {
     status:               'idle',
     roomCode:             null,
     mySeat:               null,
+    bet:                  0,
     server:               null,
     opponentDisconnected: false,
     gameOver:             null,

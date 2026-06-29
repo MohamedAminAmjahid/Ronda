@@ -88,4 +88,32 @@ function migrate(database: SqliteDb): void {
 
     CREATE INDEX IF NOT EXISTS idx_weekly_week_league ON weekly_scores (week_start, league);
   `)
+
+  // v2: add 'game' column and change PK to (username, week_start, game)
+  migrateWeeklyScoresV2(database)
+}
+
+function migrateWeeklyScoresV2(database: SqliteDb): void {
+  const cols = database.prepare('PRAGMA table_info(weekly_scores)').all() as { name: string }[]
+  if (cols.some(c => c.name === 'game')) return  // already migrated
+
+  database.exec(`
+    CREATE TABLE weekly_scores_v2 (
+      username     TEXT NOT NULL,
+      week_start   TEXT NOT NULL,
+      game         TEXT NOT NULL DEFAULT 'ronda',
+      gold_wagered INTEGER NOT NULL DEFAULT 0,
+      league       TEXT NOT NULL DEFAULT 'Bronze',
+      PRIMARY KEY (username, week_start, game)
+    );
+
+    INSERT INTO weekly_scores_v2 (username, week_start, game, gold_wagered, league)
+      SELECT username, week_start, 'ronda', gold_wagered, league FROM weekly_scores;
+
+    DROP TABLE weekly_scores;
+
+    ALTER TABLE weekly_scores_v2 RENAME TO weekly_scores;
+
+    CREATE INDEX IF NOT EXISTS idx_weekly_week_league ON weekly_scores (week_start, league);
+  `)
 }

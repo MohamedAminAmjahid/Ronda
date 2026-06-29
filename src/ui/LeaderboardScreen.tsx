@@ -159,10 +159,20 @@ export function LeaderboardScreen({ onBack }: Props) {
               return (
                 <View key={e.username} style={[s.row, me && s.rowMe]}>
                   <Text style={s.rank}>{i < 3 ? MEDALS[i] : `${i + 1}`}</Text>
-                  <Text style={[s.name, me && s.nameMe]} numberOfLines={1}>
-                    {e.username}{me ? ' ' + t('youParens') : ''}
-                  </Text>
-                  <Text style={s.wagered}>🪙 {e.gold_wagered}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.name, me && s.nameMe]} numberOfLines={1}>
+                      {e.username}{me ? ' ' + t('youParens') : ''}
+                    </Text>
+                    <View style={s.gameBadges}>
+                      {e.rondaGold > 0 && (
+                        <Text style={s.gameBadgeRonda}>🟢 {e.rondaGold}</Text>
+                      )}
+                      {e.dijoujGold > 0 && (
+                        <Text style={s.gameBadgeDijouj}>🔴 {e.dijoujGold}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={s.wagered}>🪙 {e.totalGold}</Text>
                 </View>
               )
             })
@@ -216,8 +226,11 @@ const s = StyleSheet.create({
   },
   rowMe: { borderWidth: 1.5, borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.12)' },
   rank: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone, width: 30, textAlign: 'center' },
-  name: { flex: 1, fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone },
+  name: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone },
   nameMe: { fontFamily: 'Cairo_600SemiBold', color: C.brass },
+  gameBadges: { flexDirection: 'row', gap: 8, marginTop: 1 },
+  gameBadgeRonda: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.55)' },
+  gameBadgeDijouj: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.55)' },
   wagered: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
 
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 30, lineHeight: 20 },

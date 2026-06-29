@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, TextInput, ScrollView } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
-import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
-import {
-  loadActiveRoom, clearActiveRoom, type ActiveRoom,
-  incrementUsernameChanges, USERNAME_CHANGE_COST,
-} from '../profile/profile'
-import { updateUsername, isUsernameAvailable } from '../firebase/firestore'
+import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 
@@ -44,42 +39,8 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
-  const { username, gold, gamesPlayed, gamesWon, usernameChanges, setUsername, removeGold } = useProfile()
-  const { user } = useAuth()
+  const { username } = useProfile()
   const { t, lang, setLang } = useI18n()
-  const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [usernameError, setUsernameError] = useState<string | null>(null)
-
-  const isFreeChange = usernameChanges === 0
-  const canAfford = isFreeChange || gold >= USERNAME_CHANGE_COST
-
-  const openEditor = () => { setDraft(username); setUsernameError(null); setEditing(true) }
-  const saveUsername = async () => {
-    const clean = draft.trim()
-    if (clean.length < 2 || saving || !canAfford) return
-    if (clean === username) { setEditing(false); return }
-    setSaving(true)
-    setUsernameError(null)
-    try {
-      if (user) {
-        const available = await isUsernameAvailable(clean, user.uid)
-        if (!available) {
-          setUsernameError(t('usernameTaken'))
-          return
-        }
-      }
-      if (!isFreeChange) removeGold(USERNAME_CHANGE_COST)
-      setUsername(clean)
-      incrementUsernameChanges()
-      if (user) void updateUsername(user.uid, clean).catch(() => {})
-      setEditing(false)
-    } finally {
-      setSaving(false)
-    }
-  }
 
   // ── Reconnexion à une partie en cours ──────────────────────────────────────
   const [resumeRoom, setResumeRoom] = useState<ActiveRoom | null>(null)
@@ -122,66 +83,6 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
 
-        {/* ── Modale d'édition du pseudo ───────────────────────── */}
-        <Modal visible={editing} transparent animationType="fade" onRequestClose={() => setEditing(false)}>
-          <View style={s.modalBackdrop}>
-            <View style={s.modalCard}>
-              <Text style={s.modalTitle}>{t('yourUsername')}</Text>
-              <TextInput
-                style={s.modalInput}
-                value={draft}
-                onChangeText={(v) => setDraft(v.slice(0, 16))}
-                placeholder={t('usernamePlaceholder')}
-                placeholderTextColor={C.boneOff}
-                maxLength={16}
-                autoFocus
-                autoCorrect={false}
-              />
-              <Text style={s.modalHint}>{t('usernameMaxChars')}</Text>
-              {isFreeChange
-                ? <Text style={s.costFree}>{t('firstChangeFree')}</Text>
-                : <Text style={s.costPaid}>{t('changeCost').replace('{n}', String(USERNAME_CHANGE_COST))}</Text>
-              }
-              {usernameError ? <Text style={s.usernameErrorTxt}>{usernameError}</Text> : null}
-              <View style={s.statsRow}>
-                <View style={s.statBox}>
-                  <Text style={s.statNum}>{gamesPlayed}</Text>
-                  <Text style={s.statLbl}>{t('gamesPlayed')}</Text>
-                </View>
-                <View style={s.statBox}>
-                  <Text style={s.statNum}>{gamesWon}</Text>
-                  <Text style={s.statLbl}>{t('gamesWon')}</Text>
-                </View>
-                <View style={s.statBox}>
-                  <Text style={s.statNum}>{winRate}%</Text>
-                  <Text style={s.statLbl}>{t('winRateLabel')}</Text>
-                </View>
-              </View>
-              <View style={s.modalActions}>
-                <TouchableOpacity style={s.modalCancel} onPress={() => setEditing(false)}>
-                  <Text style={s.modalCancelTxt}>{t('cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    s.modalSave,
-                    (draft.trim().length < 2 || !canAfford || saving) && s.btnDisabledOpacity,
-                  ]}
-                  disabled={draft.trim().length < 2 || !canAfford || saving}
-                  onPress={() => { void saveUsername() }}
-                >
-                  <Text style={s.modalSaveTxt}>
-                    {saving
-                      ? t('verifying')
-                      : !canAfford
-                      ? t('insufficientGold').replace('{n}', String(USERNAME_CHANGE_COST))
-                      : t('save')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-
         {/* ── Modale de reconnexion ────────────────────────────── */}
         <Modal visible={resumeRoom !== null} transparent animationType="fade" onRequestClose={onForfeit}>
           <View style={s.modalBackdrop}>
@@ -219,46 +120,6 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           </View>
         </Modal>
 
-        {/* ── Barre de profil ──────────────────────────────────── */}
-        <View style={s.profileBar}>
-          <View style={s.profileLeft}>
-            <TouchableOpacity style={s.profileNameWrap} onPress={openEditor} activeOpacity={0.7}>
-              <Text style={s.profileName} numberOfLines={1}>{username || '…'}</Text>
-              <Text style={s.profileEdit}>✎</Text>
-            </TouchableOpacity>
-            {user ? (
-              <Text style={s.profileEmail} numberOfLines={1}>{user.email}</Text>
-            ) : (
-              <TouchableOpacity onPress={() => router.push('/auth' as Href)} activeOpacity={0.7}>
-                <Text style={s.profileSignIn}>{t('signInLink')}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={s.profileRight}>
-            {user && (
-              <TouchableOpacity
-                style={s.friendsBtn}
-                onPress={() => router.push('/friends' as Href)}
-                activeOpacity={0.7}
-                accessibilityLabel="Amis"
-              >
-                <Text style={s.friendsIcon}>👥</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={s.goldPill}
-              onPress={() => router.push('/gold-shop' as Href)}
-              activeOpacity={0.7}
-              accessibilityLabel="Ouvrir la boutique d'or"
-            >
-              <Text style={s.goldCoin}>🪙</Text>
-              <Text style={s.goldAmount}>{gold}</Text>
-              <Text style={s.goldPlus}>+</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* ── Contenu scrollable ────────────────────────────────── */}
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -269,6 +130,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
               <Text style={s.platformTM}>TM</Text>
             </View>
             <Text style={s.platformAr}>دار الورقة</Text>
+            <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
           </View>
 
           {/* ── Section Jeux ─────────────────────────────────────── */}
@@ -367,44 +229,9 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
 
-  // Barre de profil
-  profileBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  profileLeft: { flexShrink: 1, gap: 2 },
-  profileRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  profileEmail: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.35)' },
-  profileSignIn: {
-    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.brass, textDecorationLine: 'underline',
-  },
-  friendsBtn: {
-    width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
-  },
-  friendsIcon: { fontSize: 16 },
-  profileNameWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
-  profileName: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone, letterSpacing: 0.3 },
-  profileEdit: { fontSize: 12, color: C.boneOff },
-  goldPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
-  },
-  goldCoin: { fontSize: 14 },
-  goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
-  goldPlus: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, marginLeft: 2,
-    backgroundColor: C.brass, width: 18, height: 18, borderRadius: 9,
-    textAlign: 'center', lineHeight: 18, overflow: 'hidden',
-  },
-
   // Scrollable
   scroll: { flex: 1 },
-  scrollContent: { gap: 14, paddingBottom: 28 },
+  scrollContent: { gap: 14, paddingBottom: 28, paddingTop: 8 },
 
   // Hero
   hero: { alignItems: 'center', paddingVertical: 24, gap: 6 },
@@ -427,6 +254,9 @@ const s = StyleSheet.create({
     fontSize: 22,
     color: C.brass,
     letterSpacing: 1,
+  },
+  helloTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)', marginTop: 4,
   },
 
   // Section label
@@ -539,7 +369,7 @@ const s = StyleSheet.create({
     color: 'rgba(244,236,216,0.28)', letterSpacing: 0.3, textDecorationLine: 'underline',
   },
 
-  // Modals
+  // Modal reconnexion
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(13,13,26,0.90)',
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28,
@@ -551,25 +381,7 @@ const s = StyleSheet.create({
   modalTitle: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff, letterSpacing: 1.5, textTransform: 'uppercase',
   },
-  modalInput: {
-    backgroundColor: 'rgba(0,0,0,0.30)', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 13,
-    fontFamily: 'Cairo_400Regular', fontSize: 16, color: C.bone, borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.20)',
-  },
-  modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
-  costFree: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#4CAF50' },
-  costPaid: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.brass },
-  usernameErrorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#E57373' },
   resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
-  statsRow: {
-    flexDirection: 'row', justifyContent: 'space-around', marginTop: 6, paddingTop: 12,
-    borderTopWidth: 1, borderTopColor: 'rgba(244,236,216,0.10)',
-  },
-  statBox: { alignItems: 'center', gap: 2 },
-  statNum: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.brass },
-  statLbl: {
-    fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff, letterSpacing: 0.5, textTransform: 'uppercase',
-  },
   modalActions: {
     flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 6,
   },

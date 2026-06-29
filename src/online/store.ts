@@ -1,7 +1,7 @@
 import type { Room } from 'colyseus.js'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
 import { joinOrCreate, createPrivate, joinByCode, getClient } from './client'
-import { setActiveRoom, clearActiveRoom } from '../profile/profile'
+import { setActiveRoom, clearActiveRoom, addGold } from '../profile/profile'
 
 // ── Types des messages serveur ─────────────────────────────────────────────────
 
@@ -43,6 +43,7 @@ export interface GameOverPayload {
   aborted: boolean
   winnerSeat?: PlayerId | null
   winnerPseudo?: string | null
+  goldWon?: number
   scores?: [number, number]
   reason?: string
 }
@@ -59,6 +60,7 @@ export interface OnlineSnapshot {
   status: ConnectionStatus
   roomCode: string | null
   mySeat: PlayerId | null
+  bet: number
   server: ServerGameState | null
   opponentDisconnected: boolean
   gameOver: GameOverPayload | null
@@ -74,6 +76,7 @@ let snapshot: OnlineSnapshot = {
   status: 'idle',
   roomCode: null,
   mySeat: null,
+  bet: 0,
   server: null,
   opponentDisconnected: false,
   gameOver: null,
@@ -152,7 +155,14 @@ function wireRoom(r: Room): void {
   r.onMessage('game_over', (payload: GameOverPayload) => {
     clearActiveRoom()
     set({ gameOver: payload })
-    if (payload.aborted) set({ status: 'disconnected', error: 'Partie annulée (adversaire absent).' })
+    if (payload.aborted) {
+      set({ status: 'disconnected', error: 'Partie annulée (adversaire absent).' })
+    } else if (payload.goldWon && payload.goldWon > 0) {
+      const mySeat = snapshot.mySeat
+      if (mySeat !== null && payload.winnerSeat === mySeat) {
+        addGold(payload.goldWon)
+      }
+    }
   })
 
   r.onMessage('opponent_disconnected', () => set({ opponentDisconnected: true }))
@@ -186,8 +196,9 @@ async function connect(factory: () => Promise<Room>): Promise<void> {
 
 // ── Actions exposées ─────────────────────────────────────────────────────────
 
-export function connectQuick(pseudo: string): Promise<void> {
-  return connect(() => joinOrCreate(pseudo))
+export function connectQuick(pseudo: string, bet = 0): Promise<void> {
+  set({ bet })
+  return connect(() => joinOrCreate(pseudo, bet))
 }
 export function connectCreate(pseudo: string): Promise<void> {
   return connect(() => createPrivate(pseudo))
@@ -228,6 +239,7 @@ export function reset(): void {
     status: 'idle',
     roomCode: null,
     mySeat: null,
+    bet: 0,
     server: null,
     opponentDisconnected: false,
     gameOver: null,

@@ -90,8 +90,24 @@ const DEMOTE_COUNT = 3
 export interface WeeklyScoreRecord {
   username: string
   week_start: string
+  game: string
   gold_wagered: number
   league: string
+}
+
+export interface WeeklyEntry {
+  username:    string
+  week_start:  string
+  totalGold:   number
+  rondaGold:   number
+  dijoujGold:  number
+  league:      string
+}
+
+export interface WeeklyStats {
+  rondaGold:  number
+  dijoujGold: number
+  totalGold:  number
 }
 
 export interface WeeklyReward {
@@ -140,30 +156,53 @@ export function getUserLeague(username: string): League {
  * Incrémente l'or misé d'un joueur pour la semaine courante (crée la ligne si
  * absente, avec la ligue courante du joueur). No-op si persistance désactivée.
  */
-export function addWageredGold(username: string, amount: number): void {
+export function addWageredGold(username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda'): void {
   const db = getDbOrNull()
   if (!db || amount <= 0) return
   const week = currentWeekStart()
   const league = getUserLeague(username)
   db.prepare(`
-    INSERT INTO weekly_scores (username, week_start, gold_wagered, league)
-    VALUES (@username, @week, @amount, @league)
-    ON CONFLICT(username, week_start) DO UPDATE SET
+    INSERT INTO weekly_scores (username, week_start, game, gold_wagered, league)
+    VALUES (@username, @week, @game, @amount, @league)
+    ON CONFLICT(username, week_start, game) DO UPDATE SET
       gold_wagered = gold_wagered + @amount
-  `).run({ username, week, amount, league })
+  `).run({ username, week, game, amount, league })
 }
 
-/** Classement de la semaine courante pour une ligue, trié par or misé décroissant. */
-export function getWeeklyLeaderboard(league: string): WeeklyScoreRecord[] {
+/** Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue. */
+export function getWeeklyLeaderboard(league: string): WeeklyEntry[] {
   const db = getDbOrNull()
   if (!db) return []
   const week = currentWeekStart()
   return db.prepare(`
-    SELECT username, week_start, gold_wagered, league
+    SELECT
+      username,
+      week_start,
+      SUM(gold_wagered)                                              AS totalGold,
+      SUM(CASE WHEN game = 'ronda'  THEN gold_wagered ELSE 0 END)   AS rondaGold,
+      SUM(CASE WHEN game = 'dijouj' THEN gold_wagered ELSE 0 END)   AS dijoujGold,
+      league
     FROM weekly_scores
     WHERE week_start = ? AND league = ?
-    ORDER BY gold_wagered DESC, username ASC
-  `).all(week, league) as WeeklyScoreRecord[]
+    GROUP BY username, week_start, league
+    ORDER BY totalGold DESC, username ASC
+  `).all(week, league) as WeeklyEntry[]
+}
+
+/** Détail par jeu pour un joueur cette semaine. */
+export function getWeeklyStats(username: string): WeeklyStats {
+  const db = getDbOrNull()
+  if (!db) return { rondaGold: 0, dijoujGold: 0, totalGold: 0 }
+  const week = currentWeekStart()
+  const rows = db.prepare(`
+    SELECT game, SUM(gold_wagered) AS gold
+    FROM weekly_scores
+    WHERE username = ? AND week_start = ?
+    GROUP BY game
+  `).all(username, week) as { game: string; gold: number }[]
+  const rondaGold  = rows.find(r => r.game === 'ronda')?.gold ?? 0
+  const dijoujGold = rows.find(r => r.game === 'dijouj')?.gold ?? 0
+  return { rondaGold, dijoujGold, totalGold: rondaGold + dijoujGold }
 }
 
 /**
@@ -195,8 +234,9 @@ export function processWeeklyReset(): WeeklyReward[] {
   const apply = db.transaction(() => {
     for (const league of LEAGUES) {
       const standings = db.prepare(`
-        SELECT username, gold_wagered FROM weekly_scores
+        SELECT username, SUM(gold_wagered) AS gold_wagered FROM weekly_scores
         WHERE week_start = ? AND league = ?
+        GROUP BY username
         ORDER BY gold_wagered DESC, username ASC
       `).all(week, league) as { username: string; gold_wagered: number }[]
 

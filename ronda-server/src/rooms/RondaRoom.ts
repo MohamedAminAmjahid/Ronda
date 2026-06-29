@@ -311,7 +311,7 @@ export class RondaRoom extends Room<RondaState> {
 
     // Partie avec mise → crédite l'or misé au vainqueur pour le classement hebdo.
     if (this.bet > 0 && winnerPseudo) {
-      addWageredGold(winnerPseudo, this.bet)
+      addWageredGold(winnerPseudo, this.bet * 2, 'ronda')
     }
 
     this.broadcast('game_over', {
@@ -319,6 +319,7 @@ export class RondaRoom extends Room<RondaState> {
       winnerSeat,
       winnerPseudo,
       scores,
+      goldWon: winnerSeat !== null ? this.bet * 2 : 0,
       reason: forcedWinner !== undefined ? 'opponent_forfeit' : undefined,
       stats: {
         [this.pseudoBySeat[0]]: getStats(this.pseudoBySeat[0]),

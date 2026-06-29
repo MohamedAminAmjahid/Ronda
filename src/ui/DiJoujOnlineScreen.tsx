@@ -80,7 +80,7 @@ export function DiJoujOnlineScreen() {
   const {
     state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
-    connectionStatus, roomCode, opponents, opponentDisconnected,
+    connectionStatus, roomCode, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
   } = useOnlineDiJouj()
 
@@ -461,8 +461,13 @@ export function DiJoujOnlineScreen() {
               <Text style={s.overlayTitle}>
                 {winner === 0 ? t('djYouWin') : t('djYouLose')}
               </Text>
-              {gameOver?.winnerPseudo && (
+              {gameOver?.winnerPseudo && winner !== 0 && (
                 <Text style={s.overlaySub}>{gameOver.winnerPseudo}</Text>
+              )}
+              {winner === 0 && gameOver?.goldWon && gameOver.goldWon > 0 && (
+                <Text style={s.overlayGold}>
+                  🪙 +{gameOver.goldWon - bet} gold gagnés !
+                </Text>
               )}
               <TouchableOpacity onPress={handleLeave} activeOpacity={0.7} style={s.backFromOverlay}>
                 <Text style={s.backFromOverlayTxt}>{t('back')}</Text>
@@ -617,7 +622,11 @@ const s = StyleSheet.create({
   overlayTitle: {
     fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 24, letterSpacing: 0.5, textAlign: 'center',
   },
-  overlaySub: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, textAlign: 'center' },
+  overlaySub:  { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, textAlign: 'center' },
+  overlayGold: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 18, textAlign: 'center',
+    textShadowColor: 'rgba(201,162,39,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+  },
   backFromOverlay:    { marginTop: 4 },
   backFromOverlayTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
 })

@@ -6,7 +6,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport'
 import { initDatabase } from './db/database'
 import {
   getStats, getLeaderboard, getRecentGames,
-  getWeeklyLeaderboard, getUserLeague, processWeeklyReset,
+  getWeeklyLeaderboard, getWeeklyStats, getUserLeague, processWeeklyReset,
 } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
@@ -50,6 +50,11 @@ app.get('/room/:code/type', (req, res) => {
 app.get('/leaderboard/weekly', (req, res) => {
   const league = typeof req.query.league === 'string' ? req.query.league : 'Bronze'
   return res.json(getWeeklyLeaderboard(league))
+})
+
+// Détail par jeu pour un joueur cette semaine.
+app.get('/leaderboard/weekly/stats/:username', (req, res) => {
+  return res.json(getWeeklyStats(req.params.username))
 })
 
 // Ligue courante d'un joueur.

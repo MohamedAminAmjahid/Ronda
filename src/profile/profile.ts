@@ -26,6 +26,10 @@ export interface Profile {
   gamesPlayed: number
   gamesWon: number
   usernameChanges: number
+  rondaPlayed: number
+  rondaWon:    number
+  dijoujPlayed: number
+  dijoujWon:   number
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -45,6 +49,10 @@ let profile: Profile = {
   gamesPlayed: 0,
   gamesWon: 0,
   usernameChanges: 0,
+  rondaPlayed: 0,
+  rondaWon:    0,
+  dijoujPlayed: 0,
+  dijoujWon:   0,
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -82,28 +90,30 @@ export function loadProfile(): Promise<Profile> {
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<Profile>
         profile = {
-          username: parsed.username?.slice(0, MAX_USERNAME) || randomUsername(),
-          gold: typeof parsed.gold === 'number' ? parsed.gold : STARTING_GOLD,
-          gamesPlayed: typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : 0,
-          gamesWon: typeof parsed.gamesWon === 'number' ? parsed.gamesWon : 0,
+          username:       parsed.username?.slice(0, MAX_USERNAME) || randomUsername(),
+          gold:           typeof parsed.gold === 'number' ? parsed.gold : STARTING_GOLD,
+          gamesPlayed:    typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : 0,
+          gamesWon:       typeof parsed.gamesWon === 'number' ? parsed.gamesWon : 0,
           usernameChanges: typeof parsed.usernameChanges === 'number' ? parsed.usernameChanges : 0,
+          rondaPlayed:    typeof parsed.rondaPlayed === 'number' ? parsed.rondaPlayed : 0,
+          rondaWon:       typeof parsed.rondaWon === 'number' ? parsed.rondaWon : 0,
+          dijoujPlayed:   typeof parsed.dijoujPlayed === 'number' ? parsed.dijoujPlayed : 0,
+          dijoujWon:      typeof parsed.dijoujWon === 'number' ? parsed.dijoujWon : 0,
         }
       } else {
         profile = {
           username: randomUsername(),
           gold: STARTING_GOLD,
-          gamesPlayed: 0,
-          gamesWon: 0,
-          usernameChanges: 0,
+          gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
+          rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
         }
       }
     } catch {
       profile = {
         username: randomUsername(),
         gold: STARTING_GOLD,
-        gamesPlayed: 0,
-        gamesWon: 0,
-        usernameChanges: 0,
+        gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
+        rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
       }
     }
     loaded = true
@@ -189,13 +199,17 @@ export function incrementUsernameChanges(): void {
  * et (si gagnée) le compteur de victoires + crédite WIN_REWARD d'or.
  * Retourne l'or gagné (0 si défaite) pour l'affichage sur l'écran de fin.
  */
-export function recordResult(won: boolean): number {
+export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): number {
   const reward = won ? WIN_REWARD : 0
   profile = {
     ...profile,
-    gamesPlayed: profile.gamesPlayed + 1,
-    gamesWon: profile.gamesWon + (won ? 1 : 0),
-    gold: profile.gold + reward,
+    gamesPlayed:  profile.gamesPlayed + 1,
+    gamesWon:     profile.gamesWon + (won ? 1 : 0),
+    gold:         profile.gold + reward,
+    rondaPlayed:  profile.rondaPlayed  + (game === 'ronda'  ? 1 : 0),
+    rondaWon:     profile.rondaWon     + (game === 'ronda'  && won ? 1 : 0),
+    dijoujPlayed: profile.dijoujPlayed + (game === 'dijouj' ? 1 : 0),
+    dijoujWon:    profile.dijoujWon    + (game === 'dijouj' && won ? 1 : 0),
   }
   void persist()
   emit()

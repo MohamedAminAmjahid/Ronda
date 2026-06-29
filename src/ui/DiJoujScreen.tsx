@@ -12,8 +12,8 @@ import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
 
-const DJ_ONLINE: Href = '/dijouj-online' as Href
-const DJ_LOBBY: Href  = '/dijouj-lobby'  as Href
+const DJ_BET:   Href = '/bet?game=dijouj' as Href
+const DJ_LOBBY: Href = '/dijouj-lobby'   as Href
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ function DiJoujMenu({ onLocalGame }: { onLocalGame: () => void }) {
                 </View>
               </LinearGradient>
             </TouchableOpacity>
-            <TouchableOpacity style={s.menuCard} onPress={() => router.push(DJ_ONLINE)} activeOpacity={0.85}>
+            <TouchableOpacity style={s.menuCard} onPress={() => router.push(DJ_BET)} activeOpacity={0.85}>
               <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
                 <Text style={s.menuCardEmoji}>⚡</Text>
                 <View style={s.menuCardText}>
