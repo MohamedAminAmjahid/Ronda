@@ -40,6 +40,8 @@ const SUIT_COLOR: Record<Suit, string> = {
 
 function cardKey(c: Card) { return `${c.suit}_${c.value}` }
 
+const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos: 3 }
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function DiJoujScreen() {
@@ -52,6 +54,15 @@ export function DiJoujScreen() {
   const human   = state.players[DJ_HUMAN_ID]
   const bot     = state.players.find(p => p.id !== DJ_HUMAN_ID)!
   const topCard = state.discardPile[state.discardPile.length - 1]
+
+  // ── Main triée visuellement ───────────────────────────────────────────────────
+
+  const sortedHand = useMemo(
+    () => [...human.hand].sort(
+      (a, b) => SUIT_RANK[a.suit] - SUIT_RANK[b.suit] || a.value - b.value,
+    ),
+    [human.hand],
+  )
 
   // ── Playable set ─────────────────────────────────────────────────────────────
 
@@ -223,7 +234,7 @@ export function DiJoujScreen() {
             contentContainerStyle={s.handScroll}
             overScrollMode="never"
           >
-            {human.hand.map((card, i) => {
+            {sortedHand.map((card, i) => {
               const playable = playableSet.has(cardKey(card))
               return (
                 <View
