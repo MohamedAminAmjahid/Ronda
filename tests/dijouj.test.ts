@@ -347,15 +347,14 @@ describe('applyDraw — pioche normale', () => {
     expect(r.drawPile).toHaveLength(0)
   })
 
-  it('garde son tour si la carte piochée est jouable', () => {
-    // Humain doit piocher ; la carte piochée est de même couleur que le sommet
+  it('le tour passe toujours après pioche, même si la carte piochée est jouable', () => {
     const s = makeState({
       humanHand:  [c('copas', 3)],
       discardTop: c('oros', 5),
-      drawPile:   [c('oros', 11)],  // jouable (même couleur oros)
+      drawPile:   [c('oros', 11)],  // jouable (même couleur oros), mais le tour passe quand même
     })
     const r = applyDraw(s, 0, rng0)
-    expect(r.currentPlayerId).toBe(0)   // garde le tour
+    expect(r.currentPlayerId).toBe(1)   // tour toujours passé
     expect(r.players[0].hand).toHaveLength(2)
   })
 

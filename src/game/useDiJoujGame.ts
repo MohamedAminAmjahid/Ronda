@@ -15,6 +15,8 @@ export function useDiJoujGame() {
     createInitialState(2, Math.random),
   )
   const [isBotThinking, setIsBotThinking] = useState(false)
+  const [isDrawPause, setIsDrawPause]     = useState(false)
+  const drawPauseTid = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   // Guard pour éviter que l'effet ne se déclenche deux fois sur le même tour bot
   const botActed = useRef(false)
 
@@ -59,15 +61,7 @@ export function useDiJoujGame() {
         const action = botPlay(s, DJ_BOT_ID)
 
         if (action.type === 'draw') {
-          const after = applyDraw(s, DJ_BOT_ID)
-          // La carte piochée est peut-être jouable : joue-la immédiatement
-          if (after.currentPlayerId === DJ_BOT_ID && !after.isOver) {
-            const action2 = botPlay(after, DJ_BOT_ID)
-            if (action2.type === 'play') {
-              return applyPlayCard(after, DJ_BOT_ID, action2.card, action2.chosenSuit)
-            }
-          }
-          return after
+          return applyDraw(s, DJ_BOT_ID)
         }
 
         return applyPlayCard(s, DJ_BOT_ID, action.card, action.chosenSuit)
@@ -94,11 +88,16 @@ export function useDiJoujGame() {
   const draw = useCallback(() => {
     if (!isHumanTurn) return
     setState(s => applyDraw(s, DJ_HUMAN_ID))
+    clearTimeout(drawPauseTid.current)
+    setIsDrawPause(true)
+    drawPauseTid.current = setTimeout(() => setIsDrawPause(false), 800)
   }, [isHumanTurn])
 
   const restart = useCallback(() => {
     botActed.current = false
     setIsBotThinking(false)
+    clearTimeout(drawPauseTid.current)
+    setIsDrawPause(false)
     setState(createInitialState(2, Math.random))
   }, [])
 
@@ -107,6 +106,7 @@ export function useDiJoujGame() {
     isHumanTurn,
     isBotThinking,
     isAutoSkipping,
+    isDrawPause,
     playCard,
     draw,
     isGameOver: state.isOver,

@@ -46,7 +46,7 @@ const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos:
 
 export function DiJoujScreen() {
   const { t } = useI18n()
-  const { state, isHumanTurn, isBotThinking, isAutoSkipping, playCard, draw, isGameOver, winner, restart } =
+  const { state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause, playCard, draw, isGameOver, winner, restart } =
     useDiJoujGame()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
@@ -158,7 +158,8 @@ export function DiJoujScreen() {
   // ── Derived display ───────────────────────────────────────────────────────────
 
   let statusText: string
-  if (isBotThinking)   statusText = t('botThinks').replace('{name}', 'Bot')
+  if (isBotThinking)    statusText = t('botThinks').replace('{name}', 'Bot')
+  else if (isDrawPause) statusText = t('botTurn')   // tour passé, en attente du bot
   else if (isHumanTurn) statusText = t('yourTurn')
   else                  statusText = t('botTurn')
 
@@ -221,9 +222,9 @@ export function DiJoujScreen() {
 
           {/* Draw pile */}
           <TouchableOpacity
-            activeOpacity={isHumanTurn ? 0.75 : 1}
-            onPress={() => isHumanTurn && draw()}
-            style={[s.pileWrap, !isHumanTurn && s.pileInactive]}
+            activeOpacity={isHumanTurn && !isDrawPause ? 0.75 : 1}
+            onPress={() => isHumanTurn && !isDrawPause && draw()}
+            style={[s.pileWrap, (!isHumanTurn || isDrawPause) && s.pileInactive]}
           >
             {state.drawPile.length > 0
               ? <CardBack size="xxl" />

@@ -196,14 +196,8 @@ export function applyDraw(
   const drawnCard  = drawn[0]
   const newHand    = [...player.hand, drawnCard]
   const newPlayers = state.players.map((p, i) => (i === playerId ? { ...p, hand: newHand } : p))
-  const base       = { ...state, players: newPlayers, drawPile, discardPile }
 
-  // La carte piochée est jouable → le joueur peut la jouer immédiatement
-  if (isPlayable(drawnCard, topCard, state.chosenSuit, null)) {
-    return base  // currentPlayerId inchangé
-  }
-
-  return { ...base, currentPlayerId: nextPId }
+  return { ...state, players: newPlayers, drawPile, discardPile, currentPlayerId: nextPId }
 }
 
 export function isGameOver(state: GameState): boolean {
