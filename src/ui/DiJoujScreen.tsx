@@ -95,6 +95,31 @@ export function DiJoujScreen() {
     prevTopKey.current = topKey
   }, [topKey])
 
+  // 2-second "last card" message before showing the game-over overlay
+  const lastCardPulse = useRef(new Animated.Value(1)).current
+  const [showLastCardMsg, setShowLastCardMsg] = useState(false)
+
+  useEffect(() => {
+    if (!isGameOver) {
+      setShowLastCardMsg(false)
+      return
+    }
+    setShowLastCardMsg(true)
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(lastCardPulse, { toValue: 0.35, duration: 350, useNativeDriver: true }),
+        Animated.timing(lastCardPulse, { toValue: 1.0,  duration: 350, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    const tid = setTimeout(() => {
+      loop.stop()
+      lastCardPulse.setValue(1)
+      setShowLastCardMsg(false)
+    }, 2000)
+    return () => { clearTimeout(tid); loop.stop(); lastCardPulse.setValue(1) }
+  }, [isGameOver])
+
   // Bot cards: slow opacity pulse when it's the bot's turn
   const botOpacity = useRef(new Animated.Value(1)).current
 
@@ -282,8 +307,17 @@ export function DiJoujScreen() {
           </View>
         </Modal>
 
-        {/* ── Game over overlay ───────────────────────────────────────────────── */}
-        {isGameOver && (
+        {/* ── "Dernière carte" message (2s before the game-over overlay) ────── */}
+        {isGameOver && showLastCardMsg && (
+          <View style={s.overlay} pointerEvents="none">
+            <Animated.Text style={[s.lastCardTxt, { opacity: lastCardPulse }]}>
+              {t('djLastCard')}
+            </Animated.Text>
+          </View>
+        )}
+
+        {/* ── Game over overlay (appears after 2s delay) ──────────────────────── */}
+        {isGameOver && !showLastCardMsg && (
           <View style={s.overlay}>
             <View style={s.overlayBox}>
               <Text style={s.overlayEmoji}>{winner === DJ_HUMAN_ID ? '🏆' : '😔'}</Text>
@@ -556,5 +590,18 @@ const s = StyleSheet.create({
     fontFamily: 'Cairo_400Regular',
     color:      C.boneOff,
     fontSize:   13,
+  },
+
+  // "Dernière carte" pulsing message
+  lastCardTxt: {
+    fontFamily:        'Cairo_600SemiBold',
+    color:             C.brass,
+    fontSize:          36,
+    letterSpacing:     1,
+    textAlign:         'center',
+    textShadowColor:   'rgba(201,162,39,0.75)',
+    textShadowOffset:  { width: 0, height: 0 },
+    textShadowRadius:  20,
+    paddingHorizontal: 24,
   },
 })

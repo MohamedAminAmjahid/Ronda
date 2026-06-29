@@ -241,6 +241,8 @@ export const translations = {
     djYouWin:     'لقد فزت!',
     djYouLose:    'خسرت.',
     djNewGame:    'مباراة جديدة',
+    djLastCard:   '🎉 آخر ورقة!',
+    djAutoSkip:   'دورك يُتخطى تلقائياً',
   },
   fr: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -482,6 +484,8 @@ export const translations = {
     djYouWin:     'Vous avez gagné !',
     djYouLose:    'Vous avez perdu.',
     djNewGame:    'Nouvelle partie',
+    djLastCard:   '🎉 Dernière carte !',
+    djAutoSkip:   'Tour passé automatiquement',
   },
   en: {
     // ── Menu ──────────────────────────────────────────────────────────────────
@@ -723,6 +727,8 @@ export const translations = {
     djYouWin:     'You won!',
     djYouLose:    'You lost.',
     djNewGame:    'New game',
+    djLastCard:   '🎉 Last card!',
+    djAutoSkip:   'Turn auto-skipped',
   },
 } as const
 
