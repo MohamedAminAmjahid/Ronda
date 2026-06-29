@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAuth } from './auth'
 import { createOrUpdateUser } from './firestore'
-import { getProfile, loadProfile, setUsername } from '../profile/profile'
+import { getProfile, loadProfile, setUsername, setGold } from '../profile/profile'
 
 /**
  * Synchronise le username local ↔ Firebase à la connexion :
@@ -20,13 +20,16 @@ export function useFirebaseProfileSync(): void {
       try {
         await loadProfile()
         const p = getProfile()
-        const { username } = await createOrUpdateUser(user, {
+        const { username, gold } = await createOrUpdateUser(user, {
           username: p.username,
           gold: p.gold,
           gamesPlayed: p.gamesPlayed,
           gamesWon: p.gamesWon,
         })
-        if (!cancelled && username) setUsername(username)
+        if (!cancelled) {
+          if (username) setUsername(username)
+          setGold(gold)
+        }
       } catch {
         // hors-ligne / règles Firestore — on garde le profil local
       }

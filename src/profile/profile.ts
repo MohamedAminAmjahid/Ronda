@@ -1,4 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { getAuth } from 'firebase/auth'
+import { firebaseApp } from '../firebase/config'
+import { updateGold as firestoreUpdateGold } from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
 // - username : généré une seule fois au premier lancement (Joueur#XXXX), puis persisté.
@@ -92,6 +95,12 @@ export function getProfile(): Profile {
   return profile
 }
 
+function syncGoldToFirestore(gold: number): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateGold(uid, gold).catch(() => {})
+}
+
 export function setUsername(name: string): void {
   const clean = name.trim().slice(0, MAX_USERNAME)
   if (clean.length === 0 || clean === profile.username) return
@@ -100,10 +109,18 @@ export function setUsername(name: string): void {
   emit()
 }
 
+export function setGold(amount: number): void {
+  if (amount === profile.gold) return
+  profile = { ...profile, gold: amount }
+  void persist()
+  emit()
+}
+
 export function addGold(amount: number): void {
   if (amount === 0) return
   profile = { ...profile, gold: Math.max(0, profile.gold + amount) }
   void persist()
+  syncGoldToFirestore(profile.gold)
   emit()
 }
 
@@ -111,6 +128,7 @@ export function removeGold(amount: number): void {
   if (amount === 0) return
   profile = { ...profile, gold: Math.max(0, profile.gold - amount) }
   void persist()
+  syncGoldToFirestore(profile.gold)
   emit()
 }
 

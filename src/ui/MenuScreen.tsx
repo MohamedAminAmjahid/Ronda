@@ -8,6 +8,7 @@ import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
 import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
+import { updateUsername } from '../firebase/firestore'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 
@@ -68,7 +69,10 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
   const openEditor = () => { setDraft(username); setEditing(true) }
   const saveUsername = () => {
     const clean = draft.trim()
-    if (clean.length >= 2) setUsername(clean)
+    if (clean.length >= 2) {
+      setUsername(clean)
+      if (user) void updateUsername(user.uid, clean).catch(() => {})
+    }
     setEditing(false)
   }
 

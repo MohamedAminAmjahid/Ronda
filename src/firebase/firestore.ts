@@ -40,9 +40,9 @@ async function getUsername(uid: string): Promise<string> {
 
 /**
  * Crée le profil Firebase au premier login (en reprenant le profil local), sinon
- * met à jour lastSeen. Retourne le username Firebase (à synchroniser localement).
+ * met à jour lastSeen. Retourne username + gold Firebase (à synchroniser localement).
  */
-export async function createOrUpdateUser(user: User, local: LocalProfileSeed): Promise<{ username: string }> {
+export async function createOrUpdateUser(user: User, local: LocalProfileSeed): Promise<{ username: string; gold: number }> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
 
@@ -56,11 +56,25 @@ export async function createOrUpdateUser(user: User, local: LocalProfileSeed): P
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
     })
-    return { username: local.username }
+    return { username: local.username, gold: local.gold }
   }
 
+  const data = snap.data()
   await updateDoc(ref, { lastSeen: serverTimestamp() })
-  return { username: (snap.data().username as string) || local.username }
+  return {
+    username: (data.username as string) || local.username,
+    gold: typeof data.gold === 'number' ? (data.gold as number) : local.gold,
+  }
+}
+
+/** Met à jour le username dans Firestore. */
+export async function updateUsername(uid: string, username: string): Promise<void> {
+  await updateDoc(userRef(uid), { username })
+}
+
+/** Met à jour le gold dans Firestore. */
+export async function updateGold(uid: string, gold: number): Promise<void> {
+  await updateDoc(userRef(uid), { gold })
 }
 
 /** Recherche un utilisateur par username (match exact). null si introuvable. */
