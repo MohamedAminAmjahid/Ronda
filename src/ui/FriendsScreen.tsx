@@ -168,6 +168,16 @@ export function FriendsScreen({ onBack }: Props) {
     setPendingInvite(null)
   }
 
+  async function waitForRoomCode(getSnap: () => { roomCode: string | null }, timeoutMs = 10000): Promise<string> {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      const code = getSnap().roomCode
+      if (code) return code
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+    throw new Error('timeout waiting for room code')
+  }
+
   async function doSendInvite() {
     if (!user || !inviteFriend) return
     if (inviteBet > gold) { setInviteError('Or insuffisant'); setInvitePhase('error'); return }
@@ -203,10 +213,10 @@ export function FriendsScreen({ onBack }: Props) {
           const pseudo = usernameRef.current || 'Joueur'
           if (game === 'dijouj') {
             await connectDiJoujFriendHost(pseudo, bet)
-            roomCode = getDjSnap().roomCode
+            roomCode = await waitForRoomCode(() => getDjSnap())
           } else {
             await connectFriendHost(pseudo, bet)
-            roomCode = getRondaSnap().roomCode
+            roomCode = await waitForRoomCode(() => getRondaSnap())
           }
           console.log('[invite] roomCode:', roomCode)
           if (!roomCode) throw new Error('no room code')
