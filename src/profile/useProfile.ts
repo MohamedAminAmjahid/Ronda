@@ -6,6 +6,9 @@ import {
   setUsername,
   addGold,
   removeGold,
+  setAvatarEmoji,
+  setAvatarImage,
+  clearAvatar,
   type Profile,
 } from './profile'
 
@@ -34,8 +37,14 @@ export function useProfile() {
     rondaWon:       profile.rondaWon,
     dijoujPlayed:   profile.dijoujPlayed,
     dijoujWon:      profile.dijoujWon,
+    avatarType:     profile.avatarType,
+    avatarEmoji:    profile.avatarEmoji,
+    avatarImage:    profile.avatarImage,
     setUsername,
     addGold,
     removeGold,
+    setAvatarEmoji,
+    setAvatarImage,
+    clearAvatar,
   }
 }

@@ -30,6 +30,9 @@ export interface Profile {
   rondaWon:    number
   dijoujPlayed: number
   dijoujWon:   number
+  avatarType:  'initial' | 'emoji' | 'image'
+  avatarEmoji: string
+  avatarImage: string
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -53,6 +56,9 @@ let profile: Profile = {
   rondaWon:    0,
   dijoujPlayed: 0,
   dijoujWon:   0,
+  avatarType:  'initial',
+  avatarEmoji: '',
+  avatarImage: '',
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -99,6 +105,9 @@ export function loadProfile(): Promise<Profile> {
           rondaWon:       typeof parsed.rondaWon === 'number' ? parsed.rondaWon : 0,
           dijoujPlayed:   typeof parsed.dijoujPlayed === 'number' ? parsed.dijoujPlayed : 0,
           dijoujWon:      typeof parsed.dijoujWon === 'number' ? parsed.dijoujWon : 0,
+          avatarType:     (parsed.avatarType === 'emoji' || parsed.avatarType === 'image') ? parsed.avatarType : 'initial',
+          avatarEmoji:    typeof parsed.avatarEmoji === 'string' ? parsed.avatarEmoji : '',
+          avatarImage:    typeof parsed.avatarImage === 'string' ? parsed.avatarImage : '',
         }
       } else {
         profile = {
@@ -106,6 +115,7 @@ export function loadProfile(): Promise<Profile> {
           gold: STARTING_GOLD,
           gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
           rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
+          avatarType: 'initial', avatarEmoji: '', avatarImage: '',
         }
       }
     } catch {
@@ -114,6 +124,7 @@ export function loadProfile(): Promise<Profile> {
         gold: STARTING_GOLD,
         gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
         rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
+        avatarType: 'initial', avatarEmoji: '', avatarImage: '',
       }
     }
     loaded = true
@@ -214,6 +225,24 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
   void persist()
   emit()
   return reward
+}
+
+export function setAvatarEmoji(emoji: string): void {
+  profile = { ...profile, avatarType: 'emoji', avatarEmoji: emoji, avatarImage: '' }
+  void persist()
+  emit()
+}
+
+export function setAvatarImage(uri: string): void {
+  profile = { ...profile, avatarType: 'image', avatarImage: uri, avatarEmoji: '' }
+  void persist()
+  emit()
+}
+
+export function clearAvatar(): void {
+  profile = { ...profile, avatarType: 'initial', avatarEmoji: '', avatarImage: '' }
+  void persist()
+  emit()
 }
 
 /** Abonnement aux changements de profil. Retourne la fonction de désabonnement. */
