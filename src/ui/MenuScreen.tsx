@@ -7,8 +7,11 @@ import { TERMS } from './terms'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
-import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
-import { updateUsername } from '../firebase/firestore'
+import {
+  loadActiveRoom, clearActiveRoom, type ActiveRoom,
+  incrementUsernameChanges, USERNAME_CHANGE_COST,
+} from '../profile/profile'
+import { updateUsername, isUsernameAvailable } from '../firebase/firestore'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 
@@ -59,21 +62,41 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, onRules, onCredits }: Props) {
-  const { username, gold, gamesPlayed, gamesWon, setUsername } = useProfile()
+  const { username, gold, gamesPlayed, gamesWon, usernameChanges, setUsername, removeGold } = useProfile()
   const { user } = useAuth()
   const { t, lang, setLang } = useI18n()
   const winRate = gamesPlayed > 0 ? Math.round((gamesWon / gamesPlayed) * 100) : 0
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
 
-  const openEditor = () => { setDraft(username); setEditing(true) }
-  const saveUsername = () => {
+  const isFreeChange = usernameChanges === 0
+  const canAfford = isFreeChange || gold >= USERNAME_CHANGE_COST
+
+  const openEditor = () => { setDraft(username); setUsernameError(null); setEditing(true) }
+  const saveUsername = async () => {
     const clean = draft.trim()
-    if (clean.length >= 2) {
+    if (clean.length < 2 || saving || !canAfford) return
+    if (clean === username) { setEditing(false); return }
+    setSaving(true)
+    setUsernameError(null)
+    try {
+      if (user) {
+        const available = await isUsernameAvailable(clean, user.uid)
+        if (!available) {
+          setUsernameError('Ce pseudo est déjà pris')
+          return
+        }
+      }
+      if (!isFreeChange) removeGold(USERNAME_CHANGE_COST)
       setUsername(clean)
+      incrementUsernameChanges()
       if (user) void updateUsername(user.uid, clean).catch(() => {})
+      setEditing(false)
+    } finally {
+      setSaving(false)
     }
-    setEditing(false)
   }
 
   // ── Reconnexion à une partie en cours ──────────────────────────────────────
@@ -173,6 +196,11 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
                 autoCorrect={false}
               />
               <Text style={s.modalHint}>16 caractères max.</Text>
+              {isFreeChange
+                ? <Text style={s.costFree}>Première modification gratuite ✓</Text>
+                : <Text style={s.costPaid}>Coût : 🪙 {USERNAME_CHANGE_COST}</Text>
+              }
+              {usernameError ? <Text style={s.usernameErrorTxt}>{usernameError}</Text> : null}
               <View style={s.statsRow}>
                 <View style={s.statBox}>
                   <Text style={s.statNum}>{gamesPlayed}</Text>
@@ -192,11 +220,20 @@ export function MenuScreen({ onPlay, onPlayOnline, onPlayFriend, onLeaderboard, 
                   <Text style={s.modalCancelTxt}>Annuler</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.modalSave, draft.trim().length < 2 && s.btnDisabledOpacity]}
-                  disabled={draft.trim().length < 2}
-                  onPress={saveUsername}
+                  style={[
+                    s.modalSave,
+                    (draft.trim().length < 2 || !canAfford || saving) && s.btnDisabledOpacity,
+                  ]}
+                  disabled={draft.trim().length < 2 || !canAfford || saving}
+                  onPress={() => { void saveUsername() }}
                 >
-                  <Text style={s.modalSaveTxt}>Sauvegarder</Text>
+                  <Text style={s.modalSaveTxt}>
+                    {saving
+                      ? 'Vérification…'
+                      : !canAfford
+                      ? `Gold insuffisant (${USERNAME_CHANGE_COST} 🪙 requis)`
+                      : 'Sauvegarder'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -432,6 +469,9 @@ const s = StyleSheet.create({
     borderColor: 'rgba(201,162,39,0.25)',
   },
   modalHint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  costFree: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#4CAF50' },
+  costPaid: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.brass },
+  usernameErrorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: '#E57373' },
   resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
   statsRow: {
     flexDirection: 'row',

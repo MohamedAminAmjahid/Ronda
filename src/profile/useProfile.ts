@@ -9,6 +9,8 @@ import {
   type Profile,
 } from './profile'
 
+export type { Profile }
+
 /**
  * Hook React du profil joueur. Déclenche le chargement (idempotent) au montage,
  * et se ré-rend à chaque changement (username / gold).
@@ -27,6 +29,7 @@ export function useProfile() {
     gold: profile.gold,
     gamesPlayed: profile.gamesPlayed,
     gamesWon: profile.gamesWon,
+    usernameChanges: profile.usernameChanges,
     setUsername,
     addGold,
     removeGold,

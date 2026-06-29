@@ -1,7 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { getAuth } from 'firebase/auth'
 import { firebaseApp } from '../firebase/config'
-import { updateGold as firestoreUpdateGold } from '../firebase/firestore'
+import {
+  updateGold as firestoreUpdateGold,
+  updateUsernameChanges as firestoreUpdateUsernameChanges,
+} from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
 // - username : généré une seule fois au premier lancement (Joueur#XXXX), puis persisté.
@@ -14,12 +17,15 @@ const STARTING_GOLD = 200
 const MAX_USERNAME = 16
 /** Or gagné en remportant une partie (solo ou en ligne). */
 export const WIN_REWARD = 20
+/** Coût en or d'un changement de pseudo (après le premier, gratuit). */
+export const USERNAME_CHANGE_COST = 200
 
 export interface Profile {
   username: string
   gold: number
   gamesPlayed: number
   gamesWon: number
+  usernameChanges: number
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -33,7 +39,13 @@ export interface ActiveRoom {
 
 type Listener = (profile: Profile) => void
 
-let profile: Profile = { username: '', gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
+let profile: Profile = {
+  username: '',
+  gold: STARTING_GOLD,
+  gamesPlayed: 0,
+  gamesWon: 0,
+  usernameChanges: 0,
+}
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
 const listeners = new Set<Listener>()
@@ -74,12 +86,25 @@ export function loadProfile(): Promise<Profile> {
           gold: typeof parsed.gold === 'number' ? parsed.gold : STARTING_GOLD,
           gamesPlayed: typeof parsed.gamesPlayed === 'number' ? parsed.gamesPlayed : 0,
           gamesWon: typeof parsed.gamesWon === 'number' ? parsed.gamesWon : 0,
+          usernameChanges: typeof parsed.usernameChanges === 'number' ? parsed.usernameChanges : 0,
         }
       } else {
-        profile = { username: randomUsername(), gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
+        profile = {
+          username: randomUsername(),
+          gold: STARTING_GOLD,
+          gamesPlayed: 0,
+          gamesWon: 0,
+          usernameChanges: 0,
+        }
       }
     } catch {
-      profile = { username: randomUsername(), gold: STARTING_GOLD, gamesPlayed: 0, gamesWon: 0 }
+      profile = {
+        username: randomUsername(),
+        gold: STARTING_GOLD,
+        gamesPlayed: 0,
+        gamesWon: 0,
+        usernameChanges: 0,
+      }
     }
     loaded = true
     await persist()
@@ -95,11 +120,21 @@ export function getProfile(): Profile {
   return profile
 }
 
+// ── Helpers de sync Firestore ──────────────────────────────────────────────────
+
 function syncGoldToFirestore(gold: number): void {
   const uid = getAuth(firebaseApp).currentUser?.uid
   if (!uid) return
   void firestoreUpdateGold(uid, gold).catch(() => {})
 }
+
+function syncUsernameChangesToFirestore(count: number): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateUsernameChanges(uid, count).catch(() => {})
+}
+
+// ── Mutations ──────────────────────────────────────────────────────────────────
 
 export function setUsername(name: string): void {
   const clean = name.trim().slice(0, MAX_USERNAME)
@@ -109,6 +144,7 @@ export function setUsername(name: string): void {
   emit()
 }
 
+/** Synchronise le gold depuis Firebase (login sur nouvel appareil). Local uniquement. */
 export function setGold(amount: number): void {
   if (amount === profile.gold) return
   profile = { ...profile, gold: amount }
@@ -129,6 +165,22 @@ export function removeGold(amount: number): void {
   profile = { ...profile, gold: Math.max(0, profile.gold - amount) }
   void persist()
   syncGoldToFirestore(profile.gold)
+  emit()
+}
+
+/** Synchronise usernameChanges depuis Firebase (login sur nouvel appareil). Local uniquement. */
+export function setUsernameChanges(count: number): void {
+  if (count === profile.usernameChanges) return
+  profile = { ...profile, usernameChanges: count }
+  void persist()
+  emit()
+}
+
+/** Incrémente le compteur de changements de pseudo et synchronise avec Firestore. */
+export function incrementUsernameChanges(): void {
+  profile = { ...profile, usernameChanges: profile.usernameChanges + 1 }
+  void persist()
+  syncUsernameChangesToFirestore(profile.usernameChanges)
   emit()
 }
 
