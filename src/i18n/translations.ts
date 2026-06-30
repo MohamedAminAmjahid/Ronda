@@ -72,6 +72,9 @@ export const translations = {
     chooseGame:   'اختر لعبتك',
     or:           'أو',
     privateGame:  'لعبة خاصة',
+    onlineSub:    'مباراة سريعة مع غريب',
+    friendSub:    'ادعُ صديقًا، لعبة خاصة',
+    trainingSub:  'ضد الذكاء الاصطناعي، منفردًا',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'الصعوبة',
     easy: 'سهل',
@@ -333,6 +336,9 @@ export const translations = {
     or:           'ou',
     privateGame:  'Partie privée',
     chooseGame:   'Choisis ton jeu',
+    onlineSub:    'Partie rapide avec un inconnu',
+    friendSub:    'Inviter un ami, partie privée',
+    trainingSub:  'Contre l\'IA, seul',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'Difficulté',
     easy: 'Facile',
@@ -594,6 +600,9 @@ export const translations = {
     chooseGame:   'Choose your game',
     or:           'or',
     privateGame:  'Private game',
+    onlineSub:    'Quick match against a stranger',
+    friendSub:    'Invite a friend, private game',
+    trainingSub:  'vs AI, solo',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'Difficulty',
     easy: 'Easy',

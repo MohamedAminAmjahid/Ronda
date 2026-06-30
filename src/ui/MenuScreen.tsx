@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Linking, Modal, ScrollView, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { LinearGradient } from 'expo-linear-gradient'
 import { router, type Href } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { useI18n } from '../i18n/useI18n'
 import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
+import { GameChoiceModal, type GameKey } from './GameChoiceModal'
 
-const RONDA_ROUTE: Href = '/ronda' as Href
-const DIJOUJ_ROUTE: Href = '/dijouj' as Href
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
+
+type ActionType = 'online' | 'friend' | 'training'
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,6 @@ const C = {
   boneOff:     'rgba(244,236,216,0.45)',
   boneGhost:   'rgba(244,236,216,0.12)',
   ink:         '#1C2622',
-  ronda:       '#0E5C4A',
-  dijouj:      '#2D0A1E',
-  dijoujAcc:   '#8B1A4A',
 } as const
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -43,7 +40,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { username } = useProfile()
   const { t, lang, setLang } = useI18n()
 
-  // ── Animation de fond (pulsation subtile) ─────────────────────────────────
+  // ── Animation de fond ─────────────────────────────────────────────────────
   const bgPulse = useRef(new Animated.Value(0)).current
   useEffect(() => {
     Animated.loop(
@@ -54,26 +51,35 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
     ).start()
   }, [bgPulse])
   const bgColor = bgPulse.interpolate({
-    inputRange: [0, 1],
+    inputRange:  [0, 1],
     outputRange: ['#0D0D1A', '#110D22'],
   })
 
-  // ── Badge "NOUVEAU" animé ─────────────────────────────────────────────────
-  const newBadge = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(newBadge, { toValue: 1.12, duration: 600, useNativeDriver: true }),
-        Animated.timing(newBadge, { toValue: 1, duration: 600, useNativeDriver: true }),
-      ]),
-    ).start()
-  }, [newBadge])
+  // ── Action en cours (détermine quelle modale de jeu ouvrir) ──────────────
+  const [action, setAction] = useState<ActionType | null>(null)
+
+  const modalTitle: string = (() => {
+    if (action === 'online')   return `⚡ ${t('playOnline')}`
+    if (action === 'friend')   return `👥 ${t('playWithFriend')}`
+    if (action === 'training') return `🤖 ${t('training')}`
+    return ''
+  })()
+
+  const handleChoose = (game: GameKey) => {
+    const a = action
+    setAction(null)
+    if (a === 'online') {
+      router.push((game === 'ronda' ? '/bet?game=ronda' : '/bet?game=dijouj') as Href)
+    } else if (a === 'friend') {
+      router.push((game === 'ronda' ? '/online?mode=friend' : '/dijouj-lobby') as Href)
+    } else if (a === 'training') {
+      router.push((game === 'ronda' ? '/play' : '/dijouj?train=1') as Href)
+    }
+  }
 
   // ── Reconnexion à une partie en cours ──────────────────────────────────────
-  const [showTraining, setShowTraining] = useState(false)
-
-  const [resumeRoom, setResumeRoom] = useState<ActiveRoom | null>(null)
-  const [resuming, setResuming] = useState(false)
+  const [resumeRoom,  setResumeRoom]  = useState<ActiveRoom | null>(null)
+  const [resuming,    setResuming]    = useState(false)
   const [resumeError, setResumeError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -150,36 +156,13 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           </View>
         </Modal>
 
-        {/* ── Modale entraînement ──────────────────────────────── */}
-        <Modal visible={showTraining} transparent animationType="fade" onRequestClose={() => setShowTraining(false)}>
-          <View style={s.modalBackdrop}>
-            <View style={s.modalCard}>
-              <Text style={s.modalTitle}>🤖 {t('training')}</Text>
-              <Text style={[s.resumeText, { fontSize: 14, opacity: 0.75 }]}>{t('chooseGame')}</Text>
-              <View style={{ gap: 10, marginTop: 6 }}>
-                <TouchableOpacity
-                  style={s.trainGameBtn}
-                  onPress={() => { setShowTraining(false); router.push('/play' as Href) }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={s.trainGameEmoji}>🃏</Text>
-                  <Text style={s.trainGameName}>RONDA</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.trainGameBtn, s.trainGameBtnDijouj]}
-                  onPress={() => { setShowTraining(false); router.push('/dijouj?train=1' as Href) }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={s.trainGameEmoji}>🎴</Text>
-                  <Text style={s.trainGameName}>DI JOUJ</Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity style={s.modalCancel} onPress={() => setShowTraining(false)}>
-                <Text style={s.modalCancelTxt}>{t('cancel')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+        {/* ── Modale de choix du jeu ───────────────────────────── */}
+        <GameChoiceModal
+          visible={action !== null}
+          title={modalTitle}
+          onChoose={handleChoose}
+          onClose={() => setAction(null)}
+        />
 
         {/* ── Contenu scrollable ────────────────────────────────── */}
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -195,73 +178,49 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
             <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
           </View>
 
-          {/* ── Section Jeux ─────────────────────────────────────── */}
-          <Text style={s.sectionLabel}>{t('platformGames')}</Text>
+          {/* ── 3 boutons d'action ───────────────────────────────── */}
+          <View style={s.actionSection}>
 
-          {/* ── Carte Ronda ──────────────────────────────────────── */}
-          <TouchableOpacity
-            style={[s.gameCard, s.rondaCard]}
-            onPress={() => router.push(RONDA_ROUTE)}
-            activeOpacity={0.85}
-          >
-            {/* Shimmer laiton en haut */}
-            <LinearGradient
-              colors={['rgba(201,162,39,0.28)', 'transparent']}
-              style={s.cardShimmer}
-            />
-            <View style={s.cardTop}>
-              <View>
-                <Text style={s.cardTitle}>RONDA</Text>
-                <Text style={s.cardTitleAr}>رُنْدة</Text>
+            {/* ⚡ Jouer en ligne */}
+            <TouchableOpacity
+              style={s.actionBtnOnline}
+              onPress={() => setAction('online')}
+              activeOpacity={0.85}
+            >
+              <Text style={s.actionBtnIcon}>⚡</Text>
+              <View style={s.actionBtnBody}>
+                <Text style={s.actionBtnLblDark}>{t('playOnline')}</Text>
+                <Text style={s.actionBtnSubDark}>{t('onlineSub')}</Text>
               </View>
-              <View style={s.cardBadge}>
-                <Text style={s.cardBadgeTxt}>1v1 · 2v2</Text>
-              </View>
-            </View>
-            <Text style={s.cardDesc}>{t('rondaCardDesc')}</Text>
-            <View style={[s.cardBtn, s.rondaBtn]}>
-              <Text style={s.cardBtnTxt}>{t('play')}</Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          {/* ── Carte Di Jouj ────────────────────────────────────── */}
-          <TouchableOpacity
-            style={[s.gameCard, s.dijoujCard]}
-            onPress={() => router.push(DIJOUJ_ROUTE)}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['rgba(139,26,74,0.40)', 'transparent']}
-              style={s.cardShimmer}
-            />
-            <View style={s.cardTop}>
-              <View>
-                <Text style={s.cardTitle}>DI JOUJ</Text>
-                <Text style={s.cardTitleAr}>ديجوج</Text>
+            {/* 👥 Jouer avec un ami */}
+            <TouchableOpacity
+              style={s.actionBtnFriend}
+              onPress={() => setAction('friend')}
+              activeOpacity={0.85}
+            >
+              <Text style={s.actionBtnIcon}>👥</Text>
+              <View style={s.actionBtnBody}>
+                <Text style={s.actionBtnLbl}>{t('playWithFriend')}</Text>
+                <Text style={s.actionBtnSub}>{t('friendSub')}</Text>
               </View>
-              <View style={s.cardTopRight}>
-                <View style={[s.cardBadge, s.dijoujBadge]}>
-                  <Text style={s.cardBadgeTxt}>{t('comingSoon')}</Text>
-                </View>
-                <Animated.View style={[s.newBadge, { transform: [{ scale: newBadge }] }]}>
-                  <Text style={s.newBadgeTxt}>NOUVEAU</Text>
-                </Animated.View>
-              </View>
-            </View>
-            <Text style={s.cardDesc}>{t('dijoujCardDesc')}</Text>
-            <View style={[s.cardBtn, s.dijoujBtn]}>
-              <Text style={[s.cardBtnTxt, s.dijoujBtnTxt]}>{t('play')}</Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
 
-          {/* ── Bouton Entraînement ──────────────────────────────── */}
-          <TouchableOpacity
-            style={s.trainingBtn}
-            onPress={() => setShowTraining(true)}
-            activeOpacity={0.75}
-          >
-            <Text style={s.trainingBtnTxt}>🤖  {t('training')}</Text>
-          </TouchableOpacity>
+            {/* 🤖 Entraînement */}
+            <TouchableOpacity
+              style={s.actionBtnTraining}
+              onPress={() => setAction('training')}
+              activeOpacity={0.75}
+            >
+              <Text style={[s.actionBtnIcon, s.trainingIcon]}>🤖</Text>
+              <View style={s.actionBtnBody}>
+                <Text style={s.actionBtnLblMuted}>{t('training')}</Text>
+                <Text style={s.actionBtnSubMuted}>{t('trainingSub')}</Text>
+              </View>
+            </TouchableOpacity>
+
+          </View>
 
           {/* ── Liens texte ──────────────────────────────────────── */}
           <View style={s.textLinks}>
@@ -313,15 +272,15 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
 const s = StyleSheet.create({
   rootBg: { flex: 1 },
-  root: { flex: 1, alignItems: 'center' },
+  root:   { flex: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
 
   // Scrollable
-  scroll: { flex: 1 },
-  scrollContent: { gap: 14, paddingBottom: 28, paddingTop: 8 },
+  scroll:        { flex: 1 },
+  scrollContent: { gap: 16, paddingBottom: 28, paddingTop: 8 },
 
   // Hero
-  hero: { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  hero:     { alignItems: 'center', paddingVertical: 28, gap: 6 },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   platformTitle: {
     fontFamily: 'Cairo_600SemiBold',
@@ -357,124 +316,73 @@ const s = StyleSheet.create({
     fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)',
   },
 
-  // Section label
-  sectionLabel: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 10,
-    color: 'rgba(244,236,216,0.22)',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    textAlign: 'center',
-    marginBottom: -2,
-  },
+  // ── 3 boutons d'action ────────────────────────────────────────────────────
+  actionSection: { gap: 12 },
 
-  // Game cards
-  gameCard: {
-    borderRadius: 18,
-    padding: 18,
-    gap: 10,
-    borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.40,
-    shadowRadius: 14,
+  actionBtnOnline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 22,
+    backgroundColor: C.brass,
+    shadowColor: C.brass,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
     elevation: 8,
   },
-  rondaCard: {
-    backgroundColor: C.ronda,
-    borderColor: 'rgba(201,162,39,0.35)',
-  },
-  dijoujCard: {
-    backgroundColor: C.dijouj,
-    borderColor: 'rgba(139,26,74,0.50)',
-  },
-  cardShimmer: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    height: 60,
-  },
-  cardTop: {
+  actionBtnFriend: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-  },
-  cardTopRight: { alignItems: 'flex-end', gap: 4 },
-  cardTitle: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 22,
-    color: C.bone,
-    letterSpacing: 3,
-  },
-  cardTitleAr: {
-    fontFamily: 'ReemKufi_700Bold',
-    fontSize: 16,
-    color: C.brass,
-    marginTop: 2,
-  },
-  cardBadge: {
-    backgroundColor: 'rgba(201,162,39,0.18)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(201,162,39,0.28)',
-  },
-  dijoujBadge: {
-    backgroundColor: 'rgba(139,26,74,0.28)',
-    borderColor: 'rgba(139,26,74,0.40)',
-  },
-  cardBadgeTxt: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.bone, letterSpacing: 0.4,
-  },
-  cardDesc: {
-    fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 19,
-  },
-  cardBtn: {
-    borderRadius: 10,
-    paddingVertical: 12,
     alignItems: 'center',
-    marginTop: 2,
+    gap: 16,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 22,
+    borderWidth: 1.5,
+    borderColor: C.brass,
+    backgroundColor: 'rgba(201,162,39,0.07)',
   },
-  rondaBtn: { backgroundColor: C.brass },
-  dijoujBtn: {
-    backgroundColor: 'rgba(139,26,74,0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(139,26,74,0.55)',
-  },
-  cardBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, letterSpacing: 0.3 },
-  dijoujBtnTxt: { color: C.boneOff },
-
-  // Training button
-  trainingBtn: {
-    borderRadius: 12,
-    paddingVertical: 14,
+  actionBtnTraining: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 22,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: 'rgba(244,236,216,0.20)',
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderColor: 'rgba(244,236,216,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
-  trainingBtnTxt: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 14,
-    color: 'rgba(244,236,216,0.40)',
-    letterSpacing: 1,
+
+  actionBtnIcon:  { fontSize: 26 },
+  trainingIcon:   { opacity: 0.70 },
+  actionBtnBody:  { gap: 2 },
+
+  // Online (on brass bg — dark text)
+  actionBtnLblDark: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.ink, letterSpacing: 0.3,
   },
-  // Training game choice modal
-  trainGameBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    backgroundColor: 'rgba(14,92,74,0.35)',
-    borderRadius: 12, paddingVertical: 14, paddingHorizontal: 18,
-    borderWidth: 1, borderColor: 'rgba(14,92,74,0.55)',
+  actionBtnSubDark: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(28,38,34,0.60)',
   },
-  trainGameBtnDijouj: {
-    backgroundColor: 'rgba(45,10,30,0.60)',
-    borderColor: 'rgba(139,26,74,0.50)',
+
+  // Friend (brass border — brass label)
+  actionBtnLbl: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.3,
   },
-  trainGameEmoji: { fontSize: 24 },
-  trainGameName: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, letterSpacing: 2,
+  actionBtnSub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
+  },
+
+  // Training (muted)
+  actionBtnLblMuted: {
+    fontFamily: 'Cairo_400Regular', fontSize: 15, color: 'rgba(244,236,216,0.45)', letterSpacing: 0.3,
+  },
+  actionBtnSubMuted: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.28)',
   },
 
   // Text links
@@ -495,31 +403,18 @@ const s = StyleSheet.create({
     width: 44, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1.5, borderColor: 'rgba(244,236,216,0.10)', backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  langBtnActive: { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.15)' },
+  langBtnActive:   { borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.15)' },
   langLabel: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: 'rgba(244,236,216,0.26)', letterSpacing: 0.5,
   },
   langLabelActive: { color: C.brass },
 
   // Footer
-  footer: { alignItems: 'center', paddingTop: 4, gap: 4 },
-  footerTxt: {
-    fontSize: 10, color: 'rgba(244,236,216,0.14)', letterSpacing: 1, textTransform: 'uppercase',
-  },
+  footer:    { alignItems: 'center', paddingTop: 4, gap: 4 },
+  footerTxt: { fontSize: 10, color: 'rgba(244,236,216,0.14)', letterSpacing: 1, textTransform: 'uppercase' },
   author: {
     fontFamily: 'Cairo_400Regular', fontSize: 11,
     color: 'rgba(244,236,216,0.28)', letterSpacing: 0.3, textDecorationLine: 'underline',
-  },
-
-  // Badge "NOUVEAU"
-  newBadge: {
-    backgroundColor: '#E53935',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  newBadgeTxt: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 9, color: '#fff', letterSpacing: 1,
   },
 
   // Modal reconnexion
@@ -534,13 +429,11 @@ const s = StyleSheet.create({
   modalTitle: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff, letterSpacing: 1.5, textTransform: 'uppercase',
   },
-  resumeText: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
-  modalActions: {
-    flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 6,
-  },
-  modalCancel: { paddingVertical: 12, paddingHorizontal: 16 },
+  resumeText:     { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone, lineHeight: 22 },
+  modalActions:   { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 6 },
+  modalCancel:    { paddingVertical: 12, paddingHorizontal: 16 },
   modalCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
-  modalSave: { backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22 },
-  modalSaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
+  modalSave:      { backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22 },
+  modalSaveTxt:   { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
   btnDisabledOpacity: { opacity: 0.4 },
 })
