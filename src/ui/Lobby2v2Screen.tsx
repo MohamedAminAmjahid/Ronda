@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Share } from 'react-native'
+import { useEffect, useState, useCallback } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, Share, Modal, FlatList, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen2v2 } from './GameScreen2v2'
@@ -7,6 +7,9 @@ import { GoldBadge } from './components/GoldBadge'
 import { useLobby2v2 } from '../online/useLobby2v2'
 import { useOnlineGame2v2 } from '../online/useOnlineGame2v2'
 import { connectLobby, leave } from '../online/lobby2v2'
+import { useAuth } from '../firebase/auth'
+import { useProfile } from '../profile/useProfile'
+import { getFriends, sendGameInvite, type FriendDoc } from '../firebase/firestore'
 
 const C = {
   table:   '#0E5C4A',
@@ -73,6 +76,32 @@ function LobbyView({ lobby, onBack }: { lobby: ReturnType<typeof useLobby2v2>; o
   const [copied, setCopied] = useState(false)
   const code = lobby.code
 
+  const { user }     = useAuth()
+  const { username } = useProfile()
+  const [showFriendModal, setShowFriendModal] = useState(false)
+  const [friends,         setFriends]         = useState<FriendDoc[]>([])
+  const [loadingFriends,  setLoadingFriends]  = useState(false)
+  const [invitingUid,     setInvitingUid]     = useState<string | null>(null)
+  const [invitedUids,     setInvitedUids]     = useState<Set<string>>(new Set())
+
+  const openFriendModal = useCallback(async () => {
+    if (!user) return
+    setShowFriendModal(true)
+    setLoadingFriends(true)
+    try { setFriends(await getFriends(user.uid)) } catch {}
+    setLoadingFriends(false)
+  }, [user])
+
+  const doInvite = useCallback(async (friend: FriendDoc) => {
+    if (!user || !code || invitingUid) return
+    setInvitingUid(friend.uid)
+    try {
+      await sendGameInvite(user.uid, username || 'Joueur', friend.uid, 'ronda', 0, code)
+      setInvitedUids(prev => new Set([...prev, friend.uid]))
+    } catch {}
+    setInvitingUid(null)
+  }, [user, code, username, invitingUid])
+
   const shareCode = async () => {
     if (!code) return
     try {
@@ -135,6 +164,9 @@ function LobbyView({ lobby, onBack }: { lobby: ReturnType<typeof useLobby2v2>; o
                 <Text style={s.btnCopyTxt}>{copied ? 'Copié ✓' : 'Copier'}</Text>
               </TouchableOpacity>
             </View>
+            <TouchableOpacity style={s.inviteBtn} onPress={openFriendModal} activeOpacity={0.8}>
+              <Text style={s.inviteBtnTxt}>+ Inviter un ami</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -167,6 +199,49 @@ function LobbyView({ lobby, onBack }: { lobby: ReturnType<typeof useLobby2v2>; o
           <Text style={s.waitTxt}>En attente que l'hôte lance la partie…</Text>
         )}
       </View>
+
+      {/* ── Modal amis ──────────────────────────────────────────────────────── */}
+      <Modal visible={showFriendModal} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalBox}>
+            <Text style={s.modalTitle}>Inviter un ami</Text>
+            {loadingFriends ? (
+              <ActivityIndicator color={C.brass} style={{ marginVertical: 20 }} />
+            ) : friends.length === 0 ? (
+              <Text style={s.modalEmpty}>Aucun ami trouvé</Text>
+            ) : (
+              <FlatList
+                data={friends}
+                keyExtractor={f => f.uid}
+                style={{ width: '100%', maxHeight: 300 }}
+                renderItem={({ item }) => {
+                  const invited = invitedUids.has(item.uid)
+                  const loading = invitingUid === item.uid
+                  return (
+                    <View style={s.friendRow}>
+                      <Text style={s.friendName}>{item.username}</Text>
+                      <TouchableOpacity
+                        style={invited ? s.friendInviteDone : s.friendInviteBtn}
+                        onPress={() => doInvite(item)}
+                        disabled={invited || !!invitingUid}
+                        activeOpacity={0.8}
+                      >
+                        {loading
+                          ? <ActivityIndicator color={C.ink} size="small" />
+                          : <Text style={s.friendInviteTxt}>{invited ? '✓ Invité' : 'Inviter'}</Text>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  )
+                }}
+              />
+            )}
+            <TouchableOpacity style={s.modalCloseBtn} onPress={() => setShowFriendModal(false)}>
+              <Text style={s.modalCloseTxt}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -212,4 +287,36 @@ const s = StyleSheet.create({
   btnPrimary: { backgroundColor: C.brass, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 12 },
   btnPrimaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.ink, letterSpacing: 0.4 },
   btnDisabled: { opacity: 0.4 },
+
+  inviteBtn: {
+    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 20,
+    borderWidth: 1.5, borderColor: C.brass, alignSelf: 'center',
+  },
+  inviteBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center' },
+  modalBox: {
+    backgroundColor: '#1A1A35', borderRadius: 18, paddingVertical: 24, paddingHorizontal: 20,
+    width: 320, alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  modalTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.brass },
+  modalEmpty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, marginVertical: 16 },
+  friendRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(244,236,216,0.08)', width: '100%',
+  },
+  friendName: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.bone, flex: 1 },
+  friendInviteBtn: {
+    backgroundColor: C.brass, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14, minWidth: 72, alignItems: 'center',
+  },
+  friendInviteDone: {
+    backgroundColor: 'rgba(201,162,39,0.18)', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14, minWidth: 72, alignItems: 'center',
+  },
+  friendInviteTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.ink },
+  modalCloseBtn: {
+    marginTop: 8, paddingVertical: 10, paddingHorizontal: 32, borderRadius: 10,
+    backgroundColor: 'rgba(244,236,216,0.08)',
+  },
+  modalCloseTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
 })
