@@ -297,10 +297,23 @@ function toHistoryEntry(id: string, data: Record<string, unknown>): GoldHistoryE
 export async function getGoldHistory(uid: string): Promise<GoldHistoryEntry[]> {
   try {
     const histRef = collection(db, 'goldHistory')
-    const [sent, received] = await Promise.all([
-      getDocs(query(histRef, where('fromUid', '==', uid), orderBy('createdAt', 'desc'), limit(10))),
-      getDocs(query(histRef, where('toUid', '==', uid), orderBy('createdAt', 'desc'), limit(10))),
-    ])
+
+    // Diagnostic : les deux requêtes sont exécutées séparément pour identifier
+    // précisément laquelle échoue (règle de sécurité / index composite).
+    let sent, received
+    try {
+      sent = await getDocs(query(histRef, where('fromUid', '==', uid), orderBy('createdAt', 'desc'), limit(10)))
+    } catch (e) {
+      console.error('[getGoldHistory] requête fromUid échouée:', e)
+      throw e
+    }
+    try {
+      received = await getDocs(query(histRef, where('toUid', '==', uid), orderBy('createdAt', 'desc'), limit(10)))
+    } catch (e) {
+      console.error('[getGoldHistory] requête toUid échouée:', e)
+      throw e
+    }
+
     const merged = new Map<string, GoldHistoryEntry>()
     for (const d of [...sent.docs, ...received.docs]) {
       merged.set(d.id, toHistoryEntry(d.id, d.data()))
