@@ -36,7 +36,7 @@ export function GoldGiftForm({ targetUid, targetName }: Props) {
     if (sending !== null) return
     setSending(amount); setErrMsg(null); setOkMsg(null)
     try {
-      await giftGold(targetUid, amount)
+      await giftGold(targetUid, amount, targetName)
       setOkMsg(t('giftSuccess').replace('{n}', String(amount)).replace('{name}', targetName))
     } catch (e) {
       console.error('[GoldGiftForm] échec du cadeau:', e)

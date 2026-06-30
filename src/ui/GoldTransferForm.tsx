@@ -47,7 +47,7 @@ export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
   const submit = async () => {
     if (amount <= 0 || sending) return
     setSending(true); setErrMsg(null); setOkMsg(null)
-    const res = await transferGold(targetUid, amount)
+    const res = await transferGold(targetUid, amount, targetName)
     setSending(false)
     if (res.ok) {
       setOkMsg(t('sendSuccess').replace('{n}', String(amount)).replace('{name}', targetName))

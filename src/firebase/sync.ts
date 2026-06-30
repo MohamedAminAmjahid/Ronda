@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { useAuth } from './auth'
 import { createOrUpdateUser } from './firestore'
-import { getProfile, loadProfile, setUsername, setGold, setUsernameChanges } from '../profile/profile'
+import {
+  getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
+} from '../profile/profile'
 
 /**
  * Synchronise username, gold et usernameChanges local ↔ Firebase à la connexion :
@@ -22,7 +24,7 @@ export function useFirebaseProfileSync(): void {
         await loadProfile()
         const p = getProfile()
         console.log('[sync] login uid:', user.uid, '| username local:', p.username)
-        const { username, gold, usernameChanges } = await createOrUpdateUser(user, {
+        const { username, gold, usernameChanges, goldHistoryPublic } = await createOrUpdateUser(user, {
           username: p.username,
           gold: p.gold,
           gamesPlayed: p.gamesPlayed,
@@ -32,12 +34,14 @@ export function useFirebaseProfileSync(): void {
           dijoujPlayed: p.dijoujPlayed,
           dijoujWon: p.dijoujWon,
           usernameChanges: p.usernameChanges,
+          goldHistoryPublic: p.goldHistoryPublic,
         })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
         if (!cancelled) {
           if (username) setUsername(username)
           setGold(gold)
           setUsernameChanges(usernameChanges)
+          setGoldHistoryPublicLocal(goldHistoryPublic)
         }
       } catch (err) {
         console.warn('[sync] hors-ligne ou règles Firestore :', err)

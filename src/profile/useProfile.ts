@@ -11,6 +11,7 @@ import {
   clearAvatar,
   giftGold,
   transferGold,
+  setGoldHistoryPublic,
   DAILY_TRANSFER_LIMIT,
   type Profile,
 } from './profile'
@@ -45,6 +46,7 @@ export function useProfile() {
     avatarImage:    profile.avatarImage,
     dailyTransferSent: profile.dailyTransferSent,
     dailyTransferDate: profile.dailyTransferDate,
+    goldHistoryPublic: profile.goldHistoryPublic,
     setUsername,
     addGold,
     removeGold,
@@ -53,6 +55,7 @@ export function useProfile() {
     clearAvatar,
     giftGold,
     transferGold,
+    setGoldHistoryPublic,
     DAILY_TRANSFER_LIMIT,
   }
 }

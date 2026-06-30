@@ -355,7 +355,7 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
     if (!result || giftAmount <= 0 || sending) return
     setSending(true); setErrMsg(null)
     try {
-      await giftGold(result.uid, giftAmount)
+      await giftGold(result.uid, giftAmount, result.username)
       setOkMsg(t('giftSuccess').replace('{n}', String(giftAmount)).replace('{name}', result.username))
       reset()
     } catch (e) {

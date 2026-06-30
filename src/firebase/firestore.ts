@@ -24,6 +24,20 @@ export interface UserDoc {
   avatarType: string
   avatarEmoji: string
   avatarImage: string
+  /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
+  goldHistoryPublic: boolean
+}
+
+/** Une entrée de l'historique des cadeaux/transferts de gold. */
+export interface GoldHistoryEntry {
+  id: string
+  fromUid: string
+  fromName: string
+  toUid: string
+  toName: string
+  amount: number
+  type: 'gift' | 'transfer'
+  createdAt: Date | null
 }
 
 /** Statistiques de parties synchronisées vers Firestore. */
@@ -56,6 +70,7 @@ export interface LocalProfileSeed {
   dijoujPlayed: number
   dijoujWon: number
   usernameChanges: number
+  goldHistoryPublic: boolean
 }
 
 function userRef(uid: string) {
@@ -94,7 +109,7 @@ export async function isUsernameAvailable(username: string, excludeUid?: string)
 export async function createOrUpdateUser(
   user: User,
   local: LocalProfileSeed,
-): Promise<{ username: string; gold: number; usernameChanges: number }> {
+): Promise<{ username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean }> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
 
@@ -116,11 +131,15 @@ export async function createOrUpdateUser(
       dijoujPlayed: local.dijoujPlayed,
       dijoujWon: local.dijoujWon,
       usernameChanges: local.usernameChanges,
+      goldHistoryPublic: local.goldHistoryPublic,
       email: user.email ?? null,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
     })
-    return { username: finalUsername, gold: local.gold, usernameChanges: local.usernameChanges }
+    return {
+      username: finalUsername, gold: local.gold,
+      usernameChanges: local.usernameChanges, goldHistoryPublic: local.goldHistoryPublic,
+    }
   }
 
   const data = snap.data()
@@ -132,6 +151,10 @@ export async function createOrUpdateUser(
       typeof data.usernameChanges === 'number'
         ? (data.usernameChanges as number)
         : local.usernameChanges,
+    goldHistoryPublic:
+      typeof data.goldHistoryPublic === 'boolean'
+        ? (data.goldHistoryPublic as boolean)
+        : true,
   }
 }
 
@@ -200,6 +223,8 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     avatarType: (data.avatarType as string) ?? 'initial',
     avatarEmoji: (data.avatarEmoji as string) ?? '',
     avatarImage: (data.avatarImage as string) ?? '',
+    // Absent → public par défaut (rétro-compat avec les anciens comptes).
+    goldHistoryPublic: (data.goldHistoryPublic as boolean) ?? true,
   }
 }
 
@@ -226,6 +251,67 @@ export async function getUserById(uid: string): Promise<UserDoc | null> {
 /** Synchronise les statistiques de parties dans Firestore. */
 export async function updateStats(uid: string, stats: StatsUpdate): Promise<void> {
   await updateDoc(userRef(uid), { ...stats })
+}
+
+/** Active/désactive la visibilité publique de l'historique de gold. */
+export async function updateGoldHistoryPublic(uid: string, value: boolean): Promise<void> {
+  await updateDoc(userRef(uid), { goldHistoryPublic: value })
+}
+
+// ── Historique des cadeaux / transferts de gold (collection goldHistory) ───────
+
+/** Enregistre une transaction de gold (cadeau ou transfert) dans goldHistory. */
+export async function logGoldTransaction(
+  fromUid: string,
+  fromName: string,
+  toUid: string,
+  toName: string,
+  amount: number,
+  type: 'gift' | 'transfer',
+): Promise<void> {
+  await addDoc(collection(db, 'goldHistory'), {
+    fromUid, fromName, toUid, toName, amount, type,
+    createdAt: serverTimestamp(),
+  })
+}
+
+function toHistoryEntry(id: string, data: Record<string, unknown>): GoldHistoryEntry {
+  return {
+    id,
+    fromUid:  (data.fromUid  as string) ?? '',
+    fromName: (data.fromName as string) ?? '',
+    toUid:    (data.toUid    as string) ?? '',
+    toName:   (data.toName   as string) ?? '',
+    amount:   (data.amount   as number) ?? 0,
+    type:     (data.type === 'transfer' ? 'transfer' : 'gift'),
+    createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+  }
+}
+
+/**
+ * Les 10 dernières transactions où `uid` est émetteur OU destinataire,
+ * triées par date décroissante. Combine deux requêtes (fromUid / toUid).
+ * Nécessite un index composite Firestore (fromUid+createdAt, toUid+createdAt) ;
+ * en cas d'erreur (index manquant, hors-ligne), renvoie [].
+ */
+export async function getGoldHistory(uid: string): Promise<GoldHistoryEntry[]> {
+  try {
+    const histRef = collection(db, 'goldHistory')
+    const [sent, received] = await Promise.all([
+      getDocs(query(histRef, where('fromUid', '==', uid), orderBy('createdAt', 'desc'), limit(10))),
+      getDocs(query(histRef, where('toUid', '==', uid), orderBy('createdAt', 'desc'), limit(10))),
+    ])
+    const merged = new Map<string, GoldHistoryEntry>()
+    for (const d of [...sent.docs, ...received.docs]) {
+      merged.set(d.id, toHistoryEntry(d.id, d.data()))
+    }
+    return Array.from(merged.values())
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+      .slice(0, 10)
+  } catch (e) {
+    console.error('[getGoldHistory] erreur (index composite requis ?):', e)
+    return []
+  }
 }
 
 // ── Amis (sous-collection users/{uid}/friends/{friendUid}) ─────────────────────

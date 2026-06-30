@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, ActivityIndicator, Image,
+  Modal, TextInput, ActivityIndicator, Image, Switch,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
@@ -97,8 +97,10 @@ export function ProfileScreen() {
     dijoujPlayed, dijoujWon,
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
+    goldHistoryPublic,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
+    setGoldHistoryPublic,
   } = useProfile()
   const { user }   = useAuth()
   const { t }      = useI18n()
@@ -406,6 +408,22 @@ export function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Confidentialité ───────────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{t('historyPublicToggle')}</Text>
+          <View style={s.toggleRow}>
+            <Text style={s.toggleHint}>
+              {goldHistoryPublic ? '🎁 ✓' : '🔒'}
+            </Text>
+            <Switch
+              value={goldHistoryPublic}
+              onValueChange={setGoldHistoryPublic}
+              trackColor={{ false: 'rgba(244,236,216,0.20)', true: C.brass }}
+              thumbColor={C.bone}
+            />
+          </View>
+        </View>
+
         {/* ── Compte ────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Compte</Text>
@@ -497,6 +515,8 @@ const s = StyleSheet.create({
     letterSpacing: 2, textTransform: 'uppercase',
   },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 28, color: C.brass, marginTop: 2 },
+  toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  toggleHint: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.boneOff },
   shopBtn:    {
     backgroundColor: C.brassDim, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,
     borderWidth: 1, borderColor: C.brassBorder,

@@ -7,6 +7,8 @@ import {
   updateAvatar as firestoreUpdateAvatar,
   giftGold as firestoreGiftGold,
   updateStats as firestoreUpdateStats,
+  updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
+  logGoldTransaction,
 } from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
@@ -47,6 +49,8 @@ export interface Profile {
   dailyTransferSent: number
   /** Jour (YYYY-MM-DD) associé à dailyTransferSent. */
   dailyTransferDate: string
+  /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
+  goldHistoryPublic: boolean
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -75,6 +79,7 @@ let profile: Profile = {
   avatarImage: '',
   dailyTransferSent: 0,
   dailyTransferDate: '',
+  goldHistoryPublic: true,
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -128,6 +133,7 @@ export function loadProfile(): Promise<Profile> {
           dailyTransferSent: (typeof parsed.dailyTransferSent === 'number' && parsed.dailyTransferDate === todayStr())
             ? parsed.dailyTransferSent : 0,
           dailyTransferDate: parsed.dailyTransferDate === todayStr() ? parsed.dailyTransferDate : todayStr(),
+          goldHistoryPublic: typeof parsed.goldHistoryPublic === 'boolean' ? parsed.goldHistoryPublic : true,
         }
       } else {
         profile = {
@@ -137,6 +143,7 @@ export function loadProfile(): Promise<Profile> {
           rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
           avatarType: 'initial', avatarEmoji: '', avatarImage: '',
           dailyTransferSent: 0, dailyTransferDate: todayStr(),
+          goldHistoryPublic: true,
         }
       }
     } catch {
@@ -147,6 +154,7 @@ export function loadProfile(): Promise<Profile> {
         rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
         avatarType: 'initial', avatarEmoji: '', avatarImage: '',
         dailyTransferSent: 0, dailyTransferDate: todayStr(),
+        goldHistoryPublic: true,
       }
     }
     loaded = true
@@ -246,12 +254,19 @@ export type TransferResult =
   | { ok: true }
   | { ok: false; reason: 'amount' | 'balance' | 'quota' | 'error'; remaining: number }
 
+/** Journalise une transaction de gold dans goldHistory (best-effort). */
+function logTransaction(toUid: string, toName: string, amount: number, type: 'gift' | 'transfer'): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void logGoldTransaction(uid, profile.username, toUid, toName, amount, type).catch(() => {})
+}
+
 /**
  * Transfère `amount` gold vers un autre joueur (gratuit) :
  * vérifie le quota quotidien et le solde, crédite le destinataire côté Firestore,
  * déduit l'émetteur (local + sync) puis met à jour le compteur quotidien.
  */
-export async function transferGold(toUid: string, amount: number): Promise<TransferResult> {
+export async function transferGold(toUid: string, amount: number, toName = ''): Promise<TransferResult> {
   const remaining = getTransferRemaining()
   if (amount <= 0)            return { ok: false, reason: 'amount',  remaining }
   if (amount > profile.gold)  return { ok: false, reason: 'balance', remaining }
@@ -275,6 +290,7 @@ export async function transferGold(toUid: string, amount: number): Promise<Trans
   }
   void persist()
   emit()
+  logTransaction(toUid, toName, amount, 'transfer')
   return { ok: true }
 }
 
@@ -282,9 +298,28 @@ export async function transferGold(toUid: string, amount: number): Promise<Trans
  * Offre `amount` gold à un joueur (simulation, sans limite ni débit).
  * Crédite uniquement le destinataire côté Firestore.
  */
-export async function giftGold(toUid: string, amount: number): Promise<void> {
+export async function giftGold(toUid: string, amount: number, toName = ''): Promise<void> {
   if (amount <= 0) return
   await firestoreGiftGold(toUid, amount)
+  logTransaction(toUid, toName, amount, 'gift')
+}
+
+/** Active/désactive la visibilité publique de l'historique de gold (local + Firestore). */
+export function setGoldHistoryPublic(value: boolean): void {
+  if (value === profile.goldHistoryPublic) return
+  profile = { ...profile, goldHistoryPublic: value }
+  void persist()
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (uid) void firestoreUpdateGoldHistoryPublic(uid, value).catch(() => {})
+  emit()
+}
+
+/** Applique la valeur Firebase au login (local uniquement, sans ré-écriture). */
+export function setGoldHistoryPublicLocal(value: boolean): void {
+  if (value === profile.goldHistoryPublic) return
+  profile = { ...profile, goldHistoryPublic: value }
+  void persist()
+  emit()
 }
 
 /** Synchronise usernameChanges depuis Firebase (login sur nouvel appareil). Local uniquement. */

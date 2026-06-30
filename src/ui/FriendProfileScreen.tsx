@@ -8,7 +8,7 @@ import { AvatarDisplay } from './ProfileScreen'
 import { GoldTransferForm } from './GoldTransferForm'
 import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
-import { getUserById, type UserDoc, type FriendDoc } from '../firebase/firestore'
+import { getUserById, getGoldHistory, type UserDoc, type FriendDoc, type GoldHistoryEntry } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -35,17 +35,37 @@ export function FriendProfileScreen({ onBack }: Props) {
   const [profile, setProfile] = useState<UserDoc | null>(null)
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [history, setHistory] = useState<GoldHistoryEntry[]>([])
 
   useEffect(() => {
     if (!uid) { setLoading(false); return }
     let cancelled = false
     setLoading(true)
+    setHistory([])
     void getUserById(uid)
-      .then((u) => { if (!cancelled) setProfile(u) })
+      .then((u) => {
+        if (cancelled) return
+        setProfile(u)
+        // Charge l'historique seulement si le profil est public.
+        if (u?.goldHistoryPublic) {
+          void getGoldHistory(uid).then((h) => { if (!cancelled) setHistory(h) })
+        }
+      })
       .catch(() => { if (!cancelled) setProfile(null) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [uid])
+
+  // Date relative « il y a 2h » localisée.
+  const relativeTime = (d: Date | null): string => {
+    if (!d) return t('timeNow')
+    const min = Math.floor((Date.now() - d.getTime()) / 60000)
+    if (min < 1)  return t('timeNow')
+    if (min < 60) return t('timeMin').replace('{n}', String(min))
+    const h = Math.floor(min / 60)
+    if (h < 24)   return t('timeHour').replace('{n}', String(h))
+    return t('timeDay').replace('{n}', String(Math.floor(h / 24)))
+  }
 
   const displayName = profile?.username ?? (name ? decodeURIComponent(name) : '')
   const initial = displayName?.[0]?.toUpperCase() ?? '?'
@@ -111,6 +131,39 @@ export function FriendProfileScreen({ onBack }: Props) {
                 rateLbl={t('winRateLabel')}
               />
             </View>
+
+            {/* ── Historique des cadeaux ── */}
+            <Text style={s.sectionLabel}>{t('goldHistory')}</Text>
+            {!profile.goldHistoryPublic ? (
+              <View style={s.card}>
+                <Text style={s.historyPrivate}>🔒 {t('historyPrivate')}</Text>
+              </View>
+            ) : history.length === 0 ? (
+              <View style={s.card}>
+                <Text style={s.historyEmpty}>{t('historyEmpty')}</Text>
+              </View>
+            ) : (
+              <View style={s.card}>
+                {history.map((h) => {
+                  const isReceived = h.toUid === profile.uid
+                  const other = isReceived ? h.fromName : h.toName
+                  return (
+                    <View key={h.id} style={s.histRow}>
+                      <Text style={s.histIcon}>{isReceived ? '🎁' : '💸'}</Text>
+                      <View style={s.histBody}>
+                        <Text style={s.histName} numberOfLines={1}>{other || '—'}</Text>
+                        <Text style={s.histMeta}>
+                          {(isReceived ? t('received') : t('sent'))} · {relativeTime(h.createdAt)}
+                        </Text>
+                      </View>
+                      <Text style={[s.histAmount, isReceived ? s.histReceived : s.histSent]}>
+                        {isReceived ? '+' : '−'}{h.amount} 🪙
+                      </Text>
+                    </View>
+                  )
+                })}
+              </View>
+            )}
 
             {/* ── Offrir un pack (cadeau, illimité) ── */}
             <View style={s.card}>
@@ -216,6 +269,21 @@ const s = StyleSheet.create({
   },
   cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone },
   cardDesc: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 18 },
+
+  // Historique
+  historyPrivate: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', lineHeight: 20 },
+  historyEmpty:   { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, textAlign: 'center' },
+  histRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(244,236,216,0.10)',
+  },
+  histIcon: { fontSize: 22 },
+  histBody: { flex: 1, gap: 2 },
+  histName: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
+  histMeta: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  histAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15 },
+  histReceived: { color: '#27AE60' },
+  histSent:     { color: '#D98324' },
 
   actions: { flexDirection: 'row', gap: 10 },
   actionBtn: {
