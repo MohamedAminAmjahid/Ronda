@@ -59,7 +59,11 @@ export function GameChat({ messages, sendMessage, myUsername, accentColor, isGam
   function doSend(text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
-    sendMessage(trimmed)
+    try {
+      sendMessage(trimmed)
+    } catch (e) {
+      console.error('[chat] send error:', e)
+    }
     setInput('')
   }
 

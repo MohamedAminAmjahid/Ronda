@@ -273,5 +273,9 @@ export function reset(): void {
 }
 
 export function sendChat(text: string): void {
-  send('chat', { text })
+  try {
+    send('chat', { text })
+  } catch (e) {
+    console.error('[chat] send error:', e)
+  }
 }

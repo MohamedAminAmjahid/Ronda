@@ -82,11 +82,15 @@ export class DiJoujRoom extends Room<DiJoujState> {
     this.onMessage('draw_card', (client) => this.handleDrawCard(client))
 
     this.onMessage('chat', (client, msg: { text: string }) => {
-      const ps = this.state.players.get(client.sessionId)
-      if (!ps) return
-      const text = String(msg?.text ?? '').trim().slice(0, 120)
-      if (!text) return
-      this.broadcast('chat', { username: ps.pseudo, text })
+      try {
+        const ps = this.state.players.get(client.sessionId)
+        if (!ps) return
+        const text = String(msg?.text ?? '').trim().slice(0, 120)
+        if (!text) return
+        this.broadcast('chat', { username: ps.pseudo, text })
+      } catch (e) {
+        console.error('[DiJoujRoom] chat handler error:', e)
+      }
     })
   }
 

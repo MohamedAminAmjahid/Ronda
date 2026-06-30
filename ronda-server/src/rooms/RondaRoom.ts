@@ -113,11 +113,15 @@ export class RondaRoom extends Room<RondaState> {
     this.onMessage('continue_deal', (client) => this.handleContinueDeal(client))
 
     this.onMessage('chat', (client, msg: { text: string }) => {
-      const ps = this.state.players.get(client.sessionId)
-      if (!ps) return
-      const text = String(msg?.text ?? '').trim().slice(0, 120)
-      if (!text) return
-      this.broadcast('chat', { username: ps.pseudo, text })
+      try {
+        const ps = this.state.players.get(client.sessionId)
+        if (!ps) return
+        const text = String(msg?.text ?? '').trim().slice(0, 120)
+        if (!text) return
+        this.broadcast('chat', { username: ps.pseudo, text })
+      } catch (e) {
+        console.error('[RondaRoom] chat handler error:', e)
+      }
     })
   }
 
