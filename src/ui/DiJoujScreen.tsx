@@ -59,6 +59,7 @@ function DiJoujMenu() {
   return (
     <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+
         <View style={s.header}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.7} style={s.backBtn}>
             <Text style={s.backTxt}>{t('back')}</Text>
@@ -66,29 +67,37 @@ function DiJoujMenu() {
           <Text style={s.title}>DI JOUJ</Text>
           <View style={s.headerSpacer} />
         </View>
-        <View style={s.menuCenter}>
+
+        <View style={s.menuBody}>
           <Text style={s.menuTagline}>{t('dijoujCardDesc')}</Text>
-          <View style={s.menuCards}>
-            <TouchableOpacity style={s.menuCard} onPress={() => router.push(DJ_BET)} activeOpacity={0.85}>
-              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
-                <Text style={s.menuCardEmoji}>⚡</Text>
-                <View style={s.menuCardText}>
-                  <Text style={s.menuCardTitle}>{t('playOnline')}</Text>
-                  <Text style={s.menuCardSub}>{t('quickMatch')}</Text>
-                </View>
-              </LinearGradient>
+
+          <View style={s.menuActions}>
+
+            {/* ── Jouer en ligne (principal) ───────────────────────── */}
+            <TouchableOpacity style={s.menuBtnPrimary} onPress={() => router.push(DJ_BET)} activeOpacity={0.85}>
+              <Text style={s.menuBtnPrimaryLbl}>{t('playOnline')}</Text>
+              <Text style={s.menuBtnPrimarySub}>{t('quickMatch')}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.menuCard} onPress={() => router.push(DJ_LOBBY)} activeOpacity={0.85}>
-              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
-                <Text style={s.menuCardEmoji}>👥</Text>
-                <View style={s.menuCardText}>
-                  <Text style={s.menuCardTitle}>{t('playWithFriend')}</Text>
-                  <Text style={s.menuCardSub}>2 – 4 {t('djPlayers')}</Text>
-                </View>
-              </LinearGradient>
+
+            {/* ── Séparateur ──────────────────────────────────────── */}
+            <View style={s.menuOrRow}>
+              <View style={s.menuOrLine} />
+              <Text style={s.menuOrTxt}>{t('or')}</Text>
+              <View style={s.menuOrLine} />
+            </View>
+
+            {/* ── Jouer avec un ami (secondaire) ──────────────────── */}
+            <TouchableOpacity style={s.menuBtnFriend} onPress={() => router.push(DJ_LOBBY)} activeOpacity={0.85}>
+              <Text style={s.menuBtnFriendIcon}>👥</Text>
+              <View style={s.menuBtnFriendBody}>
+                <Text style={s.menuBtnFriendLbl}>{t('playWithFriend')}</Text>
+                <Text style={s.menuBtnFriendSub}>2 – 4 {t('djPlayers')}</Text>
+              </View>
             </TouchableOpacity>
+
           </View>
         </View>
+
       </SafeAreaView>
     </LinearGradient>
   )
@@ -428,16 +437,65 @@ const s = StyleSheet.create({
   },
   headerSpacer: { width: 60 },
 
-  // Menu
-  menuCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, gap: 24 },
-  menuTagline: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14, textAlign: 'center' },
-  menuCards:   { width: '100%', gap: 12 },
-  menuCard:    { borderRadius: 16, overflow: 'hidden' },
-  menuCardGrad: { paddingVertical: 18, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 16 },
-  menuCardEmoji: { fontSize: 28, lineHeight: 34 },
-  menuCardText:  { flex: 1 },
-  menuCardTitle: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16 },
-  menuCardSub:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 12, marginTop: 2 },
+  // ── Menu boutons ─────────────────────────────────────────────────────────────
+  menuBody: {
+    flex: 1, justifyContent: 'center', paddingHorizontal: 28, gap: 32,
+  },
+  menuTagline: {
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14,
+    textAlign: 'center', lineHeight: 20,
+  },
+  menuActions: { gap: 0 },
+
+  // Jouer en ligne
+  menuBtnPrimary: {
+    backgroundColor: C.acc,
+    borderRadius: 14,
+    paddingVertical: 20,
+    alignItems: 'center',
+    gap: 4,
+    shadowColor: C.acc,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  menuBtnPrimaryLbl: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone, letterSpacing: 0.4,
+  },
+  menuBtnPrimarySub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.55)',
+  },
+
+  // Séparateur
+  menuOrRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 20,
+  },
+  menuOrLine: {
+    flex: 1, height: 1, backgroundColor: 'rgba(244,236,216,0.10)',
+  },
+  menuOrTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
+    letterSpacing: 1,
+  },
+
+  // Jouer avec un ami
+  menuBtnFriend: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: 14,
+    paddingVertical: 16, paddingHorizontal: 20,
+    borderWidth: 1.5,
+    borderColor: C.acc,
+    backgroundColor: 'rgba(139,26,74,0.10)',
+  },
+  menuBtnFriendIcon:  { fontSize: 24 },
+  menuBtnFriendBody:  { gap: 2 },
+  menuBtnFriendLbl: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.bone, letterSpacing: 0.4,
+  },
+  menuBtnFriendSub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
+  },
 
   // ── Game 1v1 ──────────────────────────────────────────────────────────────
 

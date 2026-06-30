@@ -45,12 +45,26 @@ export function RondaMenuScreen() {
 
         <View style={s.actions}>
 
+          {/* ── Jouer en ligne (principal) ─────────────────────────── */}
           <TouchableOpacity style={s.btnPrimary} onPress={goOnline} activeOpacity={0.85}>
-            <Text style={s.btnPrimaryTxt}>{t('playOnline')}</Text>
+            <Text style={s.btnPrimaryLbl}>{t('playOnline')}</Text>
+            <Text style={s.btnPrimarySub}>{t('quickMatch')}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={s.btnSecondary} onPress={goFriend} activeOpacity={0.85}>
-            <Text style={s.btnSecondaryTxt}>{t('playWithFriend')}</Text>
+          {/* ── Séparateur ─────────────────────────────────────────── */}
+          <View style={s.orRow}>
+            <View style={s.orLine} />
+            <Text style={s.orTxt}>{t('or')}</Text>
+            <View style={s.orLine} />
+          </View>
+
+          {/* ── Jouer avec un ami (secondaire) ─────────────────────── */}
+          <TouchableOpacity style={s.btnFriend} onPress={goFriend} activeOpacity={0.85}>
+            <Text style={s.btnFriendIcon}>👥</Text>
+            <View style={s.btnFriendBody}>
+              <Text style={s.btnFriendLbl}>{t('playWithFriend')}</Text>
+              <Text style={s.btnFriendSub}>{t('privateGame')}</Text>
+            </View>
           </TouchableOpacity>
 
         </View>
@@ -62,75 +76,78 @@ export function RondaMenuScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.table, alignItems: 'center' },
+  root:   { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 28 },
 
   backBtn: { paddingTop: 12, paddingBottom: 4, alignSelf: 'flex-start' },
   backTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13, letterSpacing: 0.5 },
 
   hero: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingTop: 20,
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 20,
   },
   title: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 48,
-    color: C.bone,
-    letterSpacing: 10,
+    fontFamily: 'Cairo_600SemiBold', fontSize: 48, color: C.bone, letterSpacing: 10,
   },
   titleAr: {
-    fontFamily: 'ReemKufi_700Bold',
-    fontSize: 26,
-    color: C.brass,
-    letterSpacing: 2,
+    fontFamily: 'ReemKufi_700Bold', fontSize: 26, color: C.brass, letterSpacing: 2,
   },
   divider: {
-    width: 40,
-    height: 2,
-    backgroundColor: C.brass,
-    opacity: 0.5,
-    borderRadius: 1,
+    width: 40, height: 2, backgroundColor: C.brass, opacity: 0.5, borderRadius: 1,
   },
   tagline: {
-    fontFamily: 'Cairo_400Regular',
-    fontSize: 13,
-    color: C.boneOff,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff,
+    letterSpacing: 1.2, textTransform: 'uppercase',
   },
 
-  actions: { gap: 14, paddingBottom: 40 },
+  actions: { paddingBottom: 44, gap: 0 },
+
+  // Jouer en ligne
   btnPrimary: {
     backgroundColor: C.brass,
-    borderRadius: 12,
-    paddingVertical: 18,
+    borderRadius: 14,
+    paddingVertical: 20,
     alignItems: 'center',
+    gap: 4,
     shadowColor: C.ink,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 8,
     elevation: 6,
   },
-  btnPrimaryTxt: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 16,
-    color: C.ink,
-    letterSpacing: 0.4,
+  btnPrimaryLbl: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.ink, letterSpacing: 0.4,
   },
-  btnSecondary: {
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
+  btnPrimarySub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(28,38,34,0.60)',
+  },
+
+  // Séparateur
+  orRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 20,
+  },
+  orLine: {
+    flex: 1, height: 1, backgroundColor: 'rgba(244,236,216,0.15)',
+  },
+  orTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
+    letterSpacing: 1, textTransform: 'lowercase',
+  },
+
+  // Jouer avec un ami
+  btnFriend: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderRadius: 14,
+    paddingVertical: 16, paddingHorizontal: 20,
     borderWidth: 1.5,
     borderColor: C.brass,
+    backgroundColor: 'rgba(201,162,39,0.06)',
   },
-  btnSecondaryTxt: {
-    fontFamily: 'Cairo_600SemiBold',
-    fontSize: 16,
-    color: C.brass,
-    letterSpacing: 0.4,
+  btnFriendIcon: { fontSize: 24 },
+  btnFriendBody: { gap: 2 },
+  btnFriendLbl: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.4,
+  },
+  btnFriendSub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
   },
 })
