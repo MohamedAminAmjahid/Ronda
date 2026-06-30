@@ -68,6 +68,8 @@ export const translations = {
     youVsAI: 'أنت ضد الذكاء الاصطناعي',
     twoVsTwo: '2 ضد 2',
     twoVsTwoDesc: 'أنت + ذكاء حليف ضد ذكاءَين',
+    training:     'تدريب',
+    chooseGame:   'اختر لعبتك',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'الصعوبة',
     easy: 'سهل',
@@ -325,6 +327,8 @@ export const translations = {
     youVsAI: 'Toi contre l\'IA',
     twoVsTwo: '2 contre 2',
     twoVsTwoDesc: 'Toi + IA alliée contre 2 IA',
+    training:     'Entraînement',
+    chooseGame:   'Choisis ton jeu',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'Difficulté',
     easy: 'Facile',
@@ -582,6 +586,8 @@ export const translations = {
     youVsAI: 'You vs AI',
     twoVsTwo: '2 vs 2',
     twoVsTwoDesc: 'You + allied AI vs 2 AI',
+    training:     'Training',
+    chooseGame:   'Choose your game',
     // ── Difficulty ────────────────────────────────────────────────────────────
     difficulty: 'Difficulty',
     easy: 'Easy',

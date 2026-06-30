@@ -70,6 +70,8 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   }, [newBadge])
 
   // ── Reconnexion à une partie en cours ──────────────────────────────────────
+  const [showTraining, setShowTraining] = useState(false)
+
   const [resumeRoom, setResumeRoom] = useState<ActiveRoom | null>(null)
   const [resuming, setResuming] = useState(false)
   const [resumeError, setResumeError] = useState<string | null>(null)
@@ -148,6 +150,37 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           </View>
         </Modal>
 
+        {/* ── Modale entraînement ──────────────────────────────── */}
+        <Modal visible={showTraining} transparent animationType="fade" onRequestClose={() => setShowTraining(false)}>
+          <View style={s.modalBackdrop}>
+            <View style={s.modalCard}>
+              <Text style={s.modalTitle}>🤖 {t('training')}</Text>
+              <Text style={[s.resumeText, { fontSize: 14, opacity: 0.75 }]}>{t('chooseGame')}</Text>
+              <View style={{ gap: 10, marginTop: 6 }}>
+                <TouchableOpacity
+                  style={s.trainGameBtn}
+                  onPress={() => { setShowTraining(false); router.push('/play' as Href) }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.trainGameEmoji}>🃏</Text>
+                  <Text style={s.trainGameName}>RONDA</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.trainGameBtn, s.trainGameBtnDijouj]}
+                  onPress={() => { setShowTraining(false); router.push('/dijouj?train=1' as Href) }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.trainGameEmoji}>🎴</Text>
+                  <Text style={s.trainGameName}>DI JOUJ</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity style={s.modalCancel} onPress={() => setShowTraining(false)}>
+                <Text style={s.modalCancelTxt}>{t('cancel')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         {/* ── Contenu scrollable ────────────────────────────────── */}
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -219,6 +252,15 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
             <View style={[s.cardBtn, s.dijoujBtn]}>
               <Text style={[s.cardBtnTxt, s.dijoujBtnTxt]}>{t('play')}</Text>
             </View>
+          </TouchableOpacity>
+
+          {/* ── Bouton Entraînement ──────────────────────────────── */}
+          <TouchableOpacity
+            style={s.trainingBtn}
+            onPress={() => setShowTraining(true)}
+            activeOpacity={0.75}
+          >
+            <Text style={s.trainingBtnTxt}>🤖  {t('training')}</Text>
           </TouchableOpacity>
 
           {/* ── Liens texte ──────────────────────────────────────── */}
@@ -402,6 +444,38 @@ const s = StyleSheet.create({
   },
   cardBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.ink, letterSpacing: 0.3 },
   dijoujBtnTxt: { color: C.boneOff },
+
+  // Training button
+  trainingBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(244,236,216,0.20)',
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  trainingBtnTxt: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 14,
+    color: 'rgba(244,236,216,0.40)',
+    letterSpacing: 1,
+  },
+  // Training game choice modal
+  trainGameBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: 'rgba(14,92,74,0.35)',
+    borderRadius: 12, paddingVertical: 14, paddingHorizontal: 18,
+    borderWidth: 1, borderColor: 'rgba(14,92,74,0.55)',
+  },
+  trainGameBtnDijouj: {
+    backgroundColor: 'rgba(45,10,30,0.60)',
+    borderColor: 'rgba(139,26,74,0.50)',
+  },
+  trainGameEmoji: { fontSize: 24 },
+  trainGameName: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, letterSpacing: 2,
+  },
 
   // Text links
   textLinks: {

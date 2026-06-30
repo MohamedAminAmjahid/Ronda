@@ -5,8 +5,7 @@ import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
 import { TERMS } from './terms'
 
-const PLAY: Href         = '/play' as Href
-const ONLINE: Href       = '/online' as Href
+const ONLINE: Href        = '/online' as Href
 const ONLINE_FRIEND: Href = '/online?mode=friend' as Href
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -46,12 +45,8 @@ export function RondaMenuScreen() {
 
         <View style={s.actions}>
 
-          <TouchableOpacity style={s.btnPrimary} onPress={() => router.push(PLAY)} activeOpacity={0.85}>
-            <Text style={s.btnPrimaryTxt}>{t('youVsAI')}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={s.btnSecondary} onPress={goOnline} activeOpacity={0.85}>
-            <Text style={s.btnSecondaryTxt}>{t('playOnline')}</Text>
+          <TouchableOpacity style={s.btnPrimary} onPress={goOnline} activeOpacity={0.85}>
+            <Text style={s.btnPrimaryTxt}>{t('playOnline')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={s.btnSecondary} onPress={goFriend} activeOpacity={0.85}>

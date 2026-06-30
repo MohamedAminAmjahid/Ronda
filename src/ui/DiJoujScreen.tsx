@@ -5,7 +5,7 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
-import { router, type Href } from 'expo-router'
+import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { isPlayable } from '../engine-dijouj/game'
@@ -54,7 +54,7 @@ function CardBackRow({ count, max = 8 }: { count: number; max?: number }) {
 
 // ── Menu Di Jouj ──────────────────────────────────────────────────────────────
 
-function DiJoujMenu({ onLocalGame }: { onLocalGame: () => void }) {
+function DiJoujMenu() {
   const { t } = useI18n()
   return (
     <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
@@ -69,15 +69,6 @@ function DiJoujMenu({ onLocalGame }: { onLocalGame: () => void }) {
         <View style={s.menuCenter}>
           <Text style={s.menuTagline}>{t('dijoujCardDesc')}</Text>
           <View style={s.menuCards}>
-            <TouchableOpacity style={s.menuCard} onPress={onLocalGame} activeOpacity={0.85}>
-              <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
-                <Text style={s.menuCardEmoji}>🤖</Text>
-                <View style={s.menuCardText}>
-                  <Text style={s.menuCardTitle}>{t('djVsBot')}</Text>
-                  <Text style={s.menuCardSub}>{t('youVsAI')}</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
             <TouchableOpacity style={s.menuCard} onPress={() => router.push(DJ_BET)} activeOpacity={0.85}>
               <LinearGradient colors={['#4D1028', '#2D0A1E']} style={s.menuCardGrad}>
                 <Text style={s.menuCardEmoji}>⚡</Text>
@@ -412,9 +403,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 // ── Écran principal ───────────────────────────────────────────────────────────
 
 export function DiJoujScreen() {
-  const [mode, setMode] = useState<'menu' | 'local'>('menu')
+  const { train } = useLocalSearchParams<{ train?: string }>()
+  const [mode, setMode] = useState<'menu' | 'local'>(train === '1' ? 'local' : 'menu')
   if (mode === 'local') return <LocalGame onBack={() => setMode('menu')} />
-  return <DiJoujMenu onLocalGame={() => setMode('local')} />
+  return <DiJoujMenu />
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
