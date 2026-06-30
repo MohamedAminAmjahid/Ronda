@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, Animated, ActivityIndicator,
+  ScrollView, Modal, Animated, ActivityIndicator, useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -76,6 +76,13 @@ const side = StyleSheet.create({
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export function DiJoujOnlineScreen() {
+  const { width } = useWindowDimensions()
+  const isSmall   = width < 430
+  const cardSz    = isSmall ? 'sm' : 'lg' as const
+  const pileSz    = isSmall ? 'lg' : 'xl' as const
+  const pileWH    = isSmall ? { w: 72, h: 108 } : { w: 80, h: 120 }
+  const handGap   = isSmall ? 3 : 8
+
   const { t }        = useI18n()
   const { username } = useProfile()
 
@@ -336,7 +343,7 @@ export function DiJoujOnlineScreen() {
           <TouchableOpacity onPress={handleLeave} activeOpacity={0.7} style={s.backBtn}>
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>DI JOUJ</Text>
+          <Text style={[s.title, isSmall && { fontSize: 15, letterSpacing: 3 }]}>DI JOUJ</Text>
           <View style={s.headerSpacer} />
         </View>
 
@@ -394,8 +401,8 @@ export function DiJoujOnlineScreen() {
               style={[s.pileWrap, (!isHumanTurn || isDrawPause) && s.pileInactive]}
             >
               {state.drawPile.length > 0
-                ? <CardBack size="xl" />
-                : <View style={s.emptyPile}><Text style={s.emptyPileTxt}>∅</Text></View>
+                ? <CardBack size={pileSz} />
+                : <View style={[s.emptyPile, { width: pileWH.w, height: pileWH.h }]}><Text style={s.emptyPileTxt}>∅</Text></View>
               }
               <Text style={s.pileCount}>{state.drawPile.length}</Text>
             </TouchableOpacity>
@@ -403,8 +410,8 @@ export function DiJoujOnlineScreen() {
             <View style={s.discardWrap}>
               <Animated.View style={{ transform: [{ scale: discardScale }] }}>
                 {topCard
-                  ? <CardFace card={topCard} size="xl" />
-                  : <View style={s.emptyPile} />
+                  ? <CardFace card={topCard} size={pileSz} />
+                  : <View style={[s.emptyPile, { width: pileWH.w, height: pileWH.h }]} />
                 }
               </Animated.View>
               {state.chosenSuit && (
@@ -437,7 +444,7 @@ export function DiJoujOnlineScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.handScroll}
+            contentContainerStyle={[s.handScroll, { gap: handGap }]}
             overScrollMode="never"
           >
             {sortedHand.map((card, i) => {
@@ -445,7 +452,7 @@ export function DiJoujOnlineScreen() {
               return (
                 <View key={i} style={[s.humanCard, !playable && s.humanCardDimmed]}>
                   <CardFace
-                    card={card} size="lg" highlighted={playable}
+                    card={card} size={cardSz} highlighted={playable}
                     disabled={!playable || !isHumanTurn || isDrawPause}
                     onPress={() => handleCardPress(card)}
                   />

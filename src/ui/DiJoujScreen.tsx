@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, Animated,
+  ScrollView, Modal, Animated, useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -106,6 +106,15 @@ function DiJoujMenu({ onLocalGame }: { onLocalGame: () => void }) {
 // ── Jeu local 1v1 (vs Bot) ────────────────────────────────────────────────────
 
 function LocalGame({ onBack }: { onBack: () => void }) {
+  const { width } = useWindowDimensions()
+  const isSmall   = width < 430
+  // Hand cards: sm (46×69) on mobile so all 7 fit without scroll
+  const cardSz    = isSmall ? 'sm' : 'lg' as const
+  // Pile / discard: one step smaller on mobile
+  const pileSz    = isSmall ? 'lg' : 'xl' as const
+  const pileWH    = isSmall ? { w: 72, h: 108 } : { w: 80, h: 120 }
+  const handGap   = isSmall ? 3 : 8
+
   const { t } = useI18n()
   const {
     state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
@@ -245,7 +254,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backBtn}>
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
-          <Text style={s.title}>DI JOUJ</Text>
+          <Text style={[s.title, isSmall && { fontSize: 15, letterSpacing: 3 }]}>DI JOUJ</Text>
           <View style={s.headerSpacer} />
         </View>
 
@@ -273,8 +282,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
               style={[s.pileWrap, (!isHumanTurn || isDrawPause) && s.pileInactive]}
             >
               {state.drawPile.length > 0
-                ? <CardBack size="xl" />
-                : <View style={s.emptyPile}><Text style={s.emptyPileTxt}>∅</Text></View>
+                ? <CardBack size={pileSz} />
+                : <View style={[s.emptyPile, { width: pileWH.w, height: pileWH.h }]}><Text style={s.emptyPileTxt}>∅</Text></View>
               }
               <Text style={s.pileCount}>{state.drawPile.length}</Text>
             </TouchableOpacity>
@@ -291,8 +300,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
               }}>
                 <Animated.View style={{ transform: [{ scale: discardScale }] }}>
                   {topCard
-                    ? <CardFace card={topCard} size="xl" />
-                    : <View style={s.emptyPile} />
+                    ? <CardFace card={topCard} size={pileSz} />
+                    : <View style={[s.emptyPile, { width: pileWH.w, height: pileWH.h }]} />
                   }
                 </Animated.View>
               </Animated.View>
@@ -321,7 +330,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
         {/* ── Main ─────────────────────────────────────────────────────────── */}
         <View style={s.handZone}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.handScroll} overScrollMode="never">
+            contentContainerStyle={[s.handScroll, { gap: handGap }]} overScrollMode="never">
             {sortedHand.map((card, i) => {
               const playable = playableSet.has(cardKey(card))
               return (
@@ -337,7 +346,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
                   },
                 ]}>
                   <CardFace
-                    card={card} size="lg" highlighted={playable}
+                    card={card} size={cardSz} highlighted={playable}
                     disabled={!playable || !isHumanTurn}
                     onPress={() => handleCardPress(card)}
                   />

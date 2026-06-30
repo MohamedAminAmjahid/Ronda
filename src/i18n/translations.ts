@@ -74,7 +74,7 @@ export const translations = {
     medium: 'متوسط',
     // ── Online ────────────────────────────────────────────────────────────────
     quickMatch: 'مباراة سريعة',
-    createGame: 'إنشاء مباراة 1v1',
+    createGame: 'إنشاء مباراة',
     lobby2v2: '2 ضد 2 (لوبي)',
     joinWithCode: 'انضم برمز',
     codePlaceholder: 'AB3X7K',
@@ -331,7 +331,7 @@ export const translations = {
     medium: 'Moyen',
     // ── Online ────────────────────────────────────────────────────────────────
     quickMatch: 'Partie rapide',
-    createGame: 'Créer une partie 1v1',
+    createGame: 'Créer une partie',
     lobby2v2: '2 contre 2 (lobby)',
     joinWithCode: 'Rejoindre avec un code',
     codePlaceholder: 'AB3X7K',
@@ -588,7 +588,7 @@ export const translations = {
     medium: 'Medium',
     // ── Online ────────────────────────────────────────────────────────────────
     quickMatch: 'Quick match',
-    createGame: 'Create 1v1 game',
+    createGame: 'Create a game',
     lobby2v2: '2 vs 2 (lobby)',
     joinWithCode: 'Join with code',
     codePlaceholder: 'AB3X7K',
