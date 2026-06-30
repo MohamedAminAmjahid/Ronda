@@ -27,6 +27,10 @@ export function useFirebaseProfileSync(): void {
           gold: p.gold,
           gamesPlayed: p.gamesPlayed,
           gamesWon: p.gamesWon,
+          rondaPlayed: p.rondaPlayed,
+          rondaWon: p.rondaWon,
+          dijoujPlayed: p.dijoujPlayed,
+          dijoujWon: p.dijoujWon,
           usernameChanges: p.usernameChanges,
         })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)

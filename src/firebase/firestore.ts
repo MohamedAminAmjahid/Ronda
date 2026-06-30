@@ -16,10 +16,24 @@ export interface UserDoc {
   gold: number
   gamesPlayed: number
   gamesWon: number
+  rondaPlayed: number
+  rondaWon: number
+  dijoujPlayed: number
+  dijoujWon: number
   usernameChanges: number
   avatarType: string
   avatarEmoji: string
   avatarImage: string
+}
+
+/** Statistiques de parties synchronisées vers Firestore. */
+export interface StatsUpdate {
+  gamesPlayed: number
+  gamesWon: number
+  rondaPlayed: number
+  rondaWon: number
+  dijoujPlayed: number
+  dijoujWon: number
 }
 
 export interface FriendDoc {
@@ -37,6 +51,10 @@ export interface LocalProfileSeed {
   gold: number
   gamesPlayed: number
   gamesWon: number
+  rondaPlayed: number
+  rondaWon: number
+  dijoujPlayed: number
+  dijoujWon: number
   usernameChanges: number
 }
 
@@ -93,6 +111,10 @@ export async function createOrUpdateUser(
       gold: local.gold,
       gamesPlayed: local.gamesPlayed,
       gamesWon: local.gamesWon,
+      rondaPlayed: local.rondaPlayed,
+      rondaWon: local.rondaWon,
+      dijoujPlayed: local.dijoujPlayed,
+      dijoujWon: local.dijoujWon,
       usernameChanges: local.usernameChanges,
       email: user.email ?? null,
       createdAt: serverTimestamp(),
@@ -161,6 +183,26 @@ export async function updateAvatar(
   await updateDoc(userRef(uid), { avatarType, avatarEmoji, avatarImage })
 }
 
+/** Construit un UserDoc à partir d'un document Firestore brut. */
+function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
+  return {
+    uid: id,
+    username: data.username as string,
+    usernameLower: (data.usernameLower as string) ?? (data.username as string).toLowerCase(),
+    gold: (data.gold as number) ?? 0,
+    gamesPlayed: (data.gamesPlayed as number) ?? 0,
+    gamesWon: (data.gamesWon as number) ?? 0,
+    rondaPlayed: (data.rondaPlayed as number) ?? 0,
+    rondaWon: (data.rondaWon as number) ?? 0,
+    dijoujPlayed: (data.dijoujPlayed as number) ?? 0,
+    dijoujWon: (data.dijoujWon as number) ?? 0,
+    usernameChanges: (data.usernameChanges as number) ?? 0,
+    avatarType: (data.avatarType as string) ?? 'initial',
+    avatarEmoji: (data.avatarEmoji as string) ?? '',
+    avatarImage: (data.avatarImage as string) ?? '',
+  }
+}
+
 /** Recherche un utilisateur par username (insensible à la casse). null si introuvable. */
 export async function searchUserByUsername(username: string): Promise<UserDoc | null> {
   const q = query(
@@ -171,19 +213,19 @@ export async function searchUserByUsername(username: string): Promise<UserDoc | 
   const res = await getDocs(q)
   if (res.empty) return null
   const d = res.docs[0]
-  const data = d.data()
-  return {
-    uid: d.id,
-    username: data.username as string,
-    usernameLower: (data.usernameLower as string) ?? (data.username as string).toLowerCase(),
-    gold: (data.gold as number) ?? 0,
-    gamesPlayed: (data.gamesPlayed as number) ?? 0,
-    gamesWon: (data.gamesWon as number) ?? 0,
-    usernameChanges: (data.usernameChanges as number) ?? 0,
-    avatarType: (data.avatarType as string) ?? 'initial',
-    avatarEmoji: (data.avatarEmoji as string) ?? '',
-    avatarImage: (data.avatarImage as string) ?? '',
-  }
+  return toUserDoc(d.id, d.data())
+}
+
+/** Lit un profil utilisateur complet par son uid. null si introuvable. */
+export async function getUserById(uid: string): Promise<UserDoc | null> {
+  const snap = await getDoc(userRef(uid))
+  if (!snap.exists()) return null
+  return toUserDoc(snap.id, snap.data())
+}
+
+/** Synchronise les statistiques de parties dans Firestore. */
+export async function updateStats(uid: string, stats: StatsUpdate): Promise<void> {
+  await updateDoc(userRef(uid), { ...stats })
 }
 
 // ── Amis (sous-collection users/{uid}/friends/{friendUid}) ─────────────────────

@@ -5,11 +5,13 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfile } from '../profile/useProfile'
+import { DAILY_TRANSFER_LIMIT } from '../profile/profile'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useI18n } from '../i18n/useI18n'
 import { useAuth } from '../firebase/auth'
 import { searchUserByUsername, type UserDoc } from '../firebase/firestore'
 import { AvatarDisplay } from './ProfileScreen'
+import { GoldTransferForm } from './GoldTransferForm'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
 
@@ -316,33 +318,21 @@ export function GoldShopScreen({ onBack }: Props) {
 
 // ── Carte « offrir un cadeau » / « envoyer du gold » ────────────────────────────
 
-/** Date du jour (YYYY-MM-DD) — pour calculer le quota quotidien côté UI. */
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
   const { t } = useI18n()
   const { user } = useAuth()
-  const {
-    gold, giftGold, transferGold,
-    dailyTransferSent, dailyTransferDate, DAILY_TRANSFER_LIMIT: LIMIT,
-  } = useProfile()
+  const { giftGold } = useProfile()
 
-  const sentToday = dailyTransferDate === todayKey() ? dailyTransferSent : 0
-  const remaining = Math.max(0, LIMIT - sentToday)
-
-  const [search, setSearch]               = useState('')
-  const [searching, setSearching]         = useState(false)
-  const [result, setResult]               = useState<UserDoc | null>(null)
-  const [giftAmount, setGiftAmount]       = useState(0)
-  const [transferInput, setTransferInput] = useState('')
-  const [sending, setSending]             = useState(false)
-  const [errMsg, setErrMsg]               = useState<string | null>(null)
-  const [okMsg, setOkMsg]                 = useState<string | null>(null)
+  const [search, setSearch]         = useState('')
+  const [searching, setSearching]   = useState(false)
+  const [result, setResult]         = useState<UserDoc | null>(null)
+  const [giftAmount, setGiftAmount] = useState(0)
+  const [sending, setSending]       = useState(false)
+  const [errMsg, setErrMsg]         = useState<string | null>(null)
+  const [okMsg, setOkMsg]           = useState<string | null>(null)
 
   const reset = () => {
-    setResult(null); setSearch(''); setGiftAmount(0); setTransferInput('')
+    setResult(null); setSearch(''); setGiftAmount(0)
   }
 
   const doSearch = async () => {
@@ -353,7 +343,8 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
       if (!u)                              setErrMsg(t('noPlayerFound'))
       else if (user && u.uid === user.uid) setErrMsg(t('thatIsYou'))
       else                                 setResult(u)
-    } catch {
+    } catch (e) {
+      console.error('[GiftTransferCard] recherche impossible:', e)
       setErrMsg(t('searchFailed'))
     } finally {
       setSearching(false)
@@ -367,48 +358,21 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
       await giftGold(result.uid, giftAmount)
       setOkMsg(t('giftSuccess').replace('{n}', String(giftAmount)).replace('{name}', result.username))
       reset()
-    } catch {
-      setErrMsg(t('searchFailed'))
+    } catch (e) {
+      console.error('[GiftTransferCard] échec du cadeau:', e)
+      setErrMsg(t('transferFailed'))
     } finally {
       setSending(false)
     }
   }
 
-  const transferAmount = parseInt(transferInput, 10) || 0
-
-  const doTransfer = async () => {
-    if (!result || transferAmount <= 0 || sending) return
-    const target = result
-    setSending(true); setErrMsg(null)
-    const res = await transferGold(target.uid, transferAmount)
-    setSending(false)
-    if (res.ok) {
-      setOkMsg(t('sendSuccess').replace('{n}', String(transferAmount)).replace('{name}', target.username))
-      reset()
-    } else if (res.reason === 'balance') {
-      setErrMsg(t('insufficientBalance'))
-    } else if (res.reason === 'quota') {
-      setErrMsg(t('dailyLimitReached').replace('{max}', String(LIMIT)))
-    } else {
-      setErrMsg(t('searchFailed'))
-    }
-  }
-
   const title = mode === 'gift' ? `🎁 ${t('giftCardTitle')}` : `💸 ${t('sendCardTitle')}`
-  const desc  = mode === 'gift'
-    ? t('giftCardDesc')
-    : t('sendCardDesc').replace('{max}', String(LIMIT))
+  const desc  = mode === 'gift' ? t('giftCardDesc') : t('sendCardDesc').replace('{max}', String(DAILY_TRANSFER_LIMIT))
 
   return (
     <View style={s.card}>
       <Text style={s.cardTitle}>{title}</Text>
       <Text style={s.cardDesc}>{desc}</Text>
-
-      {mode === 'transfer' && (
-        <Text style={s.quotaTxt}>
-          {t('transferRemaining').replace('{n}', String(remaining)).replace('{max}', String(LIMIT))}
-        </Text>
-      )}
 
       {/* Recherche d'un joueur par pseudo */}
       <View style={s.searchRow}>
@@ -467,38 +431,18 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
                   {sending ? '…' : t('giftAction')}
                 </Text>
               </TouchableOpacity>
+              {errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
+              {okMsg  && <Text style={s.okMsg}>{okMsg}</Text>}
             </>
           ) : (
-            <>
-              <Text style={s.amountLabel}>{t('transferAmountLabel')}</Text>
-              <View style={s.customInputRow}>
-                <Text style={s.customCoin}>🪙</Text>
-                <TextInput
-                  style={s.customInput}
-                  value={transferInput}
-                  onChangeText={(v) => setTransferInput(v.replace(/[^0-9]/g, '').slice(0, 4))}
-                  placeholder={`max ${remaining}`}
-                  placeholderTextColor={C.boneOff}
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                />
-              </View>
-              <TouchableOpacity
-                style={[s.btnPrimary, (transferAmount <= 0 || sending) && s.btnDisabled]}
-                onPress={doTransfer}
-                disabled={transferAmount <= 0 || sending}
-              >
-                <Text style={[s.btnPrimaryTxt, (transferAmount <= 0 || sending) && s.btnDisabledTxt]}>
-                  {sending ? '…' : t('sendAction')}
-                </Text>
-              </TouchableOpacity>
-            </>
+            <GoldTransferForm targetUid={result.uid} targetName={result.username} />
           )}
         </View>
       )}
 
-      {errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
-      {okMsg  && <Text style={s.okMsg}>{okMsg}</Text>}
+      {/* Messages de recherche (avant qu'un joueur soit sélectionné) */}
+      {!result && errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
+      {!result && okMsg  && <Text style={s.okMsg}>{okMsg}</Text>}
     </View>
   )
 }

@@ -6,6 +6,7 @@ import {
   updateUsernameChanges as firestoreUpdateUsernameChanges,
   updateAvatar as firestoreUpdateAvatar,
   giftGold as firestoreGiftGold,
+  updateStats as firestoreUpdateStats,
 } from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
@@ -182,6 +183,19 @@ function syncAvatarToFirestore(type: string, emoji: string, image: string): void
   void firestoreUpdateAvatar(uid, type, emoji, image).catch(() => {})
 }
 
+function syncStatsToFirestore(): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateStats(uid, {
+    gamesPlayed:  profile.gamesPlayed,
+    gamesWon:     profile.gamesWon,
+    rondaPlayed:  profile.rondaPlayed,
+    rondaWon:     profile.rondaWon,
+    dijoujPlayed: profile.dijoujPlayed,
+    dijoujWon:    profile.dijoujWon,
+  }).catch(() => {})
+}
+
 // ── Mutations ──────────────────────────────────────────────────────────────────
 
 export function setUsername(name: string): void {
@@ -247,7 +261,8 @@ export async function transferGold(toUid: string, amount: number): Promise<Trans
     // Crédite le destinataire (incrément atomique). Si l'opération échoue,
     // l'émetteur n'est pas débité.
     await firestoreGiftGold(toUid, amount)
-  } catch {
+  } catch (e) {
+    console.error('[transferGold] échec du crédit destinataire:', e)
     return { ok: false, reason: 'error', remaining }
   }
 
@@ -306,6 +321,9 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
     dijoujWon:    profile.dijoujWon    + (game === 'dijouj' && won ? 1 : 0),
   }
   void persist()
+  // Synchronise stats + or (le gain de victoire modifie le solde) vers Firestore.
+  syncStatsToFirestore()
+  if (reward > 0) syncGoldToFirestore(profile.gold)
   emit()
   return reward
 }
