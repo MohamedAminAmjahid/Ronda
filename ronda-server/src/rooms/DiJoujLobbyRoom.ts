@@ -5,6 +5,7 @@ import { applyPlayCard, applyDraw } from '../engine-dijouj/game'
 import type { GameState, Card, Suit } from '../engine-dijouj/types'
 import { generateCode, registerCode, unregisterCode } from './registry'
 import { addWageredGold } from '../db/queries'
+import { resolveAutoSkips } from './autoSkip'
 
 // ── Schéma Colyseus (état public du lobby) ────────────────────────────────────
 
@@ -69,6 +70,13 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
       const next = applyPlayCard(this.engine, seat, msg.card, msg.chosenSuit)
       if (next === this.engine) { client.send('error', { message: 'Coup invalide.' }); return }
       this.engine = next
+      if (this.engine.pendingEffect && !this.engine.isOver) {
+        const { engine, skipped } = resolveAutoSkips(
+          this.engine, makeRng(Date.now()), this.pseudoBySeat,
+        )
+        this.engine = engine
+        for (const s of skipped) this.broadcast('auto_skip', s)
+      }
       this.afterEngineChange()
     })
 

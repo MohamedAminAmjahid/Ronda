@@ -84,7 +84,7 @@ export function DiJoujOnlineScreen() {
     playCard, draw, isGameOver, winner, restart,
     connectionStatus, roomCode, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
-    chatMessages, sendChatMsg,
+    chatMessages, sendChatMsg, autoSkip,
   } = useOnlineDiJouj()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
@@ -353,6 +353,14 @@ export function DiJoujOnlineScreen() {
           <View style={[s.banner, { backgroundColor: bannerBg }]}>
             <Text style={s.bannerTxt}>{bannerText}</Text>
             {isAutoSkipping && <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>}
+          </View>
+        )}
+
+        {/* ── Auto-skip online (server-driven) ─────────────────────────────── */}
+        {autoSkip && !bannerText && (
+          <View style={[s.banner, { backgroundColor: C.amber }]}>
+            <Text style={s.bannerTxt}>{autoSkip.pseudo}</Text>
+            <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>
           </View>
         )}
 

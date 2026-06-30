@@ -58,6 +58,7 @@ export interface DjSnapshot {
   gameOver:             DjGameOverPayload | null
   error:                string | null
   chatMessages:         ChatMessage[]
+  autoSkip:             { playerId: number; pseudo: string } | null
 }
 
 // ── Store singleton ────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ let snapshot: DjSnapshot = {
   gameOver:             null,
   error:                null,
   chatMessages:         [],
+  autoSkip:             null,
 }
 
 const listeners = new Set<() => void>()
@@ -135,6 +137,10 @@ function wireRoom(r: Room): void {
   r.onMessage('error', (p: { message: string }) => set({ error: p.message }))
   r.onMessage('chat', (p: { username: string; text: string }) => {
     set({ chatMessages: [...snapshot.chatMessages, { id: djChatCounter++, username: p.username, text: p.text }] })
+  })
+  r.onMessage('auto_skip', (p: { playerId: number; pseudo: string }) => {
+    set({ autoSkip: p })
+    setTimeout(() => set({ autoSkip: null }), 1500)
   })
 
   r.onLeave(() => {
@@ -214,6 +220,7 @@ export function reset(): void {
     gameOver:             null,
     error:                null,
     chatMessages:         [],
+    autoSkip:             null,
   })
 }
 

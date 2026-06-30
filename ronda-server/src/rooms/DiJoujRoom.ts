@@ -6,6 +6,7 @@ import type { GameState, Card, Suit } from '../engine-dijouj/types'
 import { botPlay } from '../ai-dijouj/bot'
 import { generateCode, registerCode, unregisterCode } from './registry'
 import { addWageredGold } from '../db/queries'
+import { resolveAutoSkips } from './autoSkip'
 
 // ── Schéma Colyseus (état PUBLIC) ─────────────────────────────────────────────
 
@@ -181,7 +182,18 @@ export class DiJoujRoom extends Room<DiJoujState> {
       return
     }
     this.engine = next
+    this.applyAutoSkips()
     this.afterEngineChange()
+  }
+
+  /** Résout automatiquement les tours qui ne peuvent pas être contrés. */
+  private applyAutoSkips(): void {
+    if (!this.engine.pendingEffect || this.engine.isOver) return
+    const { engine, skipped } = resolveAutoSkips(
+      this.engine, makeRng(Date.now()), Array.from(this.pseudoBySeat),
+    )
+    this.engine = engine
+    for (const s of skipped) this.broadcast('auto_skip', s)
   }
 
   private handleDrawCard(client: Client): void {
@@ -231,6 +243,7 @@ export class DiJoujRoom extends Room<DiJoujState> {
           action.chosenSuit,
         )
       }
+      this.applyAutoSkips()
       this.afterEngineChange()
     }, 1500)
   }
