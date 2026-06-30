@@ -5,6 +5,7 @@ import {
   updateGold as firestoreUpdateGold,
   updateUsernameChanges as firestoreUpdateUsernameChanges,
   updateAvatar as firestoreUpdateAvatar,
+  giftGold as firestoreGiftGold,
 } from '../firebase/firestore'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
@@ -20,6 +21,13 @@ const MAX_USERNAME = 16
 export const WIN_REWARD = 20
 /** Coût en or d'un changement de pseudo (après le premier, gratuit). */
 export const USERNAME_CHANGE_COST = 200
+/** Plafond quotidien de gold transférable à d'autres joueurs (gratuit). */
+export const DAILY_TRANSFER_LIMIT = 200
+
+/** Date du jour au format YYYY-MM-DD (suffisant pour un quota quotidien). */
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10)
+}
 
 export interface Profile {
   username: string
@@ -34,6 +42,10 @@ export interface Profile {
   avatarType:  'initial' | 'emoji' | 'image'
   avatarEmoji: string
   avatarImage: string
+  /** Gold envoyé à d'autres joueurs aujourd'hui (remis à 0 chaque jour). */
+  dailyTransferSent: number
+  /** Jour (YYYY-MM-DD) associé à dailyTransferSent. */
+  dailyTransferDate: string
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -60,6 +72,8 @@ let profile: Profile = {
   avatarType:  'initial',
   avatarEmoji: '',
   avatarImage: '',
+  dailyTransferSent: 0,
+  dailyTransferDate: '',
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -109,6 +123,10 @@ export function loadProfile(): Promise<Profile> {
           avatarType:     (parsed.avatarType === 'emoji' || parsed.avatarType === 'image') ? parsed.avatarType : 'initial',
           avatarEmoji:    typeof parsed.avatarEmoji === 'string' ? parsed.avatarEmoji : '',
           avatarImage:    typeof parsed.avatarImage === 'string' ? parsed.avatarImage : '',
+          // Quota de transfert : remis à 0 si la date sauvegardée n'est pas aujourd'hui.
+          dailyTransferSent: (typeof parsed.dailyTransferSent === 'number' && parsed.dailyTransferDate === todayStr())
+            ? parsed.dailyTransferSent : 0,
+          dailyTransferDate: parsed.dailyTransferDate === todayStr() ? parsed.dailyTransferDate : todayStr(),
         }
       } else {
         profile = {
@@ -117,6 +135,7 @@ export function loadProfile(): Promise<Profile> {
           gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
           rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
           avatarType: 'initial', avatarEmoji: '', avatarImage: '',
+          dailyTransferSent: 0, dailyTransferDate: todayStr(),
         }
       }
     } catch {
@@ -126,6 +145,7 @@ export function loadProfile(): Promise<Profile> {
         gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
         rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
         avatarType: 'initial', avatarEmoji: '', avatarImage: '',
+        dailyTransferSent: 0, dailyTransferDate: todayStr(),
       }
     }
     loaded = true
@@ -194,6 +214,62 @@ export function removeGold(amount: number): void {
   void persist()
   syncGoldToFirestore(profile.gold)
   emit()
+}
+
+// ── Transfert de gold entre joueurs (gratuit, plafonné par jour) ────────────────
+
+/** Gold déjà envoyé aujourd'hui (0 si le compteur date d'un autre jour). */
+export function getDailyTransferSent(): number {
+  return profile.dailyTransferDate === todayStr() ? profile.dailyTransferSent : 0
+}
+
+/** Gold encore transférable aujourd'hui (0…DAILY_TRANSFER_LIMIT). */
+export function getTransferRemaining(): number {
+  return Math.max(0, DAILY_TRANSFER_LIMIT - getDailyTransferSent())
+}
+
+export type TransferResult =
+  | { ok: true }
+  | { ok: false; reason: 'amount' | 'balance' | 'quota' | 'error'; remaining: number }
+
+/**
+ * Transfère `amount` gold vers un autre joueur (gratuit) :
+ * vérifie le quota quotidien et le solde, crédite le destinataire côté Firestore,
+ * déduit l'émetteur (local + sync) puis met à jour le compteur quotidien.
+ */
+export async function transferGold(toUid: string, amount: number): Promise<TransferResult> {
+  const remaining = getTransferRemaining()
+  if (amount <= 0)            return { ok: false, reason: 'amount',  remaining }
+  if (amount > profile.gold)  return { ok: false, reason: 'balance', remaining }
+  if (amount > remaining)     return { ok: false, reason: 'quota',   remaining }
+
+  try {
+    // Crédite le destinataire (incrément atomique). Si l'opération échoue,
+    // l'émetteur n'est pas débité.
+    await firestoreGiftGold(toUid, amount)
+  } catch {
+    return { ok: false, reason: 'error', remaining }
+  }
+
+  // Déduit l'émetteur (sync Firestore via removeGold) et met à jour le quota.
+  removeGold(amount)
+  profile = {
+    ...profile,
+    dailyTransferSent: getDailyTransferSent() + amount,
+    dailyTransferDate: todayStr(),
+  }
+  void persist()
+  emit()
+  return { ok: true }
+}
+
+/**
+ * Offre `amount` gold à un joueur (simulation, sans limite ni débit).
+ * Crédite uniquement le destinataire côté Firestore.
+ */
+export async function giftGold(toUid: string, amount: number): Promise<void> {
+  if (amount <= 0) return
+  await firestoreGiftGold(toUid, amount)
 }
 
 /** Synchronise usernameChanges depuis Firebase (login sur nouvel appareil). Local uniquement. */

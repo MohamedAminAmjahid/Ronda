@@ -9,6 +9,9 @@ import {
   setAvatarEmoji,
   setAvatarImage,
   clearAvatar,
+  giftGold,
+  transferGold,
+  DAILY_TRANSFER_LIMIT,
   type Profile,
 } from './profile'
 
@@ -40,11 +43,16 @@ export function useProfile() {
     avatarType:     profile.avatarType,
     avatarEmoji:    profile.avatarEmoji,
     avatarImage:    profile.avatarImage,
+    dailyTransferSent: profile.dailyTransferSent,
+    dailyTransferDate: profile.dailyTransferDate,
     setUsername,
     addGold,
     removeGold,
     setAvatarEmoji,
     setAvatarImage,
     clearAvatar,
+    giftGold,
+    transferGold,
+    DAILY_TRANSFER_LIMIT,
   }
 }

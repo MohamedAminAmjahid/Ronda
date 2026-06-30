@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
-  Share, Linking, AppState, Modal, type AppStateStatus,
+  Share, Linking, AppState, Modal, ActivityIndicator, type AppStateStatus,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfile } from '../profile/useProfile'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useI18n } from '../i18n/useI18n'
+import { useAuth } from '../firebase/auth'
+import { searchUserByUsername, type UserDoc } from '../firebase/firestore'
+import { AvatarDisplay } from './ProfileScreen'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
 
@@ -185,6 +188,12 @@ export function GoldShopScreen({ onBack }: Props) {
             </View>
           </View>
 
+          {/* Offrir un cadeau (simulation, illimité) */}
+          <GiftTransferCard mode="gift" />
+
+          {/* Envoyer du gold (gratuit, plafonné par jour) */}
+          <GiftTransferCard mode="transfer" />
+
           {/* 1. Partager le jeu */}
           <View style={s.card}>
             <View style={s.cardHead}>
@@ -305,6 +314,195 @@ export function GoldShopScreen({ onBack }: Props) {
   )
 }
 
+// ── Carte « offrir un cadeau » / « envoyer du gold » ────────────────────────────
+
+/** Date du jour (YYYY-MM-DD) — pour calculer le quota quotidien côté UI. */
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
+  const { t } = useI18n()
+  const { user } = useAuth()
+  const {
+    gold, giftGold, transferGold,
+    dailyTransferSent, dailyTransferDate, DAILY_TRANSFER_LIMIT: LIMIT,
+  } = useProfile()
+
+  const sentToday = dailyTransferDate === todayKey() ? dailyTransferSent : 0
+  const remaining = Math.max(0, LIMIT - sentToday)
+
+  const [search, setSearch]               = useState('')
+  const [searching, setSearching]         = useState(false)
+  const [result, setResult]               = useState<UserDoc | null>(null)
+  const [giftAmount, setGiftAmount]       = useState(0)
+  const [transferInput, setTransferInput] = useState('')
+  const [sending, setSending]             = useState(false)
+  const [errMsg, setErrMsg]               = useState<string | null>(null)
+  const [okMsg, setOkMsg]                 = useState<string | null>(null)
+
+  const reset = () => {
+    setResult(null); setSearch(''); setGiftAmount(0); setTransferInput('')
+  }
+
+  const doSearch = async () => {
+    if (!search.trim()) return
+    setSearching(true); setResult(null); setErrMsg(null); setOkMsg(null)
+    try {
+      const u = await searchUserByUsername(search)
+      if (!u)                              setErrMsg(t('noPlayerFound'))
+      else if (user && u.uid === user.uid) setErrMsg(t('thatIsYou'))
+      else                                 setResult(u)
+    } catch {
+      setErrMsg(t('searchFailed'))
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const doGift = async () => {
+    if (!result || giftAmount <= 0 || sending) return
+    setSending(true); setErrMsg(null)
+    try {
+      await giftGold(result.uid, giftAmount)
+      setOkMsg(t('giftSuccess').replace('{n}', String(giftAmount)).replace('{name}', result.username))
+      reset()
+    } catch {
+      setErrMsg(t('searchFailed'))
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const transferAmount = parseInt(transferInput, 10) || 0
+
+  const doTransfer = async () => {
+    if (!result || transferAmount <= 0 || sending) return
+    const target = result
+    setSending(true); setErrMsg(null)
+    const res = await transferGold(target.uid, transferAmount)
+    setSending(false)
+    if (res.ok) {
+      setOkMsg(t('sendSuccess').replace('{n}', String(transferAmount)).replace('{name}', target.username))
+      reset()
+    } else if (res.reason === 'balance') {
+      setErrMsg(t('insufficientBalance'))
+    } else if (res.reason === 'quota') {
+      setErrMsg(t('dailyLimitReached').replace('{max}', String(LIMIT)))
+    } else {
+      setErrMsg(t('searchFailed'))
+    }
+  }
+
+  const title = mode === 'gift' ? `🎁 ${t('giftCardTitle')}` : `💸 ${t('sendCardTitle')}`
+  const desc  = mode === 'gift'
+    ? t('giftCardDesc')
+    : t('sendCardDesc').replace('{max}', String(LIMIT))
+
+  return (
+    <View style={s.card}>
+      <Text style={s.cardTitle}>{title}</Text>
+      <Text style={s.cardDesc}>{desc}</Text>
+
+      {mode === 'transfer' && (
+        <Text style={s.quotaTxt}>
+          {t('transferRemaining').replace('{n}', String(remaining)).replace('{max}', String(LIMIT))}
+        </Text>
+      )}
+
+      {/* Recherche d'un joueur par pseudo */}
+      <View style={s.searchRow}>
+        <TextInput
+          style={s.searchInput}
+          value={search}
+          onChangeText={(v) => { setSearch(v); setOkMsg(null); setErrMsg(null) }}
+          placeholder={t('exactUsername')}
+          placeholderTextColor={C.boneOff}
+          autoCapitalize="none"
+          autoCorrect={false}
+          onSubmitEditing={doSearch}
+          returnKeyType="search"
+        />
+        <TouchableOpacity style={s.btnSearch} onPress={doSearch} disabled={searching}>
+          {searching
+            ? <ActivityIndicator color={C.ink} size="small" />
+            : <Text style={s.btnSearchTxt}>{t('searchBtn')}</Text>}
+        </TouchableOpacity>
+      </View>
+
+      {result && (
+        <View style={s.resultBox}>
+          <View style={s.resultRow}>
+            <AvatarDisplay
+              type={(result.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+              initial={result.username?.[0]?.toUpperCase() ?? '?'}
+              emoji={result.avatarEmoji ?? ''}
+              image={result.avatarImage ?? ''}
+              size={36}
+            />
+            <Text style={s.resultName} numberOfLines={1}>{result.username}</Text>
+          </View>
+
+          {mode === 'gift' ? (
+            <>
+              <Text style={s.amountLabel}>{t('giftAmountLabel')}</Text>
+              <View style={s.chipRow}>
+                {PACKS.map((p) => (
+                  <TouchableOpacity
+                    key={p.gold}
+                    style={[s.chip, giftAmount === p.gold && s.chipActive]}
+                    onPress={() => setGiftAmount(p.gold)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[s.chipTxt, giftAmount === p.gold && s.chipTxtActive]}>🪙 {p.gold}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[s.btnPrimary, (giftAmount <= 0 || sending) && s.btnDisabled]}
+                onPress={doGift}
+                disabled={giftAmount <= 0 || sending}
+              >
+                <Text style={[s.btnPrimaryTxt, (giftAmount <= 0 || sending) && s.btnDisabledTxt]}>
+                  {sending ? '…' : t('giftAction')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={s.amountLabel}>{t('transferAmountLabel')}</Text>
+              <View style={s.customInputRow}>
+                <Text style={s.customCoin}>🪙</Text>
+                <TextInput
+                  style={s.customInput}
+                  value={transferInput}
+                  onChangeText={(v) => setTransferInput(v.replace(/[^0-9]/g, '').slice(0, 4))}
+                  placeholder={`max ${remaining}`}
+                  placeholderTextColor={C.boneOff}
+                  keyboardType="number-pad"
+                  inputMode="numeric"
+                />
+              </View>
+              <TouchableOpacity
+                style={[s.btnPrimary, (transferAmount <= 0 || sending) && s.btnDisabled]}
+                onPress={doTransfer}
+                disabled={transferAmount <= 0 || sending}
+              >
+                <Text style={[s.btnPrimaryTxt, (transferAmount <= 0 || sending) && s.btnDisabledTxt]}>
+                  {sending ? '…' : t('sendAction')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      )}
+
+      {errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
+      {okMsg  && <Text style={s.okMsg}>{okMsg}</Text>}
+    </View>
+  )
+}
+
 // ── Carte « suivre un réseau » ──────────────────────────────────────────────────
 
 function FollowCard({
@@ -378,6 +576,41 @@ const s = StyleSheet.create({
 
   supportRow: { flexDirection: 'row', gap: 10 },
   supportBtn: { flex: 1, paddingVertical: 12 },
+
+  // ── Cadeau & transfert de gold ──
+  quotaTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+  searchRow: { flexDirection: 'row', gap: 8 },
+  searchInput: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 11,
+    fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  btnSearch: {
+    backgroundColor: C.brass, borderRadius: 10, paddingHorizontal: 18,
+    minWidth: 64, alignItems: 'center', justifyContent: 'center',
+  },
+  btnSearchTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
+  resultBox: {
+    backgroundColor: 'rgba(0,0,0,0.20)', borderRadius: 12, padding: 12, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.18)',
+  },
+  resultRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  resultName: { flex: 1, fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
+  amountLabel: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff,
+    letterSpacing: 1.2, textTransform: 'uppercase',
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.22)', borderWidth: 1, borderColor: 'rgba(244,236,216,0.18)',
+  },
+  chipActive: { backgroundColor: C.brass, borderColor: C.brass },
+  chipTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
+  chipTxtActive: { color: C.ink },
+  errMsg: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: '#E74C3C', textAlign: 'center' },
+  okMsg:  { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, textAlign: 'center', lineHeight: 20 },
 
   sectionLabel: {
     fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,

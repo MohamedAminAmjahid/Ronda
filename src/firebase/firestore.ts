@@ -128,6 +128,16 @@ export async function updateUsernameChanges(uid: string, count: number): Promise
   await updateDoc(userRef(uid), { usernameChanges: count })
 }
 
+/**
+ * Crédite le gold d'un utilisateur via un incrément atomique Firestore.
+ * Utilisé pour offrir un cadeau (simulation) ou transférer du gold.
+ * Aucune vérification de solde : c'est l'appelant qui gère la déduction côté émetteur.
+ */
+export async function giftGold(toUid: string, amount: number): Promise<void> {
+  if (amount <= 0) return
+  await updateDoc(userRef(toUid), { gold: increment(amount) })
+}
+
 /** Lit l'avatar d'un utilisateur (type, emoji, image). */
 export async function getUserAvatar(uid: string): Promise<{
   avatarType: string; avatarEmoji: string; avatarImage: string
@@ -384,6 +394,7 @@ export async function sendGameInvite(
   toUid: string,
   game: 'ronda' | 'dijouj',
   betAmount: number,
+  roomCode?: string,  // pré-rempli pour les invitations depuis un lobby
 ): Promise<string> {
   // Vérifie s'il existe déjà une invitation pending vers ce même ami
   // (filtre client-side pour éviter un index composite Firestore)
@@ -396,7 +407,12 @@ export async function sendGameInvite(
   if (hasPending) throw new Error('already_invited')
 
   const ref = doc(collection(db, 'gameInvites'))
-  await setDoc(ref, { fromUid, fromName, toUid, game, betAmount, status: 'pending', createdAt: serverTimestamp() })
+  await setDoc(ref, {
+    fromUid, fromName, toUid, game, betAmount,
+    status: 'pending',
+    ...(roomCode ? { roomCode } : {}),
+    createdAt: serverTimestamp(),
+  })
   return ref.id
 }
 
