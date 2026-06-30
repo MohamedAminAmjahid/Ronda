@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
 import { GoldTransferForm } from './GoldTransferForm'
+import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
 import { getUserById, type UserDoc, type FriendDoc } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
@@ -111,7 +112,14 @@ export function FriendProfileScreen({ onBack }: Props) {
               />
             </View>
 
-            {/* ── Envoyer du gold ── */}
+            {/* ── Offrir un pack (cadeau, illimité) ── */}
+            <View style={s.card}>
+              <Text style={s.cardTitle}>🎁 {t('giftCardTitle')}</Text>
+              <Text style={s.cardDesc}>{t('giftCardDesc')}</Text>
+              <GoldGiftForm targetUid={profile.uid} targetName={profile.username} />
+            </View>
+
+            {/* ── Envoyer du gold (transfert, gratuit/limité) ── */}
             <View style={s.card}>
               <Text style={s.cardTitle}>💸 {t('sendCardTitle')}</Text>
               <GoldTransferForm targetUid={profile.uid} targetName={profile.username} />
@@ -207,6 +215,7 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.18)',
   },
   cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone },
+  cardDesc: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 18 },
 
   actions: { flexDirection: 'row', gap: 10 },
   actionBtn: {
