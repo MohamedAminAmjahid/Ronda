@@ -44,6 +44,7 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
   private sessionBySeat: (string | null)[] = []
   private pseudoBySeat:  string[]           = []
   private isBotSeat:     boolean[]          = []
+  private forfeitedSeats = new Set<number>()
   private reconnectSeconds = Number(process.env.RECONNECT_SECONDS ?? 60)
   private finished = false
 
@@ -109,9 +110,24 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
     if (slot) slot.connected = false
 
     if (consented && this.state.phase === 'PLAYING') {
-      const oppSeat = ([0, 1, 2, 3] as const).find(s => s !== this.seatOf(client.sessionId))!
-      this.finishGame(oppSeat)
-      this.clock.setTimeout(() => this.disconnect(), 800)
+      const leaverSeat = this.seatOf(client.sessionId)
+      if (this.pc === 2) {
+        // 1v1 : l'adversaire gagne
+        const oppSeat = leaverSeat === 0 ? 1 : 0
+        this.finishGame(oppSeat)
+        this.clock.setTimeout(() => this.disconnect(), 800)
+        return
+      }
+      // 3+ joueurs : le partant est retiré, les autres continuent
+      if (leaverSeat !== null) {
+        this.forfeitedSeats.add(leaverSeat)
+        this.broadcast('player_forfeited', {
+          seat:   leaverSeat,
+          pseudo: this.pseudoBySeat[leaverSeat] ?? 'Joueur',
+        })
+        this.resolveForfeitedTurns()
+        if (!this.engine.isOver) this.sendPrivateStateToAll()
+      }
       return
     }
 
@@ -192,6 +208,10 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
   // ── Après chaque changement moteur ────────────────────────────────────────────
 
   private afterEngineChange(): void {
+    // Résoudre les tours des joueurs ayant abandonné avant d'envoyer l'état
+    if (this.forfeitedSeats.size > 0 && !this.engine.isOver) {
+      this.resolveForfeitedTurns()
+    }
     if (this.engine.isOver) this.state.phase = 'GAME_OVER'
     this.sendPrivateStateToAll()
 
@@ -199,6 +219,30 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
       this.finishGame(this.engine.winnerId ?? undefined)
       this.clock.setTimeout(() => this.disconnect(), 5000)
     }
+  }
+
+  /**
+   * Joue automatiquement (draw) pour chaque joueur qui a abandonné,
+   * aussi longtemps que c'est son tour.
+   */
+  private resolveForfeitedTurns(): void {
+    let iter = 0
+    while (
+      !this.engine.isOver &&
+      this.state.phase === 'PLAYING' &&
+      this.forfeitedSeats.has(this.engine.currentPlayerId) &&
+      iter < this.pc
+    ) {
+      iter++
+      this.engine = applyDraw(this.engine, this.engine.currentPlayerId, makeRng(Date.now()))
+      // Appliquer également l'auto-skip si le joueur suivant ne peut pas contrer
+      if (this.engine.pendingEffect && !this.engine.isOver) {
+        const { engine, skipped } = resolveAutoSkips(this.engine, makeRng(Date.now()), this.pseudoBySeat)
+        this.engine = engine
+        for (const s of skipped) this.broadcast('auto_skip', s)
+      }
+    }
+    if (this.engine.isOver) this.state.phase = 'GAME_OVER'
   }
 
   // ── Fin de partie ─────────────────────────────────────────────────────────────

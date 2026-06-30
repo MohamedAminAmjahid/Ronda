@@ -1,14 +1,16 @@
 import { useState, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  TextInput, Share, ActivityIndicator, ScrollView,
+  TextInput, Share, ActivityIndicator, ScrollView, Modal, FlatList,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
+import { useAuth } from '../firebase/auth'
 import { useLobbyDiJouj } from '../online/useLobbyDiJouj'
+import { getFriends, sendGameInvite, type FriendDoc } from '../firebase/firestore'
 
 const MAX_PLAYERS = 4
 
@@ -28,12 +30,41 @@ const C = {
 export function DiJoujLobbyScreen() {
   const { t }        = useI18n()
   const { username } = useProfile()
+  const { user }     = useAuth()
   const {
     phase, code, slots, isAdmin, adminPseudo, error,
     connect, joinByCode: joinLobbyByCode, startGame, leave,
   } = useLobbyDiJouj()
 
   const [joinCode, setJoinCode] = useState('')
+
+  // ── Invite friend modal ──────────────────────────────────────────────────────
+  const [showFriendModal, setShowFriendModal] = useState(false)
+  const [friends,         setFriends]         = useState<FriendDoc[]>([])
+  const [loadingFriends,  setLoadingFriends]  = useState(false)
+  const [invitingUid,     setInvitingUid]     = useState<string | null>(null)
+  const [invitedUids,     setInvitedUids]     = useState<Set<string>>(new Set())
+
+  const openFriendModal = useCallback(async () => {
+    if (!user) return
+    setShowFriendModal(true)
+    setLoadingFriends(true)
+    try {
+      const list = await getFriends(user.uid)
+      setFriends(list)
+    } catch {}
+    setLoadingFriends(false)
+  }, [user])
+
+  const doInviteFriend = useCallback(async (friend: FriendDoc) => {
+    if (!user || !code || invitingUid) return
+    setInvitingUid(friend.uid)
+    try {
+      await sendGameInvite(user.uid, username || 'Joueur', friend.uid, 'dijouj', 0, code)
+      setInvitedUids(prev => new Set([...prev, friend.uid]))
+    } catch {}
+    setInvitingUid(null)
+  }, [user, code, username, invitingUid])
 
   const handleCreate = useCallback(() => {
     connect(username || 'Joueur')
@@ -52,10 +83,71 @@ export function DiJoujLobbyScreen() {
     } catch {}
   }, [code])
 
+  const [confirmQuit, setConfirmQuit] = useState(false)
+
   const handleLeave = useCallback(() => {
     leave()
     router.back()
   }, [leave])
+
+  const handleQuitGame = useCallback(() => {
+    setConfirmQuit(false)
+    leave()        // leaveLobby() → calls storeDiJouj.leave() when phase==='playing'
+    router.back()
+  }, [leave])
+
+  // ── Phase playing : l'écran de jeu est sur /dijouj-online ─────────────────
+
+  if (phase === 'playing') {
+    return (
+      <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+        <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={() => router.push('/dijouj-online' as never)} activeOpacity={0.7} style={s.backBtn}>
+              <Text style={s.backTxt}>← Jeu</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>DI JOUJ</Text>
+            <View style={s.headerSpacer} />
+          </View>
+          <View style={s.center}>
+            <Text style={[s.sectionLabel, { fontSize: 15, marginBottom: 32 }]}>Partie en cours…</Text>
+            <TouchableOpacity
+              style={s.mainBtn}
+              onPress={() => router.push('/dijouj-online' as never)}
+              activeOpacity={0.8}
+            >
+              <Text style={s.mainBtnTxt}>↩ Retourner au jeu</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.mainBtn, { backgroundColor: 'rgba(192,57,43,0.20)', borderWidth: 1, borderColor: 'rgba(192,57,43,0.45)', marginTop: 14 }]}
+              onPress={() => setConfirmQuit(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={[s.mainBtnTxt, { color: C.red }]}>Quitter la partie</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Modale confirmation forfait ─────────────────────────────────── */}
+          <Modal visible={confirmQuit} transparent animationType="fade" onRequestClose={() => setConfirmQuit(false)}>
+            <View style={s.quitBackdrop}>
+              <View style={s.quitCard}>
+                <Text style={s.quitTitle}>Quitter la partie ?</Text>
+                <Text style={s.quitSub}>Tes adversaires gagneront automatiquement.</Text>
+                <View style={s.quitActions}>
+                  <TouchableOpacity style={s.stayBtn} onPress={() => setConfirmQuit(false)}>
+                    <Text style={s.stayTxt}>Rester</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.leaveBtn} onPress={handleQuitGame}>
+                    <Text style={s.leaveTxt}>Quitter</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
+        </SafeAreaView>
+      </LinearGradient>
+    )
+  }
 
   // ── Idle / Error ──────────────────────────────────────────────────────────
 
@@ -192,6 +284,11 @@ export function DiJoujLobbyScreen() {
                 <View key={`empty-${i}`} style={[s.slotRow, s.slotRowEmpty]}>
                   <Text style={[s.slotIcon, { color: C.boneOff }]}>⏳</Text>
                   <Text style={s.slotNameEmpty}>En attente d'un joueur...</Text>
+                  {code && (
+                    <TouchableOpacity style={s.inviteSlotBtn} onPress={openFriendModal} activeOpacity={0.8}>
+                      <Text style={s.inviteSlotTxt}>+ Inviter</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )
             })}
@@ -221,6 +318,49 @@ export function DiJoujLobbyScreen() {
             </View>
           )}
         </ScrollView>
+
+        {/* ── Modale amis ──────────────────────────────────────────────────── */}
+        <Modal visible={showFriendModal} transparent animationType="fade" onRequestClose={() => setShowFriendModal(false)}>
+          <View style={s.modalOverlay}>
+            <View style={s.modalBox}>
+              <Text style={s.modalTitle}>Inviter un ami</Text>
+              {loadingFriends ? (
+                <ActivityIndicator color={C.brass} style={{ marginVertical: 24 }} />
+              ) : friends.length === 0 ? (
+                <Text style={s.modalEmpty}>Aucun ami pour l'instant</Text>
+              ) : (
+                <FlatList
+                  data={friends}
+                  keyExtractor={f => f.uid}
+                  style={{ maxHeight: 300, width: '100%' }}
+                  renderItem={({ item }) => {
+                    const invited = invitedUids.has(item.uid)
+                    return (
+                      <View style={s.friendRow}>
+                        <Text style={s.friendName}>{item.username}</Text>
+                        <TouchableOpacity
+                          style={[s.friendInviteBtn, invited && s.friendInviteDone]}
+                          onPress={() => doInviteFriend(item)}
+                          disabled={invited || invitingUid === item.uid}
+                          activeOpacity={0.8}
+                        >
+                          {invitingUid === item.uid
+                            ? <ActivityIndicator color="#fff" size="small" />
+                            : <Text style={s.friendInviteTxt}>{invited ? '✓ Envoyé' : 'Inviter'}</Text>
+                          }
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  }}
+                />
+              )}
+              <TouchableOpacity style={s.modalCloseBtn} onPress={() => { setShowFriendModal(false); setInvitedUids(new Set()) }} activeOpacity={0.8}>
+                <Text style={s.modalCloseTxt}>Fermer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </LinearGradient>
   )
@@ -333,4 +473,69 @@ const s = StyleSheet.create({
     gap: 10, paddingVertical: 12,
   },
   waitingTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13, flexShrink: 1 },
+
+  inviteSlotBtn: {
+    paddingVertical: 5, paddingHorizontal: 10,
+    backgroundColor: C.acc, borderRadius: 8,
+  },
+  inviteSlotTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 12 },
+
+  // ── Modale quitter ───────────────────────────────────────────────────────
+  quitBackdrop: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28,
+  },
+  quitCard: {
+    width: '100%', maxWidth: 340, backgroundColor: '#3D1030', borderRadius: 18, padding: 24, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  quitTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone, textAlign: 'center' },
+  quitSub:   { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, textAlign: 'center', lineHeight: 18 },
+  quitActions: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  stayBtn: {
+    flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+  },
+  stayTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff },
+  leaveBtn: {
+    flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center',
+    backgroundColor: 'rgba(192,57,43,0.20)', borderWidth: 1, borderColor: 'rgba(192,57,43,0.45)',
+  },
+  leaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.red },
+
+  // ── Modal amis ────────────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  modalBox: {
+    backgroundColor: '#1A0A14', borderRadius: 20,
+    paddingVertical: 28, paddingHorizontal: 24,
+    width: 300, alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
+  },
+  modalTitle: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 17, letterSpacing: 0.3,
+  },
+  modalEmpty: {
+    fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14,
+    marginVertical: 16, textAlign: 'center',
+  },
+  friendRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.ghost,
+    gap: 10,
+  },
+  friendName: { flex: 1, fontFamily: 'Cairo_400Regular', color: C.bone, fontSize: 14 },
+  friendInviteBtn: {
+    paddingVertical: 6, paddingHorizontal: 14,
+    backgroundColor: C.acc, borderRadius: 8, minWidth: 72, alignItems: 'center',
+  },
+  friendInviteDone: { backgroundColor: C.green },
+  friendInviteTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 12 },
+  modalCloseBtn: {
+    marginTop: 4, paddingVertical: 11, paddingHorizontal: 32,
+    borderRadius: 10, backgroundColor: C.ghost,
+  },
+  modalCloseTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 14 },
 })

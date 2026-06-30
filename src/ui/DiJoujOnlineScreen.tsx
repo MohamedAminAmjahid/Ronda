@@ -84,7 +84,7 @@ export function DiJoujOnlineScreen() {
     playCard, draw, isGameOver, winner, restart,
     connectionStatus, roomCode, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
-    chatMessages, sendChatMsg, autoSkip,
+    chatMessages, sendChatMsg, autoSkip, playerForfeited,
   } = useOnlineDiJouj()
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
@@ -361,6 +361,14 @@ export function DiJoujOnlineScreen() {
           <View style={[s.banner, { backgroundColor: C.amber }]}>
             <Text style={s.bannerTxt}>{autoSkip.pseudo}</Text>
             <Text style={s.autoSkipTxt}>{t('djAutoSkip')}</Text>
+          </View>
+        )}
+
+        {/* ── Joueur ayant abandonné ───────────────────────────────────────── */}
+        {playerForfeited && (
+          <View style={[s.banner, { backgroundColor: C.red }]}>
+            <Text style={s.bannerTxt}>{playerForfeited.pseudo}</Text>
+            <Text style={s.autoSkipTxt}>{t('playerForfeited')}</Text>
           </View>
         )}
 

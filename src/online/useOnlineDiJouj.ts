@@ -153,6 +153,7 @@ export function useOnlineDiJouj() {
     chatMessages:         snap.chatMessages as ChatMessage[],
     sendChatMsg:          sendChat,
     autoSkip:             snap.autoSkip,
+    playerForfeited:      snap.playerForfeited,
     connectQuick:         connectDiJoujQuick,
     connectPrivate:       connectDiJoujPrivate,
   }

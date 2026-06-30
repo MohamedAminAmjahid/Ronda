@@ -1,6 +1,6 @@
 import type { Room } from 'colyseus.js'
 import { createDiJoujLobby, joinByCode } from './client'
-import { attachRoom } from './storeDiJouj'
+import { attachRoom, leave as leaveGameRoom } from './storeDiJouj'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -132,6 +132,9 @@ export function startGame(): void {
 }
 
 export function leaveLobby(): void {
+  // If the game is in progress the room was transferred to storeDiJouj;
+  // we must call leaveGameRoom() so the server receives a consented leave.
+  if (snapshot.phase === 'playing') leaveGameRoom()
   room?.leave()
   room = null
   set({
