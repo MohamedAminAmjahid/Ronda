@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore, useCallback } from 'react'
+import { usePlayOnlineQuest } from '../quests/useQuests'
 import type { Card, Combination, GameState, PlayerId, PlayerState, Value } from '../engine/types'
 import type { GameView } from '../game/useRondaGame'
 import {
@@ -119,6 +120,7 @@ export interface OnlineExtras {
  */
 export function useOnlineGame() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  usePlayOnlineQuest(snap.status === 'playing')
   const [isCaptureAnimating, setCaptureAnimating] = useState(false)
 
   const gs = snap.server ? buildGameState(snap.server) : emptyState()

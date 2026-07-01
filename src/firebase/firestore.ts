@@ -6,6 +6,7 @@ import {
 import { getAuth } from 'firebase/auth'
 import { firebaseApp } from './config'
 import type { User } from './auth'
+import { notifyInvite, notifyMessage, notifyFriendRequest } from '../online/serverApi'
 
 export const db = getFirestore(firebaseApp)
 
@@ -351,6 +352,7 @@ export async function sendFriendRequest(myUid: string, targetUid: string): Promi
       status: 'pending',
       createdAt: serverTimestamp(),
     })
+    notifyFriendRequest(targetUid)
   } catch (e) {
     console.error('[sendFriendRequest] error:', JSON.stringify(e), e)
     throw e
@@ -458,6 +460,7 @@ export async function sendMessage(
       text,
       createdAt: serverTimestamp(),
     })
+    notifyMessage(friendUid)
   } catch (e) {
     console.error('[sendMessage] Firestore error:', e)
     throw e
@@ -554,6 +557,7 @@ export async function sendGameInvite(
     ...(roomCode ? { roomCode } : {}),
     createdAt: serverTimestamp(),
   })
+  notifyInvite(toUid, game)
   return ref.id
 }
 

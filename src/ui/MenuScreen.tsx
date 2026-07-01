@@ -224,6 +224,10 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
           {/* ── Liens texte ──────────────────────────────────────── */}
           <View style={s.textLinks}>
+            <TouchableOpacity style={s.linkBtn} onPress={() => router.push('/daily-quests' as Href)}>
+              <Text style={s.linkTxt}>{t('dailyQuests')}</Text>
+            </TouchableOpacity>
+            <Text style={s.linkSep}>·</Text>
             <TouchableOpacity style={s.linkBtn} onPress={onLeaderboard}>
               <Text style={s.linkTxt}>{t('leaderboard')}</Text>
             </TouchableOpacity>

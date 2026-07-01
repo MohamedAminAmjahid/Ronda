@@ -1,4 +1,5 @@
 import { useSyncExternalStore, useCallback } from 'react'
+import { usePlayOnlineQuest } from '../quests/useQuests'
 import type { GameState, Card, Suit, Value, PendingEffect } from '../engine-dijouj/types'
 import {
   subscribe,
@@ -98,6 +99,7 @@ export interface OnlineDjExtras {
 
 export function useOnlineDiJouj() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  usePlayOnlineQuest(snap.status === 'playing')
 
   const srv    = snap.server
   const mySeat = snap.mySeat ?? 0

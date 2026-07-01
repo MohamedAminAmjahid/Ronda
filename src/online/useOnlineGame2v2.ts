@@ -1,4 +1,5 @@
 import { useState, useCallback, useSyncExternalStore } from 'react'
+import { usePlayOnlineQuest } from '../quests/useQuests'
 import type { Card, Combination, Value } from '../engine/types'
 import type { GameState2v2, PlayerId2v2, PlayerState2v2, TeamState } from '../engine2v2/types2v2'
 import type { GameView2v2 } from '../game/useRonda2v2Game'
@@ -118,6 +119,7 @@ function buildState(g: Server2v2GameState): GameState2v2 {
  */
 export function useOnlineGame2v2() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  usePlayOnlineQuest(snap.status === 'playing')
   const [isCaptureAnimating, setCaptureAnimating] = useState(false)
   // Valeurs déjà contestées par l'humain, clé incluant la manche pour expirer
   // automatiquement à la redistribution (pas de reset explicite nécessaire).

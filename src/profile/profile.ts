@@ -5,11 +5,11 @@ import {
   updateGold as firestoreUpdateGold,
   updateUsernameChanges as firestoreUpdateUsernameChanges,
   updateAvatar as firestoreUpdateAvatar,
-  giftGold as firestoreGiftGold,
   updateStats as firestoreUpdateStats,
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
-  logGoldTransaction,
 } from '../firebase/firestore'
+import { apiGift, apiTransfer } from '../online/serverApi'
+import { markQuestProgress, registerGoldSetter } from '../quests/quests'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
 // - username : généré une seule fois au premier lancement (Joueur#XXXX), puis persisté.
@@ -222,6 +222,10 @@ export function setGold(amount: number): void {
   emit()
 }
 
+// Permet au module de quêtes d'appliquer localement le solde renvoyé par le
+// serveur après une récompense (sans créer de cycle d'import).
+registerGoldSetter(setGold)
+
 export function addGold(amount: number): void {
   if (amount === 0) return
   profile = { ...profile, gold: Math.max(0, profile.gold + amount) }
@@ -254,54 +258,39 @@ export type TransferResult =
   | { ok: true }
   | { ok: false; reason: 'amount' | 'balance' | 'quota' | 'error'; remaining: number }
 
-/** Journalise une transaction de gold dans goldHistory (best-effort). */
-function logTransaction(toUid: string, toName: string, amount: number, type: 'gift' | 'transfer'): void {
-  const uid = getAuth(firebaseApp).currentUser?.uid
-  if (!uid) return
-  void logGoldTransaction(uid, profile.username, toUid, toName, amount, type).catch(() => {})
-}
-
 /**
- * Transfère `amount` gold vers un autre joueur (gratuit) :
- * vérifie le quota quotidien et le solde, crédite le destinataire côté Firestore,
- * déduit l'émetteur (local + sync) puis met à jour le compteur quotidien.
+ * Transfère `amount` gold vers un autre joueur (gratuit, plafonné 200/j).
+ * Le serveur Railway est autoritaire : il vérifie le solde et le quota, débite
+ * l'émetteur et crédite le destinataire. Le solde local est mis à jour d'après
+ * la réponse serveur (sans ré-écriture Firestore).
  */
-export async function transferGold(toUid: string, amount: number, toName = ''): Promise<TransferResult> {
+export async function transferGold(toUid: string, amount: number, _toName = ''): Promise<TransferResult> {
   const remaining = getTransferRemaining()
-  if (amount <= 0)            return { ok: false, reason: 'amount',  remaining }
-  if (amount > profile.gold)  return { ok: false, reason: 'balance', remaining }
-  if (amount > remaining)     return { ok: false, reason: 'quota',   remaining }
+  if (amount <= 0) return { ok: false, reason: 'amount', remaining }
 
-  try {
-    // Crédite le destinataire (incrément atomique). Si l'opération échoue,
-    // l'émetteur n'est pas débité.
-    await firestoreGiftGold(toUid, amount)
-  } catch (e) {
-    console.error('[transferGold] échec du crédit destinataire:', e)
-    return { ok: false, reason: 'error', remaining }
+  const r = await apiTransfer(toUid, amount)
+  if (r.ok) {
+    if (typeof r.gold === 'number') setGold(r.gold)
+    const newRemaining = typeof r.remaining === 'number' ? r.remaining : Math.max(0, remaining - amount)
+    profile = { ...profile, dailyTransferSent: DAILY_TRANSFER_LIMIT - newRemaining, dailyTransferDate: todayStr() }
+    void persist()
+    emit()
+    return { ok: true }
   }
-
-  // Déduit l'émetteur (sync Firestore via removeGold) et met à jour le quota.
-  removeGold(amount)
-  profile = {
-    ...profile,
-    dailyTransferSent: getDailyTransferSent() + amount,
-    dailyTransferDate: todayStr(),
-  }
-  void persist()
-  emit()
-  logTransaction(toUid, toName, amount, 'transfer')
-  return { ok: true }
+  if (r.reason === 'balance') return { ok: false, reason: 'balance', remaining: r.remaining ?? remaining }
+  if (r.reason === 'quota')   return { ok: false, reason: 'quota',   remaining: r.remaining ?? 0 }
+  return { ok: false, reason: 'error', remaining }
 }
 
 /**
- * Offre `amount` gold à un joueur (simulation, sans limite ni débit).
- * Crédite uniquement le destinataire côté Firestore.
+ * Offre `amount` gold à un joueur (simulation, illimité, sans débit).
+ * Le serveur crédite le destinataire et journalise dans goldHistory.
  */
-export async function giftGold(toUid: string, amount: number, toName = ''): Promise<void> {
+export async function giftGold(toUid: string, amount: number, _toName = ''): Promise<void> {
   if (amount <= 0) return
-  await firestoreGiftGold(toUid, amount)
-  logTransaction(toUid, toName, amount, 'gift')
+  const r = await apiGift(toUid, amount)
+  if (!r.ok) throw new Error('gift_failed')
+  void markQuestProgress('sendGift')
 }
 
 /** Active/désactive la visibilité publique de l'historique de gold (local + Firestore). */
@@ -360,6 +349,7 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
   syncStatsToFirestore()
   if (reward > 0) syncGoldToFirestore(profile.gold)
   emit()
+  if (won) void markQuestProgress('winGame')
   return reward
 }
 

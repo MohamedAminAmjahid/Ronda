@@ -13,6 +13,9 @@ import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { DiJoujRoom } from './rooms/DiJoujRoom'
 import { DiJoujLobbyRoom } from './rooms/DiJoujLobbyRoom'
 import { resolveCode, resolveCodeEntry } from './rooms/registry'
+import { adminAuth, adminDb, firebaseReady, getUsername, FieldValue } from './firebaseAdmin'
+import { sendPushNotification } from './notifications'
+import type { Transaction } from 'firebase-admin/firestore'
 
 const PORT = Number(process.env.PORT ?? 2567)
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*'
@@ -68,6 +71,134 @@ app.post('/league/reset', (req, res) => {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
   return res.json({ rewards: processWeeklyReset() })
+})
+
+// ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────
+
+const DAILY_TRANSFER_LIMIT = 200
+const MAX_AMOUNT = 1_000_000
+
+/** Date du jour YYYY-MM-DD (quota quotidien). */
+function todayStr(): string {
+  return new Date().toISOString().slice(0, 10)
+}
+
+/** Vérifie un token Firebase et renvoie l'uid, ou null. */
+async function uidFromToken(token: unknown): Promise<string | null> {
+  if (typeof token !== 'string' || !token) return null
+  try {
+    const decoded = await adminAuth().verifyIdToken(token)
+    return decoded.uid
+  } catch (e) {
+    console.error('[gold] token invalide:', e)
+    return null
+  }
+}
+
+// Offrir un cadeau (simulation illimitée, sans débit émetteur).
+app.post('/gold/gift', async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { fromToken, toUid, amount } = (req.body ?? {}) as { fromToken?: string; toUid?: string; amount?: number }
+  if (typeof toUid !== 'string' || typeof amount !== 'number' || amount <= 0 || amount > MAX_AMOUNT) {
+    return res.status(400).json({ error: 'bad_params' })
+  }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid) return res.status(401).json({ error: 'unauthorized' })
+  try {
+    const db = adminDb()
+    await db.collection('users').doc(toUid).set({ gold: FieldValue.increment(amount) }, { merge: true })
+    // Historique (on ignore les crédits à soi-même : récompenses de quête).
+    if (fromUid !== toUid) {
+      const [fromName, toName] = await Promise.all([getUsername(fromUid), getUsername(toUid)])
+      await db.collection('goldHistory').add({
+        fromUid, fromName, toUid, toName, amount, type: 'gift',
+        createdAt: FieldValue.serverTimestamp(),
+      })
+    }
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/gold/gift] erreur:', e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// Transférer du gold (gratuit, plafonné à 200/jour, débite l'émetteur).
+app.post('/gold/transfer', async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { fromToken, toUid, amount } = (req.body ?? {}) as { fromToken?: string; toUid?: string; amount?: number }
+  if (typeof toUid !== 'string' || typeof amount !== 'number' || amount <= 0 || amount > MAX_AMOUNT) {
+    return res.status(400).json({ error: 'bad_params' })
+  }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid) return res.status(401).json({ error: 'unauthorized' })
+  if (fromUid === toUid) return res.status(400).json({ error: 'self_transfer' })
+
+  try {
+    const db = adminDb()
+    const fromRef = db.collection('users').doc(fromUid)
+    const toRef   = db.collection('users').doc(toUid)
+    const today   = todayStr()
+
+    const outcome = await db.runTransaction(async (tx: Transaction) => {
+      const snap = await tx.get(fromRef)
+      const data = snap.data() ?? {}
+      const gold = (data.gold as number) ?? 0
+      const sent = data.dailyTransferDate === today ? ((data.dailyTransferSent as number) ?? 0) : 0
+      const remaining = Math.max(0, DAILY_TRANSFER_LIMIT - sent)
+      if (amount > gold)      return { ok: false as const, reason: 'balance', remaining, gold }
+      if (amount > remaining) return { ok: false as const, reason: 'quota',   remaining, gold }
+      tx.set(fromRef, { gold: gold - amount, dailyTransferSent: sent + amount, dailyTransferDate: today }, { merge: true })
+      tx.set(toRef, { gold: FieldValue.increment(amount) }, { merge: true })
+      return { ok: true as const, gold: gold - amount, remaining: remaining - amount }
+    })
+
+    if (!outcome.ok) {
+      return res.json({ ok: false, reason: outcome.reason, remaining: outcome.remaining })
+    }
+    // Historique (hors transaction).
+    const [fromName, toName] = await Promise.all([getUsername(fromUid), getUsername(toUid)])
+    await db.collection('goldHistory').add({
+      fromUid, fromName, toUid, toName, amount, type: 'transfer',
+      createdAt: FieldValue.serverTimestamp(),
+    })
+    return res.json({ ok: true, gold: outcome.gold, remaining: outcome.remaining })
+  } catch (e) {
+    console.error('[/gold/transfer] erreur:', e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// ── Notifications push (déclenchées après une action côté client) ──────────────
+
+// Invitation de partie reçue.
+app.post('/notify/invite', async (req, res) => {
+  const { fromToken, toUid, game } = (req.body ?? {}) as { fromToken?: string; toUid?: string; game?: string }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid || typeof toUid !== 'string') return res.status(401).json({ error: 'unauthorized' })
+  const fromName = await getUsername(fromUid)
+  const gameLabel = game === 'ronda' ? 'Ronda' : 'Di Jouj'
+  void sendPushNotification(toUid, '🎮 Invitation', `${fromName} t'invite à jouer (${gameLabel})`, { type: 'invite' })
+  return res.json({ ok: true })
+})
+
+// Message privé reçu.
+app.post('/notify/message', async (req, res) => {
+  const { fromToken, toUid } = (req.body ?? {}) as { fromToken?: string; toUid?: string }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid || typeof toUid !== 'string') return res.status(401).json({ error: 'unauthorized' })
+  const fromName = await getUsername(fromUid)
+  void sendPushNotification(toUid, `💬 ${fromName}`, "Tu as reçu un message", { type: 'message', fromUid })
+  return res.json({ ok: true })
+})
+
+// Demande d'ami reçue.
+app.post('/notify/friend-request', async (req, res) => {
+  const { fromToken, toUid } = (req.body ?? {}) as { fromToken?: string; toUid?: string }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid || typeof toUid !== 'string') return res.status(401).json({ error: 'unauthorized' })
+  const fromName = await getUsername(fromUid)
+  void sendPushNotification(toUid, '👥 Demande d\'ami', `${fromName} veut être ton ami`, { type: 'friend_request' })
+  return res.json({ ok: true })
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────
