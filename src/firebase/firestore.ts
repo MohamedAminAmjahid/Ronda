@@ -27,6 +27,19 @@ export interface UserDoc {
   avatarImage: string
   /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
   goldHistoryPublic: boolean
+  /** Cosmétiques : tapis + dos de cartes équipés et possédés. */
+  table: string
+  ownedTables: string[]
+  cardBack: string
+  ownedBacks: string[]
+}
+
+/** Cosmétiques synchronisés vers Firestore. */
+export interface CosmeticsUpdate {
+  table: string
+  ownedTables: string[]
+  cardBack: string
+  ownedBacks: string[]
 }
 
 /** Une entrée de l'historique des cadeaux/transferts de gold. */
@@ -72,6 +85,10 @@ export interface LocalProfileSeed {
   dijoujWon: number
   usernameChanges: number
   goldHistoryPublic: boolean
+  table: string
+  ownedTables: string[]
+  cardBack: string
+  ownedBacks: string[]
 }
 
 function userRef(uid: string) {
@@ -110,7 +127,10 @@ export async function isUsernameAvailable(username: string, excludeUid?: string)
 export async function createOrUpdateUser(
   user: User,
   local: LocalProfileSeed,
-): Promise<{ username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean }> {
+): Promise<{
+  username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
+  table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
+}> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
 
@@ -133,6 +153,10 @@ export async function createOrUpdateUser(
       dijoujWon: local.dijoujWon,
       usernameChanges: local.usernameChanges,
       goldHistoryPublic: local.goldHistoryPublic,
+      table: local.table,
+      ownedTables: local.ownedTables,
+      cardBack: local.cardBack,
+      ownedBacks: local.ownedBacks,
       email: user.email ?? null,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
@@ -140,6 +164,8 @@ export async function createOrUpdateUser(
     return {
       username: finalUsername, gold: local.gold,
       usernameChanges: local.usernameChanges, goldHistoryPublic: local.goldHistoryPublic,
+      table: local.table, ownedTables: local.ownedTables,
+      cardBack: local.cardBack, ownedBacks: local.ownedBacks,
     }
   }
 
@@ -156,6 +182,10 @@ export async function createOrUpdateUser(
       typeof data.goldHistoryPublic === 'boolean'
         ? (data.goldHistoryPublic as boolean)
         : true,
+    table:       (data.table as string) ?? local.table,
+    ownedTables: (data.ownedTables as string[]) ?? local.ownedTables,
+    cardBack:    (data.cardBack as string) ?? local.cardBack,
+    ownedBacks:  (data.ownedBacks as string[]) ?? local.ownedBacks,
   }
 }
 
@@ -226,6 +256,10 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     avatarImage: (data.avatarImage as string) ?? '',
     // Absent → public par défaut (rétro-compat avec les anciens comptes).
     goldHistoryPublic: (data.goldHistoryPublic as boolean) ?? true,
+    table:       (data.table as string) ?? 'green',
+    ownedTables: (data.ownedTables as string[]) ?? ['green'],
+    cardBack:    (data.cardBack as string) ?? 'default',
+    ownedBacks:  (data.ownedBacks as string[]) ?? ['default'],
   }
 }
 
@@ -257,6 +291,11 @@ export async function updateStats(uid: string, stats: StatsUpdate): Promise<void
 /** Active/désactive la visibilité publique de l'historique de gold. */
 export async function updateGoldHistoryPublic(uid: string, value: boolean): Promise<void> {
   await updateDoc(userRef(uid), { goldHistoryPublic: value })
+}
+
+/** Synchronise les cosmétiques (tapis + dos de cartes) dans Firestore. */
+export async function updateCosmetics(uid: string, cosmetics: CosmeticsUpdate): Promise<void> {
+  await updateDoc(userRef(uid), { ...cosmetics })
 }
 
 // ── Historique des cadeaux / transferts de gold (collection goldHistory) ───────

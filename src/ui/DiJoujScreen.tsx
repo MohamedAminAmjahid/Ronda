@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
+import { useProfile } from '../profile/useProfile'
+import { tableColors } from '../cosmetics/catalog'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
@@ -116,6 +118,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const handGap   = isSmall ? 3 : 8
 
   const { t } = useI18n()
+  const { table } = useProfile()
+  const felt = tableColors(table)  // dégradé du tapis équipé
   const {
     state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
@@ -246,7 +250,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+    <LinearGradient colors={felt} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
         {/* Header */}

@@ -3,6 +3,7 @@ import { useAuth } from './auth'
 import { createOrUpdateUser } from './firestore'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
+  setCosmeticsLocal,
 } from '../profile/profile'
 
 /**
@@ -24,24 +25,30 @@ export function useFirebaseProfileSync(): void {
         await loadProfile()
         const p = getProfile()
         console.log('[sync] login uid:', user.uid, '| username local:', p.username)
-        const { username, gold, usernameChanges, goldHistoryPublic } = await createOrUpdateUser(user, {
-          username: p.username,
-          gold: p.gold,
-          gamesPlayed: p.gamesPlayed,
-          gamesWon: p.gamesWon,
-          rondaPlayed: p.rondaPlayed,
-          rondaWon: p.rondaWon,
-          dijoujPlayed: p.dijoujPlayed,
-          dijoujWon: p.dijoujWon,
-          usernameChanges: p.usernameChanges,
-          goldHistoryPublic: p.goldHistoryPublic,
-        })
+        const { username, gold, usernameChanges, goldHistoryPublic, table, ownedTables, cardBack, ownedBacks } =
+          await createOrUpdateUser(user, {
+            username: p.username,
+            gold: p.gold,
+            gamesPlayed: p.gamesPlayed,
+            gamesWon: p.gamesWon,
+            rondaPlayed: p.rondaPlayed,
+            rondaWon: p.rondaWon,
+            dijoujPlayed: p.dijoujPlayed,
+            dijoujWon: p.dijoujWon,
+            usernameChanges: p.usernameChanges,
+            goldHistoryPublic: p.goldHistoryPublic,
+            table: p.table,
+            ownedTables: p.ownedTables,
+            cardBack: p.cardBack,
+            ownedBacks: p.ownedBacks,
+          })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
         if (!cancelled) {
           if (username) setUsername(username)
           setGold(gold)
           setUsernameChanges(usernameChanges)
           setGoldHistoryPublicLocal(goldHistoryPublic)
+          setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks })
         }
       } catch (err) {
         console.warn('[sync] hors-ligne ou règles Firestore :', err)

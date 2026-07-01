@@ -7,9 +7,11 @@ import {
   updateAvatar as firestoreUpdateAvatar,
   updateStats as firestoreUpdateStats,
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
+  updateCosmetics as firestoreUpdateCosmetics,
 } from '../firebase/firestore'
 import { apiGift, apiTransfer } from '../online/serverApi'
 import { markQuestProgress, registerGoldSetter } from '../quests/quests'
+import { TABLES, BACKS, DEFAULT_TABLE, DEFAULT_BACK, type CosmeticKind } from '../cosmetics/catalog'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
 // - username : généré une seule fois au premier lancement (Joueur#XXXX), puis persisté.
@@ -51,6 +53,11 @@ export interface Profile {
   dailyTransferDate: string
   /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
   goldHistoryPublic: boolean
+  /** Cosmétiques : tapis + dos de cartes. */
+  table: string
+  ownedTables: string[]
+  cardBack: string
+  ownedBacks: string[]
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -80,6 +87,10 @@ let profile: Profile = {
   dailyTransferSent: 0,
   dailyTransferDate: '',
   goldHistoryPublic: true,
+  table: DEFAULT_TABLE,
+  ownedTables: [DEFAULT_TABLE],
+  cardBack: DEFAULT_BACK,
+  ownedBacks: [DEFAULT_BACK],
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -134,6 +145,10 @@ export function loadProfile(): Promise<Profile> {
             ? parsed.dailyTransferSent : 0,
           dailyTransferDate: parsed.dailyTransferDate === todayStr() ? parsed.dailyTransferDate : todayStr(),
           goldHistoryPublic: typeof parsed.goldHistoryPublic === 'boolean' ? parsed.goldHistoryPublic : true,
+          table:       typeof parsed.table === 'string' ? parsed.table : DEFAULT_TABLE,
+          ownedTables: Array.isArray(parsed.ownedTables) ? parsed.ownedTables : [DEFAULT_TABLE],
+          cardBack:    typeof parsed.cardBack === 'string' ? parsed.cardBack : DEFAULT_BACK,
+          ownedBacks:  Array.isArray(parsed.ownedBacks) ? parsed.ownedBacks : [DEFAULT_BACK],
         }
       } else {
         profile = {
@@ -144,6 +159,7 @@ export function loadProfile(): Promise<Profile> {
           avatarType: 'initial', avatarEmoji: '', avatarImage: '',
           dailyTransferSent: 0, dailyTransferDate: todayStr(),
           goldHistoryPublic: true,
+          table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
         }
       }
     } catch {
@@ -155,6 +171,7 @@ export function loadProfile(): Promise<Profile> {
         avatarType: 'initial', avatarEmoji: '', avatarImage: '',
         dailyTransferSent: 0, dailyTransferDate: todayStr(),
         goldHistoryPublic: true,
+        table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
       }
     }
     loaded = true
@@ -201,6 +218,17 @@ function syncStatsToFirestore(): void {
     rondaWon:     profile.rondaWon,
     dijoujPlayed: profile.dijoujPlayed,
     dijoujWon:    profile.dijoujWon,
+  }).catch(() => {})
+}
+
+function syncCosmeticsToFirestore(): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateCosmetics(uid, {
+    table:       profile.table,
+    ownedTables: profile.ownedTables,
+    cardBack:    profile.cardBack,
+    ownedBacks:  profile.ownedBacks,
   }).catch(() => {})
 }
 
@@ -307,6 +335,57 @@ export function setGoldHistoryPublic(value: boolean): void {
 export function setGoldHistoryPublicLocal(value: boolean): void {
   if (value === profile.goldHistoryPublic) return
   profile = { ...profile, goldHistoryPublic: value }
+  void persist()
+  emit()
+}
+
+// ── Cosmétiques (tapis + dos de cartes) ─────────────────────────────────────────
+
+/** Équipe un cosmétique déjà possédé. */
+export function equipCosmetic(kind: CosmeticKind, id: string): void {
+  if (kind === 'table') {
+    if (!profile.ownedTables.includes(id) || profile.table === id) return
+    profile = { ...profile, table: id }
+  } else {
+    if (!profile.ownedBacks.includes(id) || profile.cardBack === id) return
+    profile = { ...profile, cardBack: id }
+  }
+  void persist()
+  syncCosmeticsToFirestore()
+  emit()
+}
+
+/**
+ * Achète un cosmétique : déduit le gold, l'ajoute aux possessions et l'équipe.
+ * Si déjà possédé → équipe simplement. Renvoie false si solde insuffisant.
+ */
+export function buyCosmetic(kind: CosmeticKind, id: string): boolean {
+  const def = kind === 'table' ? TABLES.find(t => t.id === id) : BACKS.find(b => b.id === id)
+  if (!def) return false
+  const owned = kind === 'table' ? profile.ownedTables : profile.ownedBacks
+  if (owned.includes(id)) { equipCosmetic(kind, id); return true }
+  if (profile.gold < def.price) return false
+
+  const newGold = Math.max(0, profile.gold - def.price)
+  profile = kind === 'table'
+    ? { ...profile, gold: newGold, ownedTables: [...profile.ownedTables, id], table: id }
+    : { ...profile, gold: newGold, ownedBacks: [...profile.ownedBacks, id], cardBack: id }
+  void persist()
+  syncGoldToFirestore(newGold)
+  syncCosmeticsToFirestore()
+  emit()
+  return true
+}
+
+/** Applique les cosmétiques Firebase au login (local uniquement). */
+export function setCosmeticsLocal(c: {
+  table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
+}): void {
+  profile = {
+    ...profile,
+    table: c.table, ownedTables: c.ownedTables,
+    cardBack: c.cardBack, ownedBacks: c.ownedBacks,
+  }
   void persist()
   emit()
 }

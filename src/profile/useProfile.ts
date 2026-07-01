@@ -12,6 +12,8 @@ import {
   giftGold,
   transferGold,
   setGoldHistoryPublic,
+  buyCosmetic,
+  equipCosmetic,
   DAILY_TRANSFER_LIMIT,
   type Profile,
 } from './profile'
@@ -47,6 +49,10 @@ export function useProfile() {
     dailyTransferSent: profile.dailyTransferSent,
     dailyTransferDate: profile.dailyTransferDate,
     goldHistoryPublic: profile.goldHistoryPublic,
+    table:          profile.table,
+    ownedTables:    profile.ownedTables,
+    cardBack:       profile.cardBack,
+    ownedBacks:     profile.ownedBacks,
     setUsername,
     addGold,
     removeGold,
@@ -56,6 +62,8 @@ export function useProfile() {
     giftGold,
     transferGold,
     setGoldHistoryPublic,
+    buyCosmetic,
+    equipCosmetic,
     DAILY_TRANSFER_LIMIT,
   }
 }

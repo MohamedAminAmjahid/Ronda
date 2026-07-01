@@ -14,6 +14,8 @@ import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { recordResult } from '../profile/profile'
+import { useProfile } from '../profile/useProfile'
+import { tableColors } from '../cosmetics/catalog'
 import { useI18n } from '../i18n/useI18n'
 import type { PlayerId } from '../engine/types'
 import { RitualPickerScreen } from './RitualPickerScreen'
@@ -516,6 +518,8 @@ interface GameScreenProps {
 export function GameScreen({ onBack, useGame = useRondaGame, opponentName, online = false }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
+  const { table } = useProfile()
+  const felt = tableColors(table)[0]  // couleur de fond du tapis équipé
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
@@ -789,7 +793,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
     human.pendingCombo?.type === 'tringa' ? TERMS.tringa : TERMS.ronda
 
   return (
-    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.root, { backgroundColor: felt }]} edges={['top', 'bottom']}>
       {/* Colonne centrée — max 430 px sur grand écran */}
       <View style={styles.column}>
 

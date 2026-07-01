@@ -373,6 +373,13 @@ export function ProfileScreen() {
               <Text style={s.shopBtnTxt}>+ Obtenir</Text>
             </TouchableOpacity>
           </View>
+          <TouchableOpacity
+            style={s.cosmeticsBtn}
+            onPress={() => router.push('/cosmetics' as Href)}
+            activeOpacity={0.8}
+          >
+            <Text style={s.cosmeticsBtnTxt}>🎨 {t('cosmetics')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Stats ─────────────────────────────────────────────── */}
@@ -522,6 +529,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: C.brassBorder,
   },
   shopBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
+  cosmeticsBtn: {
+    marginTop: 12, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    borderWidth: 1.5, borderColor: C.brassBorder, backgroundColor: 'rgba(201,162,39,0.06)',
+  },
+  cosmeticsBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
 
   // Stats
   statRow: {

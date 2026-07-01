@@ -3,6 +3,8 @@ import { View, Image, TouchableOpacity, StyleSheet } from 'react-native'
 import { Svg, Polygon } from 'react-native-svg'
 import type { Card as CardType } from '../../engine/types'
 import { getCardImage } from '../assets/cards'
+import { useProfile } from '../../profile/useProfile'
+import { backDesign } from '../../cosmetics/catalog'
 
 // ── Tailles ──────────────────────────────────────────────────────────────────
 
@@ -73,23 +75,25 @@ export const CardFace = memo(function CardFace({
 
 // ── Dos de carte (khatam) ────────────────────────────────────────────────────
 
-function KhatamStar({ size }: { size: number }) {
+function KhatamStar({ size, color }: { size: number; color: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 28 28">
       <Polygon
         points="14,4 15.7,9.8 21.1,6.9 18.2,12.3 24,14 18.2,15.7 21.1,21.1 15.7,18.2 14,24 12.3,18.2 6.9,21.1 9.8,15.7 4,14 9.8,12.3 6.9,6.9 12.3,9.8"
-        fill="#C9A227"
+        fill={color}
       />
     </Svg>
   )
 }
 
 export const CardBack = memo(function CardBack({ size = 'lg' }: { size?: CardSize }) {
+  const { cardBack } = useProfile()
+  const design = backDesign(cardBack)
   const dim    = DIM[size]
   const starSz = Math.round(dim.w * 0.6)
   return (
-    <View style={[styles.back, { width: dim.w, height: dim.h }]}>
-      <KhatamStar size={starSz} />
+    <View style={[styles.back, { width: dim.w, height: dim.h, backgroundColor: design.bg, borderColor: design.border }]}>
+      <KhatamStar size={starSz} color={design.star} />
     </View>
   )
 })
