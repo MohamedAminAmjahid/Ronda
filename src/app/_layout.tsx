@@ -7,6 +7,7 @@ import { Cairo_400Regular, Cairo_600SemiBold } from '@expo-google-fonts/cairo'
 import * as SplashScreen from 'expo-splash-screen'
 import { useFirebaseProfileSync } from '../firebase/sync'
 import { usePushRegistration } from '../push/push'
+import { usePresence } from '../presence/usePresence'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
@@ -18,6 +19,7 @@ SplashScreen.preventAutoHideAsync()
 export default function RootLayout() {
   useFirebaseProfileSync()
   usePushRegistration()
+  usePresence()
 
   // Direction RTL pour l'arabe : sur web via document.dir (effet immédiat),
   // sur mobile via I18nManager (appliqué au prochain rendu/recharge).

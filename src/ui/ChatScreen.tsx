@@ -7,10 +7,12 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../firebase/auth'
 import {
   getChatId, sendMessage, subscribeMessages, markChatRead, getUserAvatar,
-  type MessageDoc,
+  subscribeOnlineStatus,
+  type MessageDoc, type PresenceInfo,
 } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
 import { AvatarDisplay } from './ProfileScreen'
+import { PresenceDot, presenceLabel } from './PresenceDot'
 
 const C = {
   bg:          '#0D0D1A',
@@ -47,10 +49,17 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
     avatarType: string; avatarEmoji: string; avatarImage: string
   }>({ avatarType: 'initial', avatarEmoji: '', avatarImage: '' })
 
+  const [presence, setPresence] = useState<PresenceInfo | null>(null)
+
   const chatId = user ? getChatId(user.uid, friendUid) : ''
 
   useEffect(() => {
     void getUserAvatar(friendUid).then(setFriendAvatar)
+  }, [friendUid])
+
+  useEffect(() => {
+    const unsub = subscribeOnlineStatus(friendUid, setPresence)
+    return unsub
   }, [friendUid])
 
   useEffect(() => {
@@ -87,14 +96,25 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
         <TouchableOpacity onPress={onBack} style={s.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Text style={s.backArrow}>←</Text>
         </TouchableOpacity>
-        <AvatarDisplay
-          type={friendAvatar.avatarType as 'initial' | 'emoji' | 'image'}
-          initial={friendName?.[0]?.toUpperCase() ?? '?'}
-          emoji={friendAvatar.avatarEmoji}
-          image={friendAvatar.avatarImage}
-          size={36}
-        />
-        <Text style={s.headerName} numberOfLines={1}>{friendName}</Text>
+        <View style={s.avatarWrap}>
+          <AvatarDisplay
+            type={friendAvatar.avatarType as 'initial' | 'emoji' | 'image'}
+            initial={friendName?.[0]?.toUpperCase() ?? '?'}
+            emoji={friendAvatar.avatarEmoji}
+            image={friendAvatar.avatarImage}
+            size={36}
+          />
+          <PresenceDot info={presence} ring={C.bg} />
+        </View>
+        <View style={s.headerNameCol}>
+          <Text style={s.headerName} numberOfLines={1}>{friendName}</Text>
+          {(() => {
+            const label = presenceLabel(presence, t, { hours: true })
+            return label
+              ? <Text style={[s.headerStatus, presence?.isOnline && s.headerStatusOnline]} numberOfLines={1}>{label}</Text>
+              : null
+          })()}
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -174,13 +194,16 @@ const s = StyleSheet.create({
   },
   backBtn:   { paddingRight: 4 },
   backArrow: { fontSize: 22, color: C.brass },
+  avatarWrap: { position: 'relative' },
+  headerNameCol: { flex: 1, gap: 1 },
   headerName: {
-    flex: 1,
     fontFamily: 'Cairo_600SemiBold',
     fontSize: 17,
     color: C.bone,
     letterSpacing: 0.3,
   },
+  headerStatus: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  headerStatusOnline: { color: '#27AE60' },
 
   // Liste messages
   list: { padding: 14, gap: 8, flexGrow: 1 },

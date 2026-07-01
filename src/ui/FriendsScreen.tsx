@@ -9,11 +9,12 @@ import { useAuth } from '../firebase/auth'
 import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   getFriends, getPendingRequests, subscribePendingCount, subscribeFriendUnreadCounts,
-  removeFriend,
-  type FriendDoc, type UserDoc,
+  subscribeOnlineStatuses, removeFriend,
+  type FriendDoc, type UserDoc, type PresenceInfo,
 } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
 import { InviteToPlayModal } from './InviteToPlayModal'
+import { PresenceDot, presenceLabel } from './PresenceDot'
 
 const C = {
   table:   '#0E5C4A',
@@ -45,6 +46,15 @@ export function FriendsScreen({ onBack }: Props) {
   // Badges temps réel
   const [pendingCount, setPendingCount] = useState(0)
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
+
+  // Présence en ligne (un seul abonnement groupé pour tous les amis).
+  const [presence, setPresence] = useState<Record<string, PresenceInfo>>({})
+  useEffect(() => {
+    const uids = friends.map((f) => f.uid)
+    if (uids.length === 0) { setPresence({}); return }
+    const unsub = subscribeOnlineStatuses(uids, setPresence)
+    return unsub
+  }, [friends])
 
   const refresh = useCallback(async () => {
     if (!user) return
@@ -194,6 +204,9 @@ export function FriendsScreen({ onBack }: Props) {
               : friends.map((f) => {
                 const unread = unreadCounts[f.uid] ?? 0
                 const initial = f.username?.[0]?.toUpperCase() ?? '?'
+                const info = presence[f.uid]
+                const label = presenceLabel(info, t)
+                const online = info?.isOnline === true
                 return (
                   <View key={f.uid} style={s.row}>
                     <TouchableOpacity
@@ -201,14 +214,22 @@ export function FriendsScreen({ onBack }: Props) {
                       onPress={() => router.push(`/friend-profile?uid=${f.uid}&name=${encodeURIComponent(f.username)}` as never)}
                       activeOpacity={0.7}
                     >
-                      <AvatarDisplay
-                        type={(f.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
-                        initial={initial}
-                        emoji={f.avatarEmoji ?? ''}
-                        image={f.avatarImage ?? ''}
-                        size={40}
-                      />
-                      <Text style={s.rowName} numberOfLines={1}>{f.username}</Text>
+                      <View style={s.avatarWrap}>
+                        <AvatarDisplay
+                          type={(f.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                          initial={initial}
+                          emoji={f.avatarEmoji ?? ''}
+                          image={f.avatarImage ?? ''}
+                          size={40}
+                        />
+                        <PresenceDot info={info} ring={C.table} />
+                      </View>
+                      <View style={s.nameCol}>
+                        <Text style={s.rowName} numberOfLines={1}>{f.username}</Text>
+                        {label && (
+                          <Text style={[s.statusTxt, online && s.statusOnline]} numberOfLines={1}>{label}</Text>
+                        )}
+                      </View>
                     </TouchableOpacity>
                     <View style={s.rowActions}>
                       {/* Bouton Message avec badge non-lus */}
@@ -374,7 +395,11 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14,
   },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  rowName: { flex: 1, fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
+  avatarWrap: { position: 'relative' },
+  nameCol: { flex: 1, gap: 1 },
+  rowName: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
+  statusTxt: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  statusOnline: { color: C.green },
   rowActions: { flexDirection: 'row', gap: 8 },
 
   btnSmall: { backgroundColor: C.brass, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 },

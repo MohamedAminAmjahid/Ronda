@@ -8,7 +8,8 @@ import { AvatarDisplay } from './ProfileScreen'
 import { GoldTransferForm } from './GoldTransferForm'
 import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
-import { getUserById, getGoldHistory, type UserDoc, type FriendDoc, type GoldHistoryEntry } from '../firebase/firestore'
+import { getUserById, getGoldHistory, subscribeOnlineStatus, type UserDoc, type FriendDoc, type GoldHistoryEntry, type PresenceInfo } from '../firebase/firestore'
+import { PresenceDot, presenceLabel } from './PresenceDot'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -36,6 +37,13 @@ export function FriendProfileScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [history, setHistory] = useState<GoldHistoryEntry[]>([])
+  const [presence, setPresence] = useState<PresenceInfo | null>(null)
+
+  useEffect(() => {
+    if (!uid) return
+    const unsub = subscribeOnlineStatus(uid, setPresence)
+    return unsub
+  }, [uid])
 
   useEffect(() => {
     if (!uid) { setLoading(false); return }
@@ -101,14 +109,26 @@ export function FriendProfileScreen({ onBack }: Props) {
 
             {/* ── Avatar + pseudo ── */}
             <View style={s.identity}>
-              <AvatarDisplay
-                type={(profile.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
-                initial={initial}
-                emoji={profile.avatarEmoji ?? ''}
-                image={profile.avatarImage ?? ''}
-                size={88}
-              />
+              <View style={s.avatarWrap}>
+                <AvatarDisplay
+                  type={(profile.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                  initial={initial}
+                  emoji={profile.avatarEmoji ?? ''}
+                  image={profile.avatarImage ?? ''}
+                  size={88}
+                />
+                <PresenceDot info={presence} size={16} ring={C.table} />
+              </View>
               <Text style={s.username} numberOfLines={1}>{profile.username}</Text>
+              {(() => {
+                const label = presenceLabel(presence, t, { hours: true })
+                if (!label) return null
+                return (
+                  <Text style={[s.presenceTxt, presence?.isOnline && s.presenceOnline]}>
+                    {presence?.isOnline ? '🟢' : '⚫'} {label}
+                  </Text>
+                )
+              })()}
             </View>
 
             {/* ── Stats ── */}
@@ -245,8 +265,11 @@ const s = StyleSheet.create({
 
   body: { paddingVertical: 12, gap: 16, paddingBottom: 32 },
 
-  identity: { alignItems: 'center', gap: 10, paddingVertical: 8 },
+  identity: { alignItems: 'center', gap: 8, paddingVertical: 8 },
+  avatarWrap: { position: 'relative' },
   username: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
+  presenceTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
+  presenceOnline: { color: '#27AE60' },
 
   sectionLabel: {
     fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,

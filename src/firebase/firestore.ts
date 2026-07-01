@@ -1,7 +1,7 @@
 import {
   getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, limit, serverTimestamp,
-  onSnapshot, increment, orderBy,
+  onSnapshot, increment, orderBy, documentId,
 } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import { firebaseApp } from './config'
@@ -435,6 +435,67 @@ export async function getGoldHistory(uid: string): Promise<GoldHistoryEntry[]> {
     console.error('[getGoldHistory] erreur (index composite requis ?):', e)
     return []
   }
+}
+
+// ── Présence en ligne ──────────────────────────────────────────────────────
+
+export interface PresenceInfo {
+  isOnline: boolean
+  lastSeen: Date | null
+}
+
+function toDate(ts: unknown): Date | null {
+  return (ts as { toDate?: () => Date } | null)?.toDate?.() ?? null
+}
+
+/** Met à jour le statut en ligne + lastSeen de l'utilisateur (best-effort). */
+export async function setOnlineStatus(uid: string, online: boolean): Promise<void> {
+  try {
+    await updateDoc(userRef(uid), { isOnline: online, lastSeen: serverTimestamp() })
+  } catch {
+    // hors-ligne / règles — sans effet
+  }
+}
+
+/** Écoute en temps réel le statut d'un utilisateur. */
+export function subscribeOnlineStatus(uid: string, cb: (info: PresenceInfo) => void): () => void {
+  return onSnapshot(
+    userRef(uid),
+    (snap) => {
+      const d = snap.data() ?? {}
+      cb({ isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen) })
+    },
+    () => cb({ isOnline: false, lastSeen: null }),
+  )
+}
+
+/**
+ * Écoute le statut de plusieurs utilisateurs via des requêtes groupées
+ * (chunks de 10, contrainte Firestore `in`). Un seul unsubscribe rend tous
+ * les listeners. cb reçoit la map complète { uid: PresenceInfo } à chaque MAJ.
+ */
+export function subscribeOnlineStatuses(
+  uids: string[],
+  cb: (map: Record<string, PresenceInfo>) => void,
+): () => void {
+  if (uids.length === 0) { cb({}); return () => {} }
+  const acc: Record<string, PresenceInfo> = {}
+  const chunks: string[][] = []
+  for (let i = 0; i < uids.length; i += 10) chunks.push(uids.slice(i, i + 10))
+  const unsubs = chunks.map((chunk) =>
+    onSnapshot(
+      query(collection(db, 'users'), where(documentId(), 'in', chunk)),
+      (snap) => {
+        snap.forEach((d) => {
+          const data = d.data()
+          acc[d.id] = { isOnline: data.isOnline === true, lastSeen: toDate(data.lastSeen) }
+        })
+        cb({ ...acc })
+      },
+      () => { /* ignore */ },
+    ),
+  )
+  return () => { for (const u of unsubs) u() }
 }
 
 // ── Amis (sous-collection users/{uid}/friends/{friendUid}) ─────────────────────
