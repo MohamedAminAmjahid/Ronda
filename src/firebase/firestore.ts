@@ -34,6 +34,10 @@ export interface UserDoc {
   ownedBacks: string[]
   avatarFrame: string
   ownedFrames: string[]
+  /** Parrainage. */
+  referralUsed: boolean
+  referredBy: string
+  referralCount: number
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -166,6 +170,9 @@ export async function createOrUpdateUser(
       ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame,
       ownedFrames: local.ownedFrames,
+      referralUsed: false,
+      referredBy: null,
+      referralCount: 0,
       email: user.email ?? null,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
@@ -274,6 +281,9 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     ownedBacks:  (data.ownedBacks as string[]) ?? ['default'],
     avatarFrame: (data.avatarFrame as string) ?? 'none',
     ownedFrames: (data.ownedFrames as string[]) ?? ['none'],
+    referralUsed:  (data.referralUsed as boolean) ?? false,
+    referredBy:    (data.referredBy as string) ?? '',
+    referralCount: (data.referralCount as number) ?? 0,
   }
 }
 
@@ -310,6 +320,52 @@ export async function updateGoldHistoryPublic(uid: string, value: boolean): Prom
 /** Synchronise les cosmétiques (tapis + dos de cartes) dans Firestore. */
 export async function updateCosmetics(uid: string, cosmetics: CosmeticsUpdate): Promise<void> {
   await updateDoc(userRef(uid), { ...cosmetics })
+}
+
+// ── Parrainage ─────────────────────────────────────────────────────────────
+
+/** Récompense de parrainage (créditée aux deux joueurs). */
+export const REFERRAL_REWARD = 500
+
+export type ReferralResult =
+  | { ok: true; referrerUid: string }
+  | { ok: false; reason: 'already' | 'not_found' | 'self' | 'error' }
+
+/**
+ * Applique un parrainage : crédite +500 gold au nouvel utilisateur ET au parrain
+ * (increment), marque referralUsed/referredBy et incrémente referralCount du parrain.
+ * Idempotent : ne fait rien si le nouvel utilisateur a déjà utilisé un parrainage.
+ */
+export async function applyReferral(
+  newUserUid: string,
+  referrerUsername: string,
+): Promise<ReferralResult> {
+  try {
+    const newRef = userRef(newUserUid)
+    const newSnap = await getDoc(newRef)
+    if (!newSnap.exists()) return { ok: false, reason: 'error' }
+    if (newSnap.data().referralUsed === true) return { ok: false, reason: 'already' }
+
+    const referrer = await searchUserByUsername(referrerUsername)
+    if (!referrer) return { ok: false, reason: 'not_found' }
+    if (referrer.uid === newUserUid) return { ok: false, reason: 'self' }
+
+    // Crédite le nouvel utilisateur + marque le parrainage.
+    await updateDoc(newRef, {
+      gold: increment(REFERRAL_REWARD),
+      referralUsed: true,
+      referredBy: referrer.uid,
+    })
+    // Crédite le parrain + incrémente son compteur.
+    await updateDoc(userRef(referrer.uid), {
+      gold: increment(REFERRAL_REWARD),
+      referralCount: increment(1),
+    })
+    return { ok: true, referrerUid: referrer.uid }
+  } catch (e) {
+    console.error('[applyReferral] erreur:', e)
+    return { ok: false, reason: 'error' }
+  }
 }
 
 // ── Historique des cadeaux / transferts de gold (collection goldHistory) ───────

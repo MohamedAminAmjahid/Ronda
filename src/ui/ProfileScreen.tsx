@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, ActivityIndicator, Image, Switch, Animated,
+  Modal, TextInput, ActivityIndicator, Image, Switch, Animated, Share,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as Clipboard from 'expo-clipboard'
 import { router, type Href } from 'expo-router'
 import { frameDef } from '../cosmetics/avatarFrames'
 import * as ImagePicker from 'expo-image-picker'
@@ -15,7 +16,7 @@ import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
   incrementUsernameChanges, USERNAME_CHANGE_COST,
 } from '../profile/profile'
-import { updateUsername, isUsernameAvailable } from '../firebase/firestore'
+import { updateUsername, isUsernameAvailable, getUserById } from '../firebase/firestore'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,34 @@ export function ProfileScreen() {
   const [avatarModal, setAvatarModal]           = useState(false)
   const [avatarTab, setAvatarTab]               = useState<'emoji' | 'photo'>('emoji')
   const [photoLoading, setPhotoLoading]         = useState(false)
+
+  // ── Parrainage ──────────────────────────────────────────────────────────
+  const [referralCount, setReferralCount] = useState(0)
+  const [linkCopied, setLinkCopied]       = useState(false)
+  const referralLink = `https://ronda-virid.vercel.app?ref=${encodeURIComponent(username)}`
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    void getUserById(user.uid).then((u) => {
+      if (!cancelled && u) setReferralCount(u.referralCount)
+    })
+    return () => { cancelled = true }
+  }, [user])
+
+  const copyReferral = async () => {
+    try {
+      await Clipboard.setStringAsync(referralLink)
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1800)
+    } catch { /* presse-papiers indisponible */ }
+  }
+
+  const shareReferral = async () => {
+    try {
+      await Share.share({ message: `${t('referralDesc')}\n${referralLink}` })
+    } catch { /* partage annulé */ }
+  }
 
   const isFreeChange  = usernameChanges === 0
   const canAfford     = isFreeChange || gold >= USERNAME_CHANGE_COST
@@ -424,6 +453,23 @@ export function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── Parrainage ────────────────────────────────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{t('referral')}</Text>
+          <Text style={s.referralDesc}>{t('referralDesc')}</Text>
+          <View style={s.referralBtns}>
+            <TouchableOpacity style={s.referralCopyBtn} onPress={() => { void copyReferral() }} activeOpacity={0.85}>
+              <Text style={s.referralCopyTxt}>{linkCopied ? t('referralSuccess') : t('referralCopy')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.referralShareBtn} onPress={() => { void shareReferral() }} activeOpacity={0.85}>
+              <Text style={s.referralShareTxt}>{t('referralShare')}</Text>
+            </TouchableOpacity>
+          </View>
+          {user && (
+            <Text style={s.referralCount}>{t('referralCount').replace('{n}', String(referralCount))}</Text>
+          )}
+        </View>
+
         {/* ── Stats ─────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Statistiques</Text>
@@ -576,6 +622,16 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.brassBorder, backgroundColor: 'rgba(201,162,39,0.06)',
   },
   cosmeticsBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
+  referralDesc: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 18 },
+  referralBtns: { flexDirection: 'row', gap: 10, marginTop: 2 },
+  referralCopyBtn: { flex: 1, backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  referralCopyTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: '#1C2622' },
+  referralShareBtn: {
+    flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center',
+    borderWidth: 1.5, borderColor: C.brass,
+  },
+  referralShareTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+  referralCount: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, textAlign: 'center', marginTop: 2 },
 
   // Stats
   statRow: {

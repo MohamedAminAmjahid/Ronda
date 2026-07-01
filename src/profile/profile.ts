@@ -8,6 +8,7 @@ import {
   updateStats as firestoreUpdateStats,
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
   updateCosmetics as firestoreUpdateCosmetics,
+  applyReferral, REFERRAL_REWARD,
 } from '../firebase/firestore'
 import { apiGift, apiTransfer } from '../online/serverApi'
 import { markQuestProgress, registerGoldSetter } from '../quests/quests'
@@ -21,6 +22,7 @@ import { FRAMES, DEFAULT_FRAME } from '../cosmetics/avatarFrames'
 
 const STORAGE_KEY = 'ronda_profile'
 const ACTIVE_ROOM_KEY = 'ronda_active_room'
+const REFERRAL_CODE_KEY = 'ronda_referral_code'
 const STARTING_GOLD = 200
 const MAX_USERNAME = 16
 /** Or gagné en remportant une partie (solo ou en ligne). */
@@ -445,6 +447,7 @@ export function incrementUsernameChanges(): void {
  * Retourne l'or gagné (0 si défaite) pour l'affichage sur l'écran de fin.
  */
 export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): number {
+  const wasFirstGame = profile.gamesPlayed === 0
   const reward = won ? WIN_REWARD : 0
   profile = {
     ...profile,
@@ -462,7 +465,35 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
   if (reward > 0) syncGoldToFirestore(profile.gold)
   emit()
   if (won) void markQuestProgress('winGame')
+  // Parrainage : déclenché à la TOUTE première partie (anti faux comptes).
+  if (wasFirstGame) void maybeApplyReferral()
   return reward
+}
+
+/**
+ * Si un code de parrainage est en attente (AsyncStorage), l'applique via Firestore
+ * à la première partie du joueur, puis crédite localement le +500 et retire le code.
+ */
+async function maybeApplyReferral(): Promise<void> {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  let code: string | null = null
+  try {
+    code = await AsyncStorage.getItem(REFERRAL_CODE_KEY)
+  } catch {
+    return
+  }
+  if (!code) return
+
+  const res = await applyReferral(uid, code)
+  if (res.ok) {
+    // Reflète localement le +500 crédité côté serveur (increment), sans ré-écriture.
+    setGold(profile.gold + REFERRAL_REWARD)
+  }
+  // Retire le code sauf erreur réseau (pour pouvoir retenter plus tard).
+  if (res.ok || res.reason !== 'error') {
+    try { await AsyncStorage.removeItem(REFERRAL_CODE_KEY) } catch { /* ignore */ }
+  }
 }
 
 export function setAvatarEmoji(emoji: string): void {
