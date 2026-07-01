@@ -19,7 +19,7 @@ export async function loadDifficulty(): Promise<Difficulty> {
   if (loaded) return current
   try {
     const v = await AsyncStorage.getItem(KEY)
-    if (v === 'easy' || v === 'medium') current = v
+    if (v === 'easy' || v === 'medium' || v === 'hard') current = v
   } catch {
     // stockage indisponible — valeur par défaut
   }

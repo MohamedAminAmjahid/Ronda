@@ -181,7 +181,9 @@ export function useRonda2v2Game() {
 
     const tid = setTimeout(() => {
       const obs = getObservableState2v2(gs, pid)
-      const action = chooseAction2v2(obs, pid, getDifficulty(), memsRef.current[pid])
+      // Le 2v2 n'a pas d'IA Monte-Carlo : « hard » se rabat sur « medium ».
+      const diff2v2 = getDifficulty()
+      const action = chooseAction2v2(obs, pid, diff2v2 === 'hard' ? 'medium' : diff2v2, memsRef.current[pid])
 
       if (action.type === 'PLAY_CARD') {
         recordForAll(gs, { byPlayer: pid, card: action.card })

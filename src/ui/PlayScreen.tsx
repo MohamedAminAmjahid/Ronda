@@ -22,7 +22,7 @@ interface Props {
   onPlay2v2:  () => void
 }
 
-const DIFFICULTIES: Difficulty[] = ['easy', 'medium']
+const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard']
 
 /** Choix du mode hors-ligne (vs IA) : 1 contre 1 ou 2 contre 2 + difficulté. */
 export function PlayScreen({ onBack, onPlay1v1, onPlay2v2 }: Props) {

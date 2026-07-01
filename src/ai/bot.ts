@@ -5,7 +5,7 @@ import type { AiMemory } from './memory'
 import { estimatePHigherRonda } from './memory'
 import { scoreMove } from './evaluate'
 
-export type Difficulty = 'easy' | 'medium'
+export type Difficulty = 'easy' | 'medium' | 'hard'
 
 /** Seuil en dessous duquel le bot moyen déclare sa ronda malgré le risque. */
 const DECLARE_THRESHOLD = 0.25

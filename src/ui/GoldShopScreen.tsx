@@ -33,10 +33,14 @@ const BMC_URL = 'https://buymeacoffee.com/TONLIEN'
 const SHARE_KEY = 'ronda_share_count'
 const FB_KEY = 'ronda_fb_claimed'
 const IG_KEY = 'ronda_ig_claimed'
+const VIDEO_KEY = 'ronda_video_count'
 
 const SHARE_DAILY_LIMIT = 3
 const SHARE_REWARD = 100
 const FOLLOW_REWARD = 300
+const VIDEO_DAILY_LIMIT = 3
+const VIDEO_REWARD = 50
+const VIDEO_SECONDS = 30
 
 /** Date du jour au format YYYY-MM-DD (suffisant pour le quota quotidien). */
 function todayStr(): string {
@@ -78,6 +82,12 @@ export function GoldShopScreen({ onBack }: Props) {
   const [askClaim, setAskClaim] = useState<null | 'fb' | 'ig'>(null)
   const appState = useRef<AppStateStatus>(AppState.currentState)
 
+  // Pub récompensée (simulation web).
+  const [videoCount, setVideoCount] = useState(0)
+  const [showVideo, setShowVideo] = useState(false)
+  const [videoSecs, setVideoSecs] = useState(VIDEO_SECONDS)
+  const [videoRewarded, setVideoRewarded] = useState(false)
+
   // Chargement initial des compteurs persistés.
   useEffect(() => {
     void (async () => {
@@ -89,11 +99,43 @@ export function GoldShopScreen({ onBack }: Props) {
         }
         setFbClaimed((await AsyncStorage.getItem(FB_KEY)) === 'true')
         setIgClaimed((await AsyncStorage.getItem(IG_KEY)) === 'true')
+        const rawVid = await AsyncStorage.getItem(VIDEO_KEY)
+        if (rawVid) {
+          const parsed = JSON.parse(rawVid) as { count?: number; date?: string }
+          setVideoCount(parsed.date === todayStr() ? (parsed.count ?? 0) : 0)
+        }
       } catch {
         // stockage indisponible — valeurs par défaut
       }
     })()
   }, [])
+
+  // Compte à rebours de la pub : décrémente chaque seconde, crédite à 0.
+  useEffect(() => {
+    if (!showVideo || videoRewarded) return
+    if (videoSecs <= 0) {
+      setVideoRewarded(true)
+      addGold(VIDEO_REWARD)
+      const next = videoCount + 1
+      setVideoCount(next)
+      void AsyncStorage.setItem(VIDEO_KEY, JSON.stringify({ count: next, date: todayStr() })).catch(() => {})
+      return
+    }
+    const tid = setTimeout(() => setVideoSecs((s) => s - 1), 1000)
+    return () => clearTimeout(tid)
+  }, [showVideo, videoSecs, videoRewarded, videoCount, addGold])
+
+  const openVideo = () => {
+    if (videoCount >= VIDEO_DAILY_LIMIT) return
+    setVideoSecs(VIDEO_SECONDS)
+    setVideoRewarded(false)
+    setShowVideo(true)
+  }
+
+  const closeVideo = () => {
+    if (videoSecs > 0 && !videoRewarded) return  // fermeture bloquée pendant la pub
+    setShowVideo(false)
+  }
 
   // Retour dans l'app après ouverture du réseau social → propose la récompense.
   useEffect(() => {
@@ -235,17 +277,25 @@ export function GoldShopScreen({ onBack }: Props) {
             onceTxt={t('followOnce')}
           />
 
-          {/* Regarder une vidéo (AdMob plus tard — affichage uniquement) */}
+          {/* Regarder une vidéo (pub récompensée — simulation web) */}
           <View style={s.card}>
             <View style={s.cardHead}>
               <Text style={s.cardTitle}>{t('watchVideo')}</Text>
-              <Text style={s.reward}>🪙 +50</Text>
+              <Text style={s.reward}>🪙 +{VIDEO_REWARD}</Text>
             </View>
             <Text style={s.cardDesc}>{t('watchVideoDesc')}</Text>
-            <View style={[s.btnPrimary, s.btnDisabled]}>
-              <Text style={[s.btnPrimaryTxt, s.btnDisabledTxt]}>{t('comingSoon')}</Text>
-            </View>
-            <Text style={s.counter}>{t('mobileComingSoon')}</Text>
+            <TouchableOpacity
+              style={[s.btnPrimary, videoCount >= VIDEO_DAILY_LIMIT && s.btnDisabled]}
+              onPress={openVideo}
+              disabled={videoCount >= VIDEO_DAILY_LIMIT}
+            >
+              <Text style={[s.btnPrimaryTxt, videoCount >= VIDEO_DAILY_LIMIT && s.btnDisabledTxt]}>
+                {videoCount >= VIDEO_DAILY_LIMIT ? t('comeBackTomorrow') : t('watchVideo')}
+              </Text>
+            </TouchableOpacity>
+            <Text style={s.counter}>
+              {t('todayCount').replace('{count}', String(videoCount)).replace('{limit}', String(VIDEO_DAILY_LIMIT))}
+            </Text>
           </View>
 
           {/* 4. Packs payants (affichage uniquement) */}
@@ -309,6 +359,36 @@ export function GoldShopScreen({ onBack }: Props) {
                 <Text style={s.modalSaveTxt}>{t('yes')}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Pub récompensée (simulation) */}
+      <Modal visible={showVideo} transparent animationType="fade" onRequestClose={closeVideo}>
+        <View style={s.modalBackdrop}>
+          <View style={s.adCard}>
+            {videoRewarded ? (
+              <>
+                <Text style={s.adEmoji}>🎉</Text>
+                <Text style={s.adReward}>{t('adRewardMsg').replace('{n}', String(VIDEO_REWARD))}</Text>
+                <TouchableOpacity style={s.modalSave} onPress={closeVideo}>
+                  <Text style={s.modalSaveTxt}>{t('adClose')}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={s.adPlayIcon}>📺</Text>
+                <Text style={s.adWatching}>{t('adWatching')}</Text>
+                <View style={s.adBarTrack}>
+                  <View style={[s.adBarFill, { width: `${((VIDEO_SECONDS - videoSecs) / VIDEO_SECONDS) * 100}%` }]} />
+                </View>
+                <View style={[s.adCloseBtn, s.btnDisabled]}>
+                  <Text style={s.adCloseDisabledTxt}>
+                    ✕ {t('adCloseIn').replace('{n}', String(videoSecs))}
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -622,4 +702,25 @@ const s = StyleSheet.create({
   modalCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
   modalSave: { backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 26 },
   modalSaveTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
+
+  // Pub récompensée
+  adCard: {
+    width: '100%', maxWidth: 340, backgroundColor: '#101010', borderRadius: 18,
+    padding: 26, gap: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',
+  },
+  adPlayIcon: { fontSize: 48, lineHeight: 56 },
+  adEmoji:    { fontSize: 48, lineHeight: 56 },
+  adWatching: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
+  adReward:   { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.brass, textAlign: 'center' },
+  adBarTrack: {
+    width: '100%', height: 8, borderRadius: 4, overflow: 'hidden',
+    backgroundColor: 'rgba(244,236,216,0.15)',
+  },
+  adBarFill: { height: '100%', backgroundColor: C.brass, borderRadius: 4 },
+  adCloseBtn: {
+    borderRadius: 10, paddingVertical: 10, paddingHorizontal: 20,
+    borderWidth: 1, borderColor: 'rgba(244,236,216,0.2)',
+  },
+  adCloseDisabledTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: 'rgba(244,236,216,0.5)' },
 })
