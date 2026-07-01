@@ -28,9 +28,13 @@ export async function registerPush(): Promise<void> {
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') return
 
+    // Scope dédié pour ne pas entrer en conflit avec le SW principal (/sw.js) qui
+    // contrôle la portée racine '/'.
     let swReg: ServiceWorkerRegistration | undefined
     if ('serviceWorker' in navigator) {
-      swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+      swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+        scope: '/firebase-cloud-messaging-push-scope',
+      })
     }
 
     const messaging = getMessaging(firebaseApp)

@@ -10,6 +10,8 @@ import { usePushRegistration } from '../push/push'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
+import { OfflineBanner } from '../ui/OfflineBanner'
+import { InstallPrompt } from '../ui/InstallPrompt'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -56,6 +58,8 @@ export default function RootLayout() {
       />
       <BottomNav />
       <IncomingInviteModal />
+      <OfflineBanner />
+      <InstallPrompt />
     </View>
   )
 }

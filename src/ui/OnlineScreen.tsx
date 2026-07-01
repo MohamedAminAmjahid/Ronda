@@ -8,6 +8,7 @@ import { useOnlineGame } from '../online/useOnlineGame'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
+import { useIsOffline } from '../net/useOnlineStatus'
 import { VoiceButton } from '../voice/VoiceButton'
 import { GameChat } from '../voice/GameChat'
 
@@ -47,6 +48,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
   const { username } = useProfile()
   const { t: tr } = useI18n()
+  const offline = useIsOffline()
 
   const [codeInput, setCodeInput] = useState(() => normalizeCode(initialCode ?? ''))
   const [lookupError, setLookupError] = useState<string | null>(null)
@@ -145,6 +147,12 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
         <View style={s.body}>
           <Text style={s.helloTxt}>Salut {username} 👋</Text>
 
+          {offline && (
+            <View style={s.offlineNotice}>
+              <Text style={s.offlineNoticeTxt}>📵 {tr('offlineNeedConnection')}</Text>
+            </View>
+          )}
+
           {mode === 'friend' && (
             <>
               <Text style={s.label}>Inviter</Text>
@@ -159,7 +167,11 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           {mode !== 'friend' && (
             <>
               <Text style={s.label}>Adversaire aléatoire</Text>
-              <TouchableOpacity style={s.btnPrimary} onPress={() => game.connectQuick(username)}>
+              <TouchableOpacity
+                style={[s.btnPrimary, offline && s.btnDisabled]}
+                onPress={() => { if (!offline) game.connectQuick(username) }}
+                disabled={offline}
+              >
                 <Text style={s.btnPrimaryTxt}>{tr('quickMatch')}</Text>
               </TouchableOpacity>
               <Text style={s.hint}>Pour jouer avec un ami, reviens au menu → « Jouer avec un ami ».</Text>
@@ -169,10 +181,18 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           {mode === 'friend' && (
             <>
               <Text style={s.label}>Avec un ami</Text>
-              <TouchableOpacity style={s.btnSecondary} onPress={() => game.connectCreate(username)}>
+              <TouchableOpacity
+                style={[s.btnSecondary, offline && s.btnDisabled]}
+                onPress={() => { if (!offline) game.connectCreate(username) }}
+                disabled={offline}
+              >
                 <Text style={s.btnSecondaryTxt}>{tr('createGame')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.btnSecondary} onPress={() => goLobby2v2(username)}>
+              <TouchableOpacity
+                style={[s.btnSecondary, offline && s.btnDisabled]}
+                onPress={() => { if (!offline) goLobby2v2(username) }}
+                disabled={offline}
+              >
                 <Text style={s.btnSecondaryTxt}>{tr('lobby2v2')}</Text>
               </TouchableOpacity>
 
@@ -185,7 +205,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
                 placeholderTextColor={C.boneOff}
                 autoCapitalize="characters"
                 autoCorrect={false}
-                editable={!joining}
+                editable={!joining && !offline}
               />
               {joining ? (
                 <Text style={s.hint}>{tr('connecting')}</Text>
@@ -310,6 +330,12 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderColor: C.brass,
   },
   btnSecondaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.4 },
+  btnDisabled: { opacity: 0.4 },
+  offlineNotice: {
+    backgroundColor: 'rgba(90,42,42,0.5)', borderRadius: 10, padding: 12,
+    borderLeftWidth: 3, borderLeftColor: '#C0392B',
+  },
+  offlineNoticeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
   divider: {
     height: 1, backgroundColor: 'rgba(244,236,216,0.12)', marginVertical: 6,
   },

@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { router } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
+import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
@@ -85,6 +86,7 @@ export function DiJoujOnlineScreen() {
 
   const { t }        = useI18n()
   const { username } = useProfile()
+  const offline      = useIsOffline()
 
   const {
     state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
@@ -225,20 +227,27 @@ export function DiJoujOnlineScreen() {
           <View style={s.center}>
             <Text style={s.centerTitle}>Di Jouj — {t('playOnline')}</Text>
             <Text style={s.centerSub}>{username}</Text>
+            {offline && (
+              <View style={s.offlineNotice}>
+                <Text style={s.offlineNoticeTxt}>📵 {t('offlineNeedConnection')}</Text>
+              </View>
+            )}
             {isConnecting
               ? <ActivityIndicator color={C.brass} size="large" style={{ marginTop: 32 }} />
               : (
                 <View style={s.centerBtns}>
                   <TouchableOpacity
-                    style={[s.centerBtn, { backgroundColor: C.acc }]}
-                    onPress={() => connectQuick(username || 'Joueur')}
+                    style={[s.centerBtn, { backgroundColor: C.acc }, offline && s.centerBtnDisabled]}
+                    onPress={() => { if (!offline) connectQuick(username || 'Joueur') }}
+                    disabled={offline}
                     activeOpacity={0.8}
                   >
                     <Text style={s.centerBtnTxt}>{t('quickMatch')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[s.centerBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.brass }]}
-                    onPress={() => connectPrivate(username || 'Joueur')}
+                    style={[s.centerBtn, { backgroundColor: C.surface, borderWidth: 1, borderColor: C.brass }, offline && s.centerBtnDisabled]}
+                    onPress={() => { if (!offline) connectPrivate(username || 'Joueur') }}
+                    disabled={offline}
                     activeOpacity={0.8}
                   >
                     <Text style={s.centerBtnTxt}>{t('createGame')}</Text>
@@ -571,7 +580,13 @@ const s = StyleSheet.create({
   },
   centerBtns: { width: '100%', gap: 14, marginTop: 32 },
   centerBtn: { paddingVertical: 16, paddingHorizontal: 24, borderRadius: 14, alignItems: 'center' },
+  centerBtnDisabled: { opacity: 0.4 },
   centerBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16, letterSpacing: 0.4 },
+  offlineNotice: {
+    marginTop: 20, backgroundColor: 'rgba(90,42,42,0.5)', borderRadius: 10, padding: 12,
+    borderLeftWidth: 3, borderLeftColor: C.red,
+  },
+  offlineNoticeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone, textAlign: 'center' },
   codeBox: {
     marginTop: 24, alignItems: 'center', backgroundColor: C.surface,
     borderRadius: 12, paddingVertical: 16, paddingHorizontal: 28, gap: 6,
