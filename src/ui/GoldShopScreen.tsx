@@ -321,7 +321,7 @@ export function GoldShopScreen({ onBack }: Props) {
 function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
   const { t } = useI18n()
   const { user } = useAuth()
-  const { giftGold } = useProfile()
+  const { giftGold, gold, giftCost } = useProfile()
 
   const [search, setSearch]         = useState('')
   const [searching, setSearching]   = useState(false)
@@ -422,15 +422,27 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity
-                style={[s.btnPrimary, (giftAmount <= 0 || sending) && s.btnDisabled]}
-                onPress={doGift}
-                disabled={giftAmount <= 0 || sending}
-              >
-                <Text style={[s.btnPrimaryTxt, (giftAmount <= 0 || sending) && s.btnDisabledTxt]}>
-                  {sending ? '…' : t('giftAction')}
+              {giftAmount > 0 && (
+                <Text style={s.costLine}>
+                  {t('giftCostLine').replace('{n}', String(giftAmount)).replace('{c}', String(giftCost(giftAmount)))}
                 </Text>
-              </TouchableOpacity>
+              )}
+              {(() => {
+                const cost = giftCost(giftAmount)
+                const cannotAfford = giftAmount > 0 && gold < cost
+                const disabled = giftAmount <= 0 || sending || cannotAfford
+                return (
+                  <TouchableOpacity
+                    style={[s.btnPrimary, disabled && s.btnDisabled]}
+                    onPress={doGift}
+                    disabled={disabled}
+                  >
+                    <Text style={[s.btnPrimaryTxt, disabled && s.btnDisabledTxt]}>
+                      {sending ? '…' : cannotAfford ? t('insufficientBalance') : t('giftAction')}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })()}
               {errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
               {okMsg  && <Text style={s.okMsg}>{okMsg}</Text>}
             </>
@@ -553,6 +565,7 @@ const s = StyleSheet.create({
   chipActive: { backgroundColor: C.brass, borderColor: C.brass },
   chipTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
   chipTxtActive: { color: C.ink },
+  costLine: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass, textAlign: 'center' },
   errMsg: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: '#E74C3C', textAlign: 'center' },
   okMsg:  { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, textAlign: 'center', lineHeight: 20 },
 

@@ -12,6 +12,7 @@ import {
 import { apiGift, apiTransfer } from '../online/serverApi'
 import { markQuestProgress, registerGoldSetter } from '../quests/quests'
 import { TABLES, BACKS, DEFAULT_TABLE, DEFAULT_BACK, type CosmeticKind } from '../cosmetics/catalog'
+import { FRAMES, DEFAULT_FRAME } from '../cosmetics/avatarFrames'
 
 // Store singleton du profil joueur, persisté via AsyncStorage.
 // - username : généré une seule fois au premier lancement (Joueur#XXXX), puis persisté.
@@ -53,11 +54,13 @@ export interface Profile {
   dailyTransferDate: string
   /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
   goldHistoryPublic: boolean
-  /** Cosmétiques : tapis + dos de cartes. */
+  /** Cosmétiques : tapis + dos de cartes + cadre d'avatar. */
   table: string
   ownedTables: string[]
   cardBack: string
   ownedBacks: string[]
+  avatarFrame: string
+  ownedFrames: string[]
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -91,6 +94,8 @@ let profile: Profile = {
   ownedTables: [DEFAULT_TABLE],
   cardBack: DEFAULT_BACK,
   ownedBacks: [DEFAULT_BACK],
+  avatarFrame: DEFAULT_FRAME,
+  ownedFrames: [DEFAULT_FRAME],
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -149,6 +154,8 @@ export function loadProfile(): Promise<Profile> {
           ownedTables: Array.isArray(parsed.ownedTables) ? parsed.ownedTables : [DEFAULT_TABLE],
           cardBack:    typeof parsed.cardBack === 'string' ? parsed.cardBack : DEFAULT_BACK,
           ownedBacks:  Array.isArray(parsed.ownedBacks) ? parsed.ownedBacks : [DEFAULT_BACK],
+          avatarFrame: typeof parsed.avatarFrame === 'string' ? parsed.avatarFrame : DEFAULT_FRAME,
+          ownedFrames: Array.isArray(parsed.ownedFrames) ? parsed.ownedFrames : [DEFAULT_FRAME],
         }
       } else {
         profile = {
@@ -160,6 +167,7 @@ export function loadProfile(): Promise<Profile> {
           dailyTransferSent: 0, dailyTransferDate: todayStr(),
           goldHistoryPublic: true,
           table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
+          avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
         }
       }
     } catch {
@@ -172,6 +180,7 @@ export function loadProfile(): Promise<Profile> {
         dailyTransferSent: 0, dailyTransferDate: todayStr(),
         goldHistoryPublic: true,
         table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
+        avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
       }
     }
     loaded = true
@@ -229,6 +238,8 @@ function syncCosmeticsToFirestore(): void {
     ownedTables: profile.ownedTables,
     cardBack:    profile.cardBack,
     ownedBacks:  profile.ownedBacks,
+    avatarFrame: profile.avatarFrame,
+    ownedFrames: profile.ownedFrames,
   }).catch(() => {})
 }
 
@@ -310,14 +321,23 @@ export async function transferGold(toUid: string, amount: number, _toName = ''):
   return { ok: false, reason: 'error', remaining }
 }
 
+/** Coût pour l'émetteur d'un cadeau : 90 % du montant offert (10 % de réduction). */
+export function giftCost(amount: number): number {
+  return Math.round(amount * 0.9)
+}
+
 /**
- * Offre `amount` gold à un joueur (simulation, illimité, sans débit).
- * Le serveur crédite le destinataire et journalise dans goldHistory.
+ * Offre `amount` gold à un joueur : le serveur crédite le destinataire (+journal),
+ * et l'émetteur est débité de `giftCost(amount)` (90 %). Lance 'insufficient_gold'
+ * si le solde est insuffisant, 'gift_failed' si le crédit serveur échoue.
  */
 export async function giftGold(toUid: string, amount: number, _toName = ''): Promise<void> {
   if (amount <= 0) return
+  const cost = giftCost(amount)
+  if (profile.gold < cost) throw new Error('insufficient_gold')
   const r = await apiGift(toUid, amount)
   if (!r.ok) throw new Error('gift_failed')
+  removeGold(cost)
   void markQuestProgress('sendGift')
 }
 
@@ -346,9 +366,12 @@ export function equipCosmetic(kind: CosmeticKind, id: string): void {
   if (kind === 'table') {
     if (!profile.ownedTables.includes(id) || profile.table === id) return
     profile = { ...profile, table: id }
-  } else {
+  } else if (kind === 'back') {
     if (!profile.ownedBacks.includes(id) || profile.cardBack === id) return
     profile = { ...profile, cardBack: id }
+  } else {
+    if (!profile.ownedFrames.includes(id) || profile.avatarFrame === id) return
+    profile = { ...profile, avatarFrame: id }
   }
   void persist()
   syncCosmeticsToFirestore()
@@ -360,16 +383,24 @@ export function equipCosmetic(kind: CosmeticKind, id: string): void {
  * Si déjà possédé → équipe simplement. Renvoie false si solde insuffisant.
  */
 export function buyCosmetic(kind: CosmeticKind, id: string): boolean {
-  const def = kind === 'table' ? TABLES.find(t => t.id === id) : BACKS.find(b => b.id === id)
+  const def = kind === 'table' ? TABLES.find(t => t.id === id)
+    : kind === 'back' ? BACKS.find(b => b.id === id)
+    : FRAMES.find(f => f.id === id)
   if (!def) return false
-  const owned = kind === 'table' ? profile.ownedTables : profile.ownedBacks
+  const owned = kind === 'table' ? profile.ownedTables
+    : kind === 'back' ? profile.ownedBacks
+    : profile.ownedFrames
   if (owned.includes(id)) { equipCosmetic(kind, id); return true }
   if (profile.gold < def.price) return false
 
   const newGold = Math.max(0, profile.gold - def.price)
-  profile = kind === 'table'
-    ? { ...profile, gold: newGold, ownedTables: [...profile.ownedTables, id], table: id }
-    : { ...profile, gold: newGold, ownedBacks: [...profile.ownedBacks, id], cardBack: id }
+  if (kind === 'table') {
+    profile = { ...profile, gold: newGold, ownedTables: [...profile.ownedTables, id], table: id }
+  } else if (kind === 'back') {
+    profile = { ...profile, gold: newGold, ownedBacks: [...profile.ownedBacks, id], cardBack: id }
+  } else {
+    profile = { ...profile, gold: newGold, ownedFrames: [...profile.ownedFrames, id], avatarFrame: id }
+  }
   void persist()
   syncGoldToFirestore(newGold)
   syncCosmeticsToFirestore()
@@ -380,11 +411,13 @@ export function buyCosmetic(kind: CosmeticKind, id: string): boolean {
 /** Applique les cosmétiques Firebase au login (local uniquement). */
 export function setCosmeticsLocal(c: {
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
+  avatarFrame: string; ownedFrames: string[]
 }): void {
   profile = {
     ...profile,
     table: c.table, ownedTables: c.ownedTables,
     cardBack: c.cardBack, ownedBacks: c.ownedBacks,
+    avatarFrame: c.avatarFrame, ownedFrames: c.ownedFrames,
   }
   void persist()
   emit()

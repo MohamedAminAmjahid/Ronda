@@ -14,6 +14,7 @@ import {
   setGoldHistoryPublic,
   buyCosmetic,
   equipCosmetic,
+  giftCost,
   DAILY_TRANSFER_LIMIT,
   type Profile,
 } from './profile'
@@ -53,6 +54,8 @@ export function useProfile() {
     ownedTables:    profile.ownedTables,
     cardBack:       profile.cardBack,
     ownedBacks:     profile.ownedBacks,
+    avatarFrame:    profile.avatarFrame,
+    ownedFrames:    profile.ownedFrames,
     setUsername,
     addGold,
     removeGold,
@@ -64,6 +67,7 @@ export function useProfile() {
     setGoldHistoryPublic,
     buyCosmetic,
     equipCosmetic,
+    giftCost,
     DAILY_TRANSFER_LIMIT,
   }
 }

@@ -21,12 +21,11 @@ interface Props {
 
 /**
  * Formulaire « offrir un pack » vers un joueur déjà connu (sans recherche).
- * Cadeau = simulation illimitée : crédite le destinataire via giftGold, sans
- * débit ni quota côté émetteur. Même pattern que GoldTransferForm.
+ * Le destinataire est crédité du montant ; l'émetteur paie giftCost (90 %).
  */
 export function GoldGiftForm({ targetUid, targetName }: Props) {
   const { t } = useI18n()
-  const { giftGold } = useProfile()
+  const { giftGold, gold, giftCost } = useProfile()
 
   const [sending, setSending] = useState<number | null>(null)
   const [errMsg, setErrMsg]   = useState<string | null>(null)
@@ -49,20 +48,28 @@ export function GoldGiftForm({ targetUid, targetName }: Props) {
   return (
     <View style={s.wrap}>
       <View style={s.grid}>
-        {GIFT_PACKS.map((amount) => (
-          <View key={amount} style={s.pack}>
-            <Text style={s.packCoin}>🪙</Text>
-            <Text style={s.packGold}>{amount}</Text>
-            <TouchableOpacity
-              style={[s.giftBtn, sending !== null && s.giftBtnDisabled]}
-              onPress={() => offer(amount)}
-              disabled={sending !== null}
-              activeOpacity={0.85}
-            >
-              <Text style={s.giftBtnTxt}>{sending === amount ? '…' : t('giftAction')}</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+        {GIFT_PACKS.map((amount) => {
+          const cost = giftCost(amount)
+          const cannotAfford = gold < cost
+          const disabled = sending !== null || cannotAfford
+          return (
+            <View key={amount} style={s.pack}>
+              <Text style={s.packCoin}>🪙</Text>
+              <Text style={s.packGold}>{amount}</Text>
+              <Text style={s.packCost}>{t('giftCostLine').replace('{n}', String(amount)).replace('{c}', String(cost))}</Text>
+              <TouchableOpacity
+                style={[s.giftBtn, disabled && s.giftBtnDisabled]}
+                onPress={() => offer(amount)}
+                disabled={disabled}
+                activeOpacity={0.85}
+              >
+                <Text style={s.giftBtnTxt}>
+                  {sending === amount ? '…' : cannotAfford ? '🔒' : t('giftAction')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )
+        })}
       </View>
 
       {errMsg && <Text style={s.errMsg}>{errMsg}</Text>}
@@ -80,7 +87,8 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.22)',
   },
   packCoin: { fontSize: 22 },
-  packGold: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.bone, marginBottom: 6 },
+  packGold: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.bone },
+  packCost: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.brass, textAlign: 'center', marginBottom: 6 },
   giftBtn: { backgroundColor: C.brass, borderRadius: 9, paddingVertical: 9, paddingHorizontal: 22, alignItems: 'center' },
   giftBtnDisabled: { opacity: 0.5 },
   giftBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.ink, letterSpacing: 0.3 },

@@ -5,6 +5,8 @@ import { Svg, Polygon } from 'react-native-svg'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { TABLES, BACKS, type TableDef, type BackDef, type CosmeticKind } from '../cosmetics/catalog'
+import { FRAMES, type FrameDef } from '../cosmetics/avatarFrames'
+import { AvatarDisplay } from './ProfileScreen'
 
 const C = {
   bg:      '#0D0D1A',
@@ -22,7 +24,10 @@ interface Props {
 
 export function CosmeticsShopScreen({ onBack }: Props) {
   const { t } = useI18n()
-  const { gold, table, ownedTables, cardBack, ownedBacks, buyCosmetic, equipCosmetic } = useProfile()
+  const {
+    gold, table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
+    buyCosmetic, equipCosmetic,
+  } = useProfile()
 
   const act = (kind: CosmeticKind, id: string, owned: boolean) => {
     if (owned) equipCosmetic(kind, id)
@@ -46,6 +51,25 @@ export function CosmeticsShopScreen({ onBack }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
+
+          {/* ── Cadres d'avatar ── */}
+          <Text style={s.sectionLabel}>{t('avatarFrames')}</Text>
+          <View style={s.grid}>
+            {FRAMES.map((item) => (
+              <FrameItem
+                key={item.id}
+                item={item}
+                owned={ownedFrames.includes(item.id)}
+                active={avatarFrame === item.id}
+                canAfford={gold >= item.price}
+                name={t(item.nameKey)}
+                buyLbl={t('buy')}
+                equipLbl={t('equip')}
+                equippedLbl={t('equipped')}
+                onPress={(owned) => act('frame', item.id, owned)}
+              />
+            ))}
+          </View>
 
           {/* ── Tapis de jeu ── */}
           <Text style={s.sectionLabel}>{t('tables')}</Text>
@@ -108,6 +132,18 @@ function TableItem({ item, ...p }: ItemCommon & { item: TableDef }) {
   return (
     <View style={[s.item, p.active && s.itemActive]}>
       <LinearGradient colors={item.colors} style={s.preview} />
+      <Text style={s.itemName}>{p.name}</Text>
+      <ActionRow price={item.price} {...p} />
+    </View>
+  )
+}
+
+function FrameItem({ item, ...p }: ItemCommon & { item: FrameDef }) {
+  return (
+    <View style={[s.item, p.active && s.itemActive]}>
+      <View style={s.framePreview}>
+        <AvatarDisplay type="initial" initial="DL" emoji="" image="" size={52} frame={item.id} />
+      </View>
       <Text style={s.itemName}>{p.name}</Text>
       <ActionRow price={item.price} {...p} />
     </View>
@@ -185,6 +221,7 @@ const s = StyleSheet.create({
   },
   itemActive: { borderColor: C.brass },
   preview: { width: '100%', height: 76, borderRadius: 10 },
+  framePreview: { width: '100%', height: 76, alignItems: 'center', justifyContent: 'center' },
   itemName: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
 
   btn: { width: '100%', borderRadius: 10, paddingVertical: 9, alignItems: 'center' },

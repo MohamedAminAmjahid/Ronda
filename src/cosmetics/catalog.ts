@@ -2,7 +2,7 @@ import type { TranslationKey } from '../i18n/translations'
 
 // Catalogue des cosmétiques : tapis de jeu (fond) et dos de cartes.
 
-export type CosmeticKind = 'table' | 'back'
+export type CosmeticKind = 'table' | 'back' | 'frame'
 
 export interface TableDef {
   id: string

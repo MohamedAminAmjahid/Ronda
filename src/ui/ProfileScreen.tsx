@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, ActivityIndicator, Image, Switch,
+  Modal, TextInput, ActivityIndicator, Image, Switch, Animated,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import { router, type Href } from 'expo-router'
+import { frameDef } from '../cosmetics/avatarFrames'
 import * as ImagePicker from 'expo-image-picker'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
@@ -50,30 +52,69 @@ interface AvatarDisplayProps {
   emoji: string
   image: string
   size?: number
+  /** Cadre premium équipé (défaut : 'none'). */
+  frame?: string
 }
 
-export function AvatarDisplay({ type, initial, emoji, image, size = 80 }: AvatarDisplayProps) {
+export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none' }: AvatarDisplayProps) {
   const radius   = size / 2
   const fontSize = type === 'emoji' ? size * 0.48 : size * 0.45
 
-  if (type === 'image' && image) {
-    return (
-      <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
-        <Image
-          source={{ uri: image }}
-          style={{ width: size, height: size, borderRadius: radius }}
-          resizeMode="cover"
-        />
-      </View>
-    )
-  }
-
-  return (
+  const inner = (type === 'image' && image) ? (
+    <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
+      <Image
+        source={{ uri: image }}
+        style={{ width: size, height: size, borderRadius: radius }}
+        resizeMode="cover"
+      />
+    </View>
+  ) : (
     <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
       <Text style={[av.text, { fontSize, lineHeight: size }]}>
         {type === 'emoji' && emoji ? emoji : initial}
       </Text>
     </View>
+  )
+
+  if (frame === 'none') return inner
+  return <FramedAvatar frame={frame} size={size}>{inner}</FramedAvatar>
+}
+
+/** Anneau (cadre) autour de l'avatar, avec lueur animée. */
+function FramedAvatar({ frame, size, children }: { frame: string; size: number; children: ReactNode }) {
+  const def = frameDef(frame)
+  const ringSize = size + def.width * 2
+  const glow = useRef(new Animated.Value(0.4)).current
+
+  useEffect(() => {
+    if (!def.animated) return
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(glow, { toValue: 1,   duration: 900, useNativeDriver: false }),
+      Animated.timing(glow, { toValue: 0.4, duration: 900, useNativeDriver: false }),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [def.animated, glow])
+
+  const ringColors = (def.ring.length > 1 ? def.ring : [def.ring[0], def.ring[0]]) as [string, string, ...string[]]
+
+  return (
+    <Animated.View
+      style={{
+        width: ringSize, height: ringSize, borderRadius: ringSize / 2,
+        alignItems: 'center', justifyContent: 'center',
+        shadowColor: def.glow, shadowOpacity: glow, shadowRadius: 12,
+        shadowOffset: { width: 0, height: 0 }, elevation: 10,
+      }}
+    >
+      <LinearGradient
+        colors={ringColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{ position: 'absolute', width: ringSize, height: ringSize, borderRadius: ringSize / 2 }}
+      />
+      {children}
+    </Animated.View>
   )
 }
 
@@ -97,7 +138,7 @@ export function ProfileScreen() {
     dijoujPlayed, dijoujWon,
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
-    goldHistoryPublic,
+    goldHistoryPublic, avatarFrame,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
     setGoldHistoryPublic,
@@ -346,6 +387,7 @@ export function ProfileScreen() {
             <AvatarDisplay
               type={avatarType} initial={initial}
               emoji={avatarEmoji} image={avatarImage} size={88}
+              frame={avatarFrame}
             />
             <View style={s.avatarEditBadge}>
               <Text style={s.avatarEditIcon}>✎</Text>
