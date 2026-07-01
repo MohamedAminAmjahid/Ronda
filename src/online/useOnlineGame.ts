@@ -1,5 +1,6 @@
-import { useState, useSyncExternalStore, useCallback } from 'react'
+import { useState, useSyncExternalStore, useCallback, useEffect, useRef } from 'react'
 import { usePlayOnlineQuest } from '../quests/useQuests'
+import { frameFromState, buildReplay, saveReplay, type ReplayStep } from '../replay/replay'
 import type { Card, Combination, GameState, PlayerId, PlayerState, Value } from '../engine/types'
 import type { GameView } from '../game/useRondaGame'
 import {
@@ -126,6 +127,31 @@ export function useOnlineGame() {
   const gs = snap.server ? buildGameState(snap.server) : emptyState()
   const isHumanTurn = gs.currentPlayer === 0 && gs.phase === 'PLAYING'
   const me = gs.players[0]
+
+  // ── Enregistrement du replay (parties en ligne) ────────────────────────────
+  const gsRef = useRef(gs); gsRef.current = gs
+  const stepsRef = useRef<ReplayStep[]>([])
+  const lastSigRef = useRef('')
+  const savedRef = useRef(false)
+  const replaySig = `${gs.phase}|${gs.currentPlayer}|${gs.dealNumber}|${gs.table.length}|${gs.players[0].score}|${gs.players[1].score}|${gs.eventSeq}`
+  useEffect(() => {
+    // Réinitialise le journal hors partie (nouvelle partie / déconnexion).
+    if (snap.status !== 'playing') {
+      stepsRef.current = []
+      lastSigRef.current = ''
+      savedRef.current = false
+      return
+    }
+    const g = gsRef.current
+    if (replaySig !== lastSigRef.current) {
+      lastSigRef.current = replaySig
+      stepsRef.current = [...stepsRef.current, { action: { type: 'MOVE' }, frame: frameFromState(g) }]
+    }
+    if (g.phase === 'GAME_OVER' && !savedRef.current) {
+      savedRef.current = true
+      void saveReplay(buildReplay(stepsRef.current, true, Date.now()))
+    }
+  }, [replaySig, snap.status])
 
   const view: GameView = {
     state: gs,

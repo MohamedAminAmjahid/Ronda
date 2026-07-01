@@ -13,6 +13,7 @@ import ReAnimated, {
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
+import { router, type Href } from 'expo-router'
 import { recordResult } from '../profile/profile'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
@@ -170,12 +171,15 @@ export function GameOverScreen({
   scoreText,
   onReplay,
   goldReward = 0,
+  onWatchReplay,
 }: {
   won: boolean
   scoreText: string
   onReplay: () => void
   /** Or gagné pour cette victoire (affiché si > 0). */
   goldReward?: number
+  /** Ouvre le replay de la partie (bouton affiché si fourni). */
+  onWatchReplay?: () => void
 }) {
   const { t } = useI18n()
   const reduceMotion = useReducedMotion()
@@ -213,13 +217,18 @@ export function GameOverScreen({
           <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
             <Text style={styles.btnPrimaryTxt}>{t('replay')}</Text>
           </TouchableOpacity>
+          {onWatchReplay && (
+            <TouchableOpacity style={styles.btnGhost} onPress={onWatchReplay}>
+              <Text style={styles.btnGhostTxt}>🎬 {t('watchReplay')}</Text>
+            </TouchableOpacity>
+          )}
         </ReAnimated.View>
       </View>
     </SafeAreaView>
   )
 }
 
-function GameOver({ scores, onReplay, goldReward = 0 }: { scores: [number, number]; onReplay: () => void; goldReward?: number }) {
+function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay }: { scores: [number, number]; onReplay: () => void; goldReward?: number; onWatchReplay?: () => void }) {
   const { t } = useI18n()
   return (
     <GameOverScreen
@@ -227,6 +236,7 @@ function GameOver({ scores, onReplay, goldReward = 0 }: { scores: [number, numbe
       scoreText={`${t('you')} ${scores[HUMAN_ID]} — ${t('bot')} ${scores[BOT_ID]}`}
       onReplay={onReplay}
       goldReward={goldReward}
+      onWatchReplay={onWatchReplay}
     />
   )
 }
@@ -752,6 +762,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
         scores={[human.score, bot.score]}
         goldReward={winReward}
         onReplay={() => { setSelectedRitual(null); newGame() }}
+        onWatchReplay={() => router.push('/replay' as Href)}
       />
     )
   }
@@ -1612,5 +1623,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: C.ink,
     letterSpacing: 0.5,
+  },
+  btnGhost: {
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: C.brass,
+  },
+  btnGhostTxt: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 14,
+    color: C.brass,
+    letterSpacing: 0.3,
   },
 })

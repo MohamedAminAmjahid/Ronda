@@ -9,6 +9,7 @@ import { chooseActionHard } from '../ai/botHard'
 import { getDifficulty } from './difficulty'
 import { createMemory, updateMemory } from '../ai/memory'
 import type { AiMemory } from '../ai/memory'
+import { frameFromState, buildReplay, saveReplay, type GameAction, type ReplayStep } from '../replay/replay'
 
 // ── Identités fixes ─────────────────────────────────────────────────────────
 
@@ -103,24 +104,34 @@ function toView(gs: GameState): GameView {
 
 // ── Reducer pur ──────────────────────────────────────────────────────────────
 
-type RS = { gs: GameState; seed: number }
+type RS = { gs: GameState; seed: number; steps: ReplayStep[] }
 
 type RA =
   | { kind: 'ACT'; action: Action }
   | { kind: 'NEW'; seed: number; firstDealer: PlayerId }
   | { kind: 'CONTINUE_DEAL' }
 
+/** Convertit une action moteur en action de journal (replay). */
+function toGameAction(action: Action): GameAction {
+  switch (action.type) {
+    case 'PLAY_CARD': return { type: 'PLAY_CARD', playerId: action.playerId, card: action.card }
+    case 'DECLARE':   return { type: 'DECLARE', playerId: action.playerId, value: action.combination.value }
+    case 'CONTEST':   return { type: 'CONTEST', playerId: action.playerId, value: action.accusedValue }
+  }
+}
+
 function reduce(s: RS, a: RA): RS {
   switch (a.kind) {
     case 'ACT': {
       const { rng, getSeed } = makeLcg(s.seed)
       const gs = applyAction(s.gs, a.action, rng)
-      return { gs, seed: getSeed() }
+      const step: ReplayStep = { action: toGameAction(a.action), frame: frameFromState(gs) }
+      return { gs, seed: getSeed(), steps: [...s.steps, step] }
     }
     case 'NEW': {
       const { rng, getSeed } = makeLcg(a.seed)
       const gs = createInitialState(rng, a.firstDealer)
-      return { gs, seed: getSeed() }
+      return { gs, seed: getSeed(), steps: [{ action: { type: 'START' }, frame: frameFromState(gs) }] }
     }
     case 'CONTINUE_DEAL': {
       const { rng, getSeed } = makeLcg(s.seed)
@@ -132,7 +143,8 @@ function reduce(s: RS, a: RA): RS {
         },
         rng,
       )
-      return { gs, seed: getSeed() }
+      const step: ReplayStep = { action: { type: 'DEAL' }, frame: frameFromState(gs) }
+      return { gs, seed: getSeed(), steps: [...s.steps, step] }
     }
   }
 }
@@ -149,7 +161,7 @@ export function useRondaGame() {
   // seulement quand startGame() dispatche 'NEW' avec le bon donneur.
   const [s, dispatch] = useReducer(reduce, undefined, (): RS => {
     const { rng, getSeed } = makeLcg(1)
-    return { gs: createInitialState(rng, 0), seed: getSeed() }
+    return { gs: createInitialState(rng, 0), seed: getSeed(), steps: [] }
   })
 
   // Le bot « réfléchit » pendant son délai aléatoire (2–3 s) avant de jouer.
@@ -160,6 +172,19 @@ export function useRondaGame() {
 
   // AiMemory persiste entre les renders sans déclencher de re-render
   const memRef = useRef<AiMemory>(createMemory())
+
+  // ── Sauvegarde du replay en fin de partie ─────────────────────────────────
+  const replaySavedRef = useRef(false)
+  useEffect(() => {
+    if (s.gs.phase === 'GAME_OVER') {
+      if (!replaySavedRef.current) {
+        replaySavedRef.current = true
+        void saveReplay(buildReplay(s.steps, false, Date.now()))
+      }
+    } else {
+      replaySavedRef.current = false
+    }
+  }, [s.gs.phase, s.steps])
 
   // ── Boucle bot ────────────────────────────────────────────────────────────
   useEffect(() => {
