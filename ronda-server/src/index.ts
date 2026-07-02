@@ -15,6 +15,7 @@ import { DiJoujLobbyRoom } from './rooms/DiJoujLobbyRoom'
 import { resolveCode, resolveCodeEntry } from './rooms/registry'
 import { adminAuth, adminDb, firebaseReady, getUsername, FieldValue } from './firebaseAdmin'
 import { sendPushNotification } from './notifications'
+import { stripe, stripeReady, WEBHOOK_SECRET, PACKS } from './stripe'
 import type { Transaction } from 'firebase-admin/firestore'
 
 const PORT = Number(process.env.PORT ?? 2567)
@@ -34,6 +35,38 @@ initDatabase()
 const app = express()
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))   // preflight pour toutes les routes
+
+// ── Webhook Stripe (corps brut obligatoire pour vérifier la signature) ────────
+app.post('/payment/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripeReady() || !stripe) return res.status(503).json({ error: 'stripe_unavailable' })
+  const sig = req.headers['stripe-signature']
+  if (typeof sig !== 'string' || !WEBHOOK_SECRET) return res.status(400).json({ error: 'no_signature' })
+  let event
+  try {
+    event = stripe.webhooks.constructEvent(req.body as Buffer, sig, WEBHOOK_SECRET)
+  } catch (e) {
+    console.error('[webhook] signature invalide:', e)
+    return res.status(400).json({ error: 'invalid_signature' })
+  }
+  if (event.type === 'payment_intent.succeeded') {
+    const pi = event.data.object as { metadata?: { uid?: string; packId?: string } }
+    const uid    = pi.metadata?.uid
+    const packId = pi.metadata?.packId
+    const pack   = packId ? PACKS[packId] : null
+    if (uid && pack && firebaseReady()) {
+      try {
+        await adminDb().collection('users').doc(uid).set(
+          { gold: FieldValue.increment(pack.gold) }, { merge: true }
+        )
+        console.log(`[webhook] +${pack.gold} gold → ${uid}`)
+      } catch (e) {
+        console.error('[webhook] crédit gold échoué:', e)
+      }
+    }
+  }
+  return res.json({ received: true })
+})
+
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
@@ -172,6 +205,30 @@ app.post('/gold/transfer', async (req, res) => {
     return res.json({ ok: true, gold: outcome.gold, remaining: outcome.remaining })
   } catch (e) {
     console.error('[/gold/transfer] erreur:', e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// ── Paiements Stripe ──────────────────────────────────────────────────────────
+
+// Crée un PaymentIntent et retourne le clientSecret au client.
+app.post('/payment/create-intent', async (req, res) => {
+  if (!stripeReady() || !stripe) return res.status(503).json({ error: 'stripe_unavailable' })
+  const { fromToken, packId } = (req.body ?? {}) as { fromToken?: string; packId?: string }
+  const pack = packId ? PACKS[packId] : null
+  if (!pack) return res.status(400).json({ error: 'invalid_pack' })
+  const uid = await uidFromToken(fromToken)
+  if (!uid) return res.status(401).json({ error: 'unauthorized' })
+  try {
+    const intent = await stripe.paymentIntents.create({
+      amount:   pack.amount,
+      currency: pack.currency,
+      metadata: { uid, packId: packId! },
+      automatic_payment_methods: { enabled: true },
+    })
+    return res.json({ clientSecret: intent.client_secret })
+  } catch (e) {
+    console.error('[/payment/create-intent] erreur:', e)
     return res.status(500).json({ error: 'server_error' })
   }
 })

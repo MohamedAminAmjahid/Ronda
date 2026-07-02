@@ -259,6 +259,7 @@ export const translations = {
     no: 'لا',
     claimed: '✓ تم الاستلام',
     comingSoon: '🔒 قريباً',
+    buyPack: 'شراء',
     // ── Rituals ───────────────────────────────────────────────────────────────
     whoStarts: 'من يبدأ؟',
     chooseRitual: 'اختر طريقة السحب',
@@ -619,6 +620,7 @@ export const translations = {
     no: 'Non',
     claimed: '✓ Réclamé',
     comingSoon: '🔒 Bientôt',
+    buyPack: 'Acheter',
     // ── Rituals ───────────────────────────────────────────────────────────────
     whoStarts: 'Qui commence ?',
     chooseRitual: 'Choisissez un rituel de tirage',
@@ -979,6 +981,7 @@ export const translations = {
     no: 'No',
     claimed: '✓ Claimed',
     comingSoon: '🔒 Coming soon',
+    buyPack: 'Buy',
     // ── Rituals ───────────────────────────────────────────────────────────────
     whoStarts: 'Who starts?',
     chooseRitual: 'Choose a drawing ritual',

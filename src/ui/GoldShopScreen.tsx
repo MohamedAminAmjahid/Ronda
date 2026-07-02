@@ -12,6 +12,8 @@ import { useAuth } from '../firebase/auth'
 import { searchUserByUsername, type UserDoc } from '../firebase/firestore'
 import { AvatarDisplay } from './ProfileScreen'
 import { GoldTransferForm } from './GoldTransferForm'
+import { PaymentModal } from '../payment/PaymentModal'
+import { STRIPE_PACKS, type PackId } from '../payment/stripe'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
 
@@ -47,16 +49,9 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-const PACKS: { gold: number; price: string }[] = [
-  { gold: 500, price: '1,19 €' },
-  { gold: 1000, price: '2,29 €' },
-  { gold: 2500, price: '4,99 €' },
-  { gold: 5000, price: '8,99 €' },
-]
-
 // Pack de référence pour le prix d'un montant personnalisé.
 const REF_GOLD = 500
-const REF_PRICE = 1.19
+const REF_PRICE = 2.0
 const MIN_CUSTOM_GOLD = 500
 
 /** Prix proportionnel au pack de référence, arrondi à 2 décimales. */
@@ -76,6 +71,9 @@ export function GoldShopScreen({ onBack }: Props) {
   const [fbClaimed, setFbClaimed] = useState(false)
   const [igClaimed, setIgClaimed] = useState(false)
   const [customGold, setCustomGold] = useState('')
+
+  // Paiement Stripe.
+  const [payPack, setPayPack] = useState<{ id: PackId; gold: number; label: string } | null>(null)
 
   // Plateforme dont on attend le retour (pour proposer la récompense au retour app).
   const [pendingClaim, setPendingClaim] = useState<null | 'fb' | 'ig'>(null)
@@ -298,18 +296,23 @@ export function GoldShopScreen({ onBack }: Props) {
             </Text>
           </View>
 
-          {/* 4. Packs payants (affichage uniquement) */}
+          {/* 4. Packs payants (Stripe) */}
           <Text style={s.sectionLabel}>{t('goldPacks')}</Text>
           <View style={s.packGrid}>
-            {PACKS.map((p) => (
-              <View key={p.gold} style={s.pack}>
+            {STRIPE_PACKS.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={s.pack}
+                activeOpacity={0.82}
+                onPress={() => setPayPack({ id: p.id, gold: p.gold, label: p.label })}
+              >
                 <Text style={s.packCoin}>🪙</Text>
                 <Text style={s.packGold}>{p.gold}</Text>
-                <Text style={s.packPrice}>{p.price}</Text>
-                <View style={s.packBtn}>
-                  <Text style={s.packBtnTxt}>{t('comingSoon')}</Text>
+                <Text style={s.packPrice}>{p.label}</Text>
+                <View style={s.packBuyBtn}>
+                  <Text style={s.packBuyBtnTxt}>{t('buyPack')}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -362,6 +365,18 @@ export function GoldShopScreen({ onBack }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* Paiement Stripe */}
+      {payPack && (
+        <PaymentModal
+          visible
+          packId={payPack.id}
+          gold={payPack.gold}
+          priceLabel={payPack.label}
+          onClose={() => setPayPack(null)}
+          onSuccess={(g) => { addGold(g); setPayPack(null) }}
+        />
+      )}
 
       {/* Pub récompensée (simulation) */}
       <Modal visible={showVideo} transparent animationType="fade" onRequestClose={closeVideo}>
@@ -491,7 +506,7 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
             <>
               <Text style={s.amountLabel}>{t('giftAmountLabel')}</Text>
               <View style={s.chipRow}>
-                {PACKS.map((p) => (
+                {STRIPE_PACKS.map((p) => (
                   <TouchableOpacity
                     key={p.gold}
                     style={[s.chip, giftAmount === p.gold && s.chipActive]}
@@ -667,6 +682,11 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(244,236,216,0.18)',
   },
   packBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
+  packBuyBtn: {
+    backgroundColor: C.brass, borderRadius: 9, paddingVertical: 9,
+    paddingHorizontal: 14, marginTop: 4,
+  },
+  packBuyBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.ink },
 
   customCard: {
     backgroundColor: C.deep, borderRadius: 14, padding: 16, gap: 10, marginTop: 4,
