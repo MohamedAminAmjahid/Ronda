@@ -11,11 +11,21 @@ import { usePresence } from '../presence/usePresence'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
 import { TopBar } from '../ui/TopBar'
+import { DailyBonusModal } from '../ui/DailyBonusModal'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { InstallPrompt } from '../ui/InstallPrompt'
+import { useDailyBonus } from '../hooks/useDailyBonus'
+import { useAuth } from '../firebase/auth'
 
 SplashScreen.preventAutoHideAsync()
+
+function DailyBonusGate() {
+  const { user }            = useAuth()
+  const { pending, claim }  = useDailyBonus()
+  if (!user || !pending) return null
+  return <DailyBonusModal bonus={pending} onClaim={claim} />
+}
 
 export default function RootLayout() {
   useFirebaseProfileSync()
@@ -61,6 +71,7 @@ export default function RootLayout() {
         }}
       />
       <BottomNav />
+      <DailyBonusGate />
       <IncomingInviteModal />
       <OfflineBanner />
       <InstallPrompt />
