@@ -10,6 +10,7 @@ import { usePushRegistration } from '../push/push'
 import { usePresence } from '../presence/usePresence'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
+import { TopBar } from '../ui/TopBar'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { InstallPrompt } from '../ui/InstallPrompt'
@@ -51,6 +52,7 @@ export default function RootLayout() {
 
   return (
     <View style={{ flex: 1 }}>
+      <TopBar />
       <Stack
         screenOptions={{
           headerShown: false,
