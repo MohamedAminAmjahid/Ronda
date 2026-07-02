@@ -28,7 +28,7 @@ const C = {
 const GAME_URL = 'https://ronda-virid.vercel.app'
 const FB_URL = 'https://www.facebook.com/PLACEHOLDER_FB'
 const IG_URL = 'https://www.instagram.com/PLACEHOLDER_IG'
-const BMC_URL = 'https://buymeacoffee.com/TONLIEN'
+const BMC_URL = 'https://buymeacoffee.com/amjahidmohamedamin'
 
 const SHARE_KEY = 'ronda_share_count'
 const FB_KEY = 'ronda_fb_claimed'

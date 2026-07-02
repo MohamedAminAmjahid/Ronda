@@ -20,12 +20,20 @@ import type { Transaction } from 'firebase-admin/firestore'
 const PORT = Number(process.env.PORT ?? 2567)
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*'
 
+const corsOptions: cors.CorsOptions = {
+  origin: CORS_ORIGIN === '*' ? '*' : CORS_ORIGIN.split(',').map(s => s.trim()),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: false,
+}
+
 // ── Base de données ────────────────────────────────────────────────────────────
 initDatabase()
 
 // ── HTTP (Express) ───────────────────────────────────────────────────────────
 const app = express()
-app.use(cors({ origin: CORS_ORIGIN === '*' ? true : CORS_ORIGIN.split(',') }))
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))   // preflight pour toutes les routes
 app.use(express.json())
 
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }))
