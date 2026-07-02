@@ -130,8 +130,12 @@ export function GoldShopScreen({ onBack }: Props) {
     setShowVideo(true)
   }
 
+  // Fermeture anticipée (✕) → sans récompense.
+  const closeEarly = () => { setShowVideo(false) }
+
+  // Fermeture après récompense (bouton de confirmation).
   const closeVideo = () => {
-    if (videoSecs > 0 && !videoRewarded) return  // fermeture bloquée pendant la pub
+    if (!videoRewarded) return
     setShowVideo(false)
   }
 
@@ -379,9 +383,15 @@ export function GoldShopScreen({ onBack }: Props) {
       )}
 
       {/* Pub récompensée (simulation) */}
-      <Modal visible={showVideo} transparent animationType="fade" onRequestClose={closeVideo}>
+      <Modal visible={showVideo} transparent animationType="fade" onRequestClose={closeEarly}>
         <View style={s.modalBackdrop}>
           <View style={s.adCard}>
+
+            {/* ✕ toujours visible — quitte sans créditer */}
+            <TouchableOpacity style={s.adXBtn} onPress={closeEarly} hitSlop={10}>
+              <Text style={s.adXTxt}>✕</Text>
+            </TouchableOpacity>
+
             {videoRewarded ? (
               <>
                 <Text style={s.adEmoji}>🎉</Text>
@@ -393,13 +403,14 @@ export function GoldShopScreen({ onBack }: Props) {
             ) : (
               <>
                 <Text style={s.adPlayIcon}>📺</Text>
+                <Text style={s.adWatchFull}>{t('adWatchFull').replace('{n}', String(VIDEO_REWARD))}</Text>
                 <Text style={s.adWatching}>{t('adWatching')}</Text>
                 <View style={s.adBarTrack}>
                   <View style={[s.adBarFill, { width: `${((VIDEO_SECONDS - videoSecs) / VIDEO_SECONDS) * 100}%` }]} />
                 </View>
                 <View style={[s.adCloseBtn, s.btnDisabled]}>
                   <Text style={s.adCloseDisabledTxt}>
-                    ✕ {t('adCloseIn').replace('{n}', String(videoSecs))}
+                    {t('adCloseIn').replace('{n}', String(videoSecs))}
                   </Text>
                 </View>
               </>
@@ -726,8 +737,17 @@ const s = StyleSheet.create({
   // Pub récompensée
   adCard: {
     width: '100%', maxWidth: 340, backgroundColor: '#101010', borderRadius: 18,
-    padding: 26, gap: 14, alignItems: 'center',
+    padding: 26, paddingTop: 40, gap: 14, alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',
+  },
+  adXBtn: {
+    position: 'absolute', top: 10, right: 12,
+    paddingHorizontal: 8, paddingVertical: 4,
+  },
+  adXTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: 'rgba(244,236,216,0.55)' },
+  adWatchFull: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass,
+    textAlign: 'center', lineHeight: 20,
   },
   adPlayIcon: { fontSize: 48, lineHeight: 56 },
   adEmoji:    { fontSize: 48, lineHeight: 56 },

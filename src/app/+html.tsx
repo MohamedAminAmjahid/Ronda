@@ -31,6 +31,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <ScrollViewStyleReset />
         <script dangerouslySetInnerHTML={{ __html: SW_REGISTER }} />
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6001850530671722" crossOrigin="anonymous" />
       </head>
       <body>{children}</body>
     </html>
