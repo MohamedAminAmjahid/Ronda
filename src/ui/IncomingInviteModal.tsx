@@ -13,6 +13,8 @@ import {
 } from '../firebase/firestore'
 import { connectFriendGuest } from '../online/store'
 import { connectDiJoujFriendGuest } from '../online/storeDiJouj'
+import { joinLobbyByCode } from '../online/lobbyDiJouj'
+import { connectLobby } from '../online/lobby2v2'
 
 const C = {
   bg:    '#0D0D1A',
@@ -84,10 +86,32 @@ export function IncomingInviteModal() {
     setPhase('accepting')
 
     acceptGameInvite(savedInvite.id)
-      .then(() => {
+      .then(async () => {
+        // ── Invitation lobby : roomCode déjà défini → rejoindre directement ──
+        if (savedInvite.roomCode) {
+          try {
+            const pseudo = username || 'Joueur'
+            const rc     = savedInvite.roomCode
+            if (savedInvite.game === 'dijouj') {
+              await joinLobbyByCode(pseudo, rc)
+              router.push('/dijouj-lobby' as never)
+            } else {
+              await connectLobby(pseudo, rc)
+              router.push('/lobby2v2' as never)
+            }
+            setInvite(null)
+            setPhase('idle')
+            activeIdRef.current = null
+          } catch {
+            setErrorMsg('Impossible de rejoindre le lobby')
+            setPhase('error')
+          }
+          return
+        }
+
+        // ── Invitation 1v1 : attendre que l'hôte crée la room ────────────────
         setPhase('waiting_room')
 
-        // Attendre que l'hôte crée la room et écrive le code
         let timeoutId: ReturnType<typeof setTimeout>
         let unsub: () => void
 
