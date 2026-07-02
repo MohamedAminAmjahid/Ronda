@@ -27,6 +27,8 @@ export interface UserDoc {
   avatarImage: string
   /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
   goldHistoryPublic: boolean
+  /** Statistiques visibles publiquement (true par défaut). */
+  statsPublic: boolean
   /** Cosmétiques : tapis + dos de cartes + cadre d'avatar équipés et possédés. */
   table: string
   ownedTables: string[]
@@ -140,7 +142,7 @@ export async function createOrUpdateUser(
 ): Promise<{
   username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
-  avatarFrame: string; ownedFrames: string[]
+  avatarFrame: string; ownedFrames: string[]; statsPublic: boolean
 }> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
@@ -164,6 +166,7 @@ export async function createOrUpdateUser(
       dijoujWon: local.dijoujWon,
       usernameChanges: local.usernameChanges,
       goldHistoryPublic: local.goldHistoryPublic,
+      statsPublic: true,
       table: local.table,
       ownedTables: local.ownedTables,
       cardBack: local.cardBack,
@@ -183,6 +186,7 @@ export async function createOrUpdateUser(
       table: local.table, ownedTables: local.ownedTables,
       cardBack: local.cardBack, ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame, ownedFrames: local.ownedFrames,
+      statsPublic: true,
     }
   }
 
@@ -205,7 +209,13 @@ export async function createOrUpdateUser(
     ownedBacks:  (data.ownedBacks as string[]) ?? local.ownedBacks,
     avatarFrame: (data.avatarFrame as string) ?? local.avatarFrame,
     ownedFrames: (data.ownedFrames as string[]) ?? local.ownedFrames,
+    statsPublic: typeof data.statsPublic === 'boolean' ? (data.statsPublic as boolean) : true,
   }
+}
+
+/** Active/désactive la visibilité publique des statistiques. */
+export async function updateStatsPublic(uid: string, value: boolean): Promise<void> {
+  await updateDoc(userRef(uid), { statsPublic: value })
 }
 
 /** Met à jour le username et usernameLower dans Firestore. */
@@ -275,6 +285,7 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     avatarImage: (data.avatarImage as string) ?? '',
     // Absent → public par défaut (rétro-compat avec les anciens comptes).
     goldHistoryPublic: (data.goldHistoryPublic as boolean) ?? true,
+    statsPublic: (data.statsPublic as boolean) ?? true,
     table:       (data.table as string) ?? 'green',
     ownedTables: (data.ownedTables as string[]) ?? ['green'],
     cardBack:    (data.cardBack as string) ?? 'default',
@@ -331,6 +342,65 @@ export type ReferralResult =
   | { ok: true; referrerUid: string }
   | { ok: false; reason: 'already' | 'not_found' | 'self' | 'error' }
 
+/** Une entrée de la liste de parrainages (réussi ou en attente). */
+export interface ReferralEntry {
+  uid: string
+  username: string
+  date: Date | null
+  reward?: number
+}
+
+/**
+ * Enregistre un filleul « en attente » (compte créé via un lien, pas encore joué)
+ * chez le parrain : referrals/{referrerUid}/pending/{newUserUid}. No-op si déjà
+ * parrainé ou si le parrain est introuvable / soi-même.
+ */
+export async function registerPendingReferral(
+  referrerUsername: string,
+  newUserUid: string,
+  newUsername: string,
+): Promise<void> {
+  try {
+    const newSnap = await getDoc(userRef(newUserUid))
+    if (newSnap.exists() && newSnap.data().referralUsed === true) return
+    const referrer = await searchUserByUsername(referrerUsername)
+    if (!referrer || referrer.uid === newUserUid) return
+    await setDoc(doc(db, 'referrals', referrer.uid, 'pending', newUserUid), {
+      uid: newUserUid,
+      username: newUsername,
+      createdAt: serverTimestamp(),
+    })
+  } catch (e) {
+    console.error('[registerPendingReferral] erreur:', e)
+  }
+}
+
+/** Liste des parrainages d'un joueur : réussis (completed) + en attente (pending). */
+export async function getReferrals(uid: string): Promise<{ completed: ReferralEntry[]; pending: ReferralEntry[] }> {
+  const mapEntry = (d: { id: string; data: () => Record<string, unknown> }): ReferralEntry => {
+    const data = d.data()
+    return {
+      uid: (data.uid as string) ?? d.id,
+      username: (data.username as string) ?? '—',
+      date: toDate(data.createdAt),
+      reward: data.reward as number | undefined,
+    }
+  }
+  try {
+    const [comp, pend] = await Promise.all([
+      getDocs(query(collection(db, 'referrals', uid, 'completed'), orderBy('createdAt', 'desc'))),
+      getDocs(query(collection(db, 'referrals', uid, 'pending'), orderBy('createdAt', 'desc'))),
+    ])
+    return {
+      completed: comp.docs.map(mapEntry),
+      pending: pend.docs.map(mapEntry),
+    }
+  } catch (e) {
+    console.error('[getReferrals] erreur:', e)
+    return { completed: [], pending: [] }
+  }
+}
+
 /**
  * Applique un parrainage : crédite +500 gold au nouvel utilisateur ET au parrain
  * (increment), marque referralUsed/referredBy et incrémente referralCount du parrain.
@@ -361,6 +431,15 @@ export async function applyReferral(
       gold: increment(REFERRAL_REWARD),
       referralCount: increment(1),
     })
+    // Historique de parrainage : ajoute aux « réussis », retire des « en attente ».
+    const newUsername = (newSnap.data().username as string) ?? 'Joueur'
+    await setDoc(doc(db, 'referrals', referrer.uid, 'completed', newUserUid), {
+      uid: newUserUid,
+      username: newUsername,
+      reward: REFERRAL_REWARD,
+      createdAt: serverTimestamp(),
+    })
+    await deleteDoc(doc(db, 'referrals', referrer.uid, 'pending', newUserUid)).catch(() => {})
     return { ok: true, referrerUid: referrer.uid }
   } catch (e) {
     console.error('[applyReferral] erreur:', e)

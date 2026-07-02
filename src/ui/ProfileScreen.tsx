@@ -16,7 +16,7 @@ import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
   incrementUsernameChanges, USERNAME_CHANGE_COST,
 } from '../profile/profile'
-import { updateUsername, isUsernameAvailable, getUserById } from '../firebase/firestore'
+import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -139,10 +139,10 @@ export function ProfileScreen() {
     dijoujPlayed, dijoujWon,
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
-    goldHistoryPublic, avatarFrame,
+    goldHistoryPublic, statsPublic, avatarFrame,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
-    setGoldHistoryPublic,
+    setGoldHistoryPublic, setStatsPublic,
   } = useProfile()
   const { user }   = useAuth()
   const { t }      = useI18n()
@@ -169,6 +169,19 @@ export function ProfileScreen() {
     })
     return () => { cancelled = true }
   }, [user])
+
+  const [showReferrals, setShowReferrals] = useState(false)
+  const [refData, setRefData] = useState<{ completed: ReferralEntry[]; pending: ReferralEntry[] }>({ completed: [], pending: [] })
+  const [refLoading, setRefLoading] = useState(false)
+
+  const openReferrals = async () => {
+    if (!user) return
+    setShowReferrals(true)
+    setRefLoading(true)
+    const data = await getReferrals(user.uid)
+    setRefData(data)
+    setRefLoading(false)
+  }
 
   const copyReferral = async () => {
     try {
@@ -468,6 +481,11 @@ export function ProfileScreen() {
           {user && (
             <Text style={s.referralCount}>{t('referralCount').replace('{n}', String(referralCount))}</Text>
           )}
+          {user && (
+            <TouchableOpacity style={s.referralViewBtn} onPress={() => { void openReferrals() }} activeOpacity={0.8}>
+              <Text style={s.referralViewTxt}>{t('referralView')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Stats ─────────────────────────────────────────────── */}
@@ -505,14 +523,21 @@ export function ProfileScreen() {
 
         {/* ── Confidentialité ───────────────────────────────────── */}
         <View style={s.card}>
-          <Text style={s.cardLabel}>{t('historyPublicToggle')}</Text>
+          <Text style={s.cardLabel}>{t('privacy')}</Text>
           <View style={s.toggleRow}>
-            <Text style={s.toggleHint}>
-              {goldHistoryPublic ? '🎁 ✓' : '🔒'}
-            </Text>
+            <Text style={s.toggleLabel}>{t('historyPublicToggle')}</Text>
             <Switch
               value={goldHistoryPublic}
               onValueChange={setGoldHistoryPublic}
+              trackColor={{ false: 'rgba(244,236,216,0.20)', true: C.brass }}
+              thumbColor={C.bone}
+            />
+          </View>
+          <View style={s.toggleRow}>
+            <Text style={s.toggleLabel}>{t('hideStats')}</Text>
+            <Switch
+              value={!statsPublic}
+              onValueChange={(v) => setStatsPublic(!v)}
               trackColor={{ false: 'rgba(244,236,216,0.20)', true: C.brass }}
               thumbColor={C.bone}
             />
@@ -556,8 +581,65 @@ export function ProfileScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* ── Modale « Mes parrainages » ────────────────────────── */}
+      <Modal visible={showReferrals} transparent animationType="fade" onRequestClose={() => setShowReferrals(false)}>
+        <View style={s.backdrop}>
+          <View style={[s.modalCard, s.referralModalCard]}>
+            <View style={s.avatarModalHeader}>
+              <Text style={s.modalTitle}>🎁 {t('referral')}</Text>
+              <TouchableOpacity onPress={() => setShowReferrals(false)} style={s.closeBtn}>
+                <Text style={s.closeBtnTxt}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {refLoading ? (
+              <ActivityIndicator color={C.brass} style={{ marginVertical: 24 }} />
+            ) : (refData.completed.length === 0 && refData.pending.length === 0) ? (
+              <Text style={s.referralEmpty}>{t('referralNone')}</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                {refData.completed.length > 0 && (
+                  <>
+                    <Text style={s.referralSection}>✅ {t('referralDone')}</Text>
+                    {refData.completed.map((r) => (
+                      <View key={r.uid} style={s.referralRow}>
+                        <View style={s.referralRowMain}>
+                          <Text style={s.referralName} numberOfLines={1}>{r.username}</Text>
+                          <Text style={s.referralDate}>{fmtDate(r.date)}</Text>
+                        </View>
+                        <Text style={s.referralReward}>🪙 +{r.reward ?? 500}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+                {refData.pending.length > 0 && (
+                  <>
+                    <Text style={s.referralSection}>⏳ {t('referralPending')}</Text>
+                    {refData.pending.map((r) => (
+                      <View key={r.uid} style={s.referralRow}>
+                        <View style={s.referralRowMain}>
+                          <Text style={s.referralName} numberOfLines={1}>{r.username}</Text>
+                          <Text style={s.referralDate}>{fmtDate(r.date)}</Text>
+                        </View>
+                        <Text style={s.referralWaiting}>⏳</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
+}
+
+/** Date courte JJ/MM (ou vide si absente). */
+function fmtDate(d: Date | null): string {
+  if (!d) return ''
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 // ── Sous-composant stat ───────────────────────────────────────────────────────
@@ -610,7 +692,8 @@ const s = StyleSheet.create({
     letterSpacing: 2, textTransform: 'uppercase',
   },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 28, color: C.brass, marginTop: 2 },
-  toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 },
+  toggleLabel: { flex: 1, fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.bone, paddingRight: 12 },
   toggleHint: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.boneOff },
   shopBtn:    {
     backgroundColor: C.brassDim, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,
@@ -632,6 +715,23 @@ const s = StyleSheet.create({
   },
   referralShareTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
   referralCount: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, textAlign: 'center', marginTop: 2 },
+  referralViewBtn: { paddingVertical: 8, alignItems: 'center' },
+  referralViewTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass, textDecorationLine: 'underline' },
+  referralModalCard: { maxHeight: '82%' },
+  referralEmpty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', paddingVertical: 20 },
+  referralSection: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone,
+    marginTop: 12, marginBottom: 6, letterSpacing: 0.3,
+  },
+  referralRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 6,
+  },
+  referralRowMain: { flex: 1, gap: 2 },
+  referralName: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
+  referralDate: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
+  referralReward: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+  referralWaiting: { fontSize: 16 },
 
   // Stats
   statRow: {

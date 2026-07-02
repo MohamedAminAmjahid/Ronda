@@ -7,6 +7,7 @@ import {
   updateAvatar as firestoreUpdateAvatar,
   updateStats as firestoreUpdateStats,
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
+  updateStatsPublic as firestoreUpdateStatsPublic,
   updateCosmetics as firestoreUpdateCosmetics,
   applyReferral, REFERRAL_REWARD,
 } from '../firebase/firestore'
@@ -56,6 +57,8 @@ export interface Profile {
   dailyTransferDate: string
   /** Historique des cadeaux/transferts visible publiquement (true par défaut). */
   goldHistoryPublic: boolean
+  /** Statistiques visibles publiquement (true par défaut). */
+  statsPublic: boolean
   /** Cosmétiques : tapis + dos de cartes + cadre d'avatar. */
   table: string
   ownedTables: string[]
@@ -92,6 +95,7 @@ let profile: Profile = {
   dailyTransferSent: 0,
   dailyTransferDate: '',
   goldHistoryPublic: true,
+  statsPublic: true,
   table: DEFAULT_TABLE,
   ownedTables: [DEFAULT_TABLE],
   cardBack: DEFAULT_BACK,
@@ -152,6 +156,7 @@ export function loadProfile(): Promise<Profile> {
             ? parsed.dailyTransferSent : 0,
           dailyTransferDate: parsed.dailyTransferDate === todayStr() ? parsed.dailyTransferDate : todayStr(),
           goldHistoryPublic: typeof parsed.goldHistoryPublic === 'boolean' ? parsed.goldHistoryPublic : true,
+          statsPublic: typeof parsed.statsPublic === 'boolean' ? parsed.statsPublic : true,
           table:       typeof parsed.table === 'string' ? parsed.table : DEFAULT_TABLE,
           ownedTables: Array.isArray(parsed.ownedTables) ? parsed.ownedTables : [DEFAULT_TABLE],
           cardBack:    typeof parsed.cardBack === 'string' ? parsed.cardBack : DEFAULT_BACK,
@@ -168,6 +173,7 @@ export function loadProfile(): Promise<Profile> {
           avatarType: 'initial', avatarEmoji: '', avatarImage: '',
           dailyTransferSent: 0, dailyTransferDate: todayStr(),
           goldHistoryPublic: true,
+          statsPublic: true,
           table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
           avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
         }
@@ -181,6 +187,7 @@ export function loadProfile(): Promise<Profile> {
         avatarType: 'initial', avatarEmoji: '', avatarImage: '',
         dailyTransferSent: 0, dailyTransferDate: todayStr(),
         goldHistoryPublic: true,
+        statsPublic: true,
         table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
         avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
       }
@@ -357,6 +364,24 @@ export function setGoldHistoryPublic(value: boolean): void {
 export function setGoldHistoryPublicLocal(value: boolean): void {
   if (value === profile.goldHistoryPublic) return
   profile = { ...profile, goldHistoryPublic: value }
+  void persist()
+  emit()
+}
+
+/** Active/désactive la visibilité publique des stats (local + Firestore). */
+export function setStatsPublic(value: boolean): void {
+  if (value === profile.statsPublic) return
+  profile = { ...profile, statsPublic: value }
+  void persist()
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (uid) void firestoreUpdateStatsPublic(uid, value).catch(() => {})
+  emit()
+}
+
+/** Applique la valeur Firebase au login (local uniquement). */
+export function setStatsPublicLocal(value: boolean): void {
+  if (value === profile.statsPublic) return
+  profile = { ...profile, statsPublic: value }
   void persist()
   emit()
 }

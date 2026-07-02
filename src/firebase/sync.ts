@@ -1,10 +1,13 @@
 import { useEffect } from 'react'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from './auth'
-import { createOrUpdateUser } from './firestore'
+import { createOrUpdateUser, registerPendingReferral } from './firestore'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
-  setCosmeticsLocal,
+  setStatsPublicLocal, setCosmeticsLocal,
 } from '../profile/profile'
+
+const REFERRAL_CODE_KEY = 'ronda_referral_code'
 
 /**
  * Synchronise username, gold et usernameChanges local ↔ Firebase à la connexion :
@@ -26,7 +29,7 @@ export function useFirebaseProfileSync(): void {
         const p = getProfile()
         console.log('[sync] login uid:', user.uid, '| username local:', p.username)
         const {
-          username, gold, usernameChanges, goldHistoryPublic,
+          username, gold, usernameChanges, goldHistoryPublic, statsPublic,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
         } = await createOrUpdateUser(user, {
           username: p.username,
@@ -52,8 +55,16 @@ export function useFirebaseProfileSync(): void {
           setGold(gold)
           setUsernameChanges(usernameChanges)
           setGoldHistoryPublicLocal(goldHistoryPublic)
+          setStatsPublicLocal(statsPublic)
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
         }
+
+        // Parrainage : enregistre le filleul « en attente » chez le parrain (le
+        // crédit sera appliqué à sa 1re partie). No-op si déjà parrainé.
+        try {
+          const code = await AsyncStorage.getItem(REFERRAL_CODE_KEY)
+          if (code) void registerPendingReferral(code, user.uid, username || getProfile().username)
+        } catch { /* stockage indisponible */ }
       } catch (err) {
         console.warn('[sync] hors-ligne ou règles Firestore :', err)
         // on garde le profil local

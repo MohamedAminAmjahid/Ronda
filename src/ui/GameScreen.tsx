@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Animated, Easing, Platform, View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native'
+import { Animated, Easing, Platform, View, Text, TouchableOpacity, StyleSheet, Modal, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import ReAnimated, {
   useSharedValue,
@@ -720,6 +720,26 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   // pas à chaque re-render (animations, états transitoires…).
   const sortedTable = useMemo(() => sortTableCards(view.state.table), [view.state.table])
 
+  // Pulsation Ronda : démarre quand disponible, s'arrête sinon.
+  // (Déclaré AVANT tout return conditionnel pour ne jamais changer le nombre de
+  // hooks entre le rituel et la partie — sinon React plante et affiche un écran blanc.)
+  const canDeclareNow = view.canDeclare
+  useEffect(() => {
+    if (canDeclareNow) {
+      rondaPulseAnim.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(rondaPulse, { toValue: 1.08, duration: 500, useNativeDriver: true }),
+          Animated.timing(rondaPulse, { toValue: 1,    duration: 500, useNativeDriver: true }),
+        ]),
+      )
+      rondaPulseAnim.current.start()
+    } else {
+      rondaPulseAnim.current?.stop()
+      rondaPulse.setValue(1)
+    }
+    return () => { rondaPulseAnim.current?.stop() }
+  }, [canDeclareNow, rondaPulse])
+
   // ── Sélection du rituel (avant la partie) ─────────────────────────────────
   if (appPhase === 'RITUAL_PICKER') {
     if (!selectedRitual) {
@@ -736,25 +756,18 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
 
   // ── Partie en cours ───────────────────────────────────────────────────────
   const { state, isHumanTurn, canDeclare, canContest, contestValue, isGameOver, isDealEnd, isBotThinking } = view
+
+  // Garde : état non prêt (init) → écran de chargement plutôt qu'un rendu blanc.
+  if (!state || !state.players?.[HUMAN_ID] || !state.players?.[BOT_ID]) {
+    return (
+      <SafeAreaView style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator color="#C9A227" size="large" />
+      </SafeAreaView>
+    )
+  }
+
   const human = state.players[HUMAN_ID]
   const bot   = state.players[BOT_ID]
-
-  // Pulsation Ronda : démarre quand disponible, s'arrête sinon
-  useEffect(() => {
-    if (canDeclare) {
-      rondaPulseAnim.current = Animated.loop(
-        Animated.sequence([
-          Animated.timing(rondaPulse, { toValue: 1.08, duration: 500, useNativeDriver: true }),
-          Animated.timing(rondaPulse, { toValue: 1,    duration: 500, useNativeDriver: true }),
-        ]),
-      )
-      rondaPulseAnim.current.start()
-    } else {
-      rondaPulseAnim.current?.stop()
-      rondaPulse.setValue(1)
-    }
-    return () => { rondaPulseAnim.current?.stop() }
-  }, [canDeclare, rondaPulse])
 
   if (isGameOver) {
     return (

@@ -133,24 +133,30 @@ export function FriendProfileScreen({ onBack }: Props) {
 
             {/* ── Stats ── */}
             <Text style={s.sectionLabel}>{t('statsTitle')}</Text>
-            <View style={s.statsRow}>
-              <StatCard
-                title="🃏 RONDA"
-                played={profile.rondaPlayed}
-                won={profile.rondaWon}
-                playedLbl={t('gamesPlayed')}
-                wonLbl={t('gamesWon')}
-                rateLbl={t('winRateLabel')}
-              />
-              <StatCard
-                title="🎴 DI JOUJ"
-                played={profile.dijoujPlayed}
-                won={profile.dijoujWon}
-                playedLbl={t('gamesPlayed')}
-                wonLbl={t('gamesWon')}
-                rateLbl={t('winRateLabel')}
-              />
-            </View>
+            {profile.statsPublic === false ? (
+              <View style={s.card}>
+                <Text style={s.historyPrivate}>📊 {t('statsHidden')}</Text>
+              </View>
+            ) : (
+              <View style={s.statsRow}>
+                <StatCard
+                  title="🃏 RONDA"
+                  played={profile.rondaPlayed}
+                  won={profile.rondaWon}
+                  playedLbl={t('gamesPlayed')}
+                  wonLbl={t('gamesWon')}
+                  rateLbl={t('winRateLabel')}
+                />
+                <StatCard
+                  title="🎴 DI JOUJ"
+                  played={profile.dijoujPlayed}
+                  won={profile.dijoujWon}
+                  playedLbl={t('gamesPlayed')}
+                  wonLbl={t('gamesWon')}
+                  rateLbl={t('winRateLabel')}
+                />
+              </View>
+            )}
 
             {/* ── Historique des cadeaux ── */}
             <Text style={s.sectionLabel}>{t('goldHistory')}</Text>

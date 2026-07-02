@@ -1,10 +1,15 @@
 import { memo } from 'react'
-import { View, Image, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Image, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Svg, Polygon } from 'react-native-svg'
-import type { Card as CardType } from '../../engine/types'
+import type { Card as CardType, Suit } from '../../engine/types'
 import { getCardImage } from '../assets/cards'
 import { useProfile } from '../../profile/useProfile'
 import { backDesign } from '../../cosmetics/catalog'
+
+// Couleur par enseigne — sert au repli visuel quand l'image n'est pas (encore) chargée.
+const SUIT_COLOR: Record<Suit, string> = {
+  oros: '#C9A227', copas: '#C0392B', espadas: '#2980B9', bastos: '#27AE60',
+}
 
 // ── Tailles ──────────────────────────────────────────────────────────────────
 
@@ -49,11 +54,18 @@ export const CardFace = memo(function CardFace({
         highlighted && styles.highlightedBorder,
       ]}
     >
+      {/* Repli visuel (valeur + couleur d'enseigne) affiché tant que l'image
+          n'est pas chargée, ou si elle est absente — évite la carte blanche. */}
+      <View style={styles.fallback}>
+        <Text style={[styles.fbValue, { color: SUIT_COLOR[card.suit] }]}>{card.value}</Text>
+        <View style={[styles.fbSuit, { backgroundColor: SUIT_COLOR[card.suit] }]} />
+      </View>
       {img && (
         <Image
           source={img}
-          style={{ width: '100%', height: '100%' }}
+          style={styles.cardImg}
           resizeMode="cover"
+          fadeDuration={0}
         />
       )}
     </View>
@@ -101,6 +113,14 @@ export const CardBack = memo(function CardBack({ size = 'lg' }: { size?: CardSiz
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  cardImg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
+  fallback: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', gap: 4,
+    backgroundColor: '#F4ECD8',
+  },
+  fbValue: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, fontWeight: '700' },
+  fbSuit:  { width: 10, height: 10, borderRadius: 5 },
   cardWrap: {
     borderRadius:    5,
     overflow:        'hidden',
