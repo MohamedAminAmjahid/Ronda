@@ -106,8 +106,12 @@ export function SpinWheelModal({ canSpin, onSpin, onClose }: Props) {
     setPhase('spinning')
 
     const idx = await onSpin()
-    // Angle final : le segment idx doit être sous le pointeur (haut)
-    const targetDeg = 360 * 5 + idx * SLICE + SLICE / 2
+    // Rotation clockwise de θ déplace le centre du segment i vers (i*SLICE + SLICE/2 + θ) mod 360.
+    // Pour que le segment idx soit sous le pointeur (0° = haut) :
+    //   θ = 360 - idx*SLICE - SLICE/2  (dans le premier tour)
+    // On y ajoute 5 tours complets pour l'effet visuel.
+    const targetAngle = 360 - idx * SLICE - SLICE / 2
+    const targetDeg   = 360 * 5 + targetAngle
     const total = currentDeg + targetDeg
 
     spinAnim.setValue(currentDeg)
