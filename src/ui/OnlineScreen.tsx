@@ -124,7 +124,17 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
 
   // ── En attente (connexion / adversaire) ────────────────────────────────────
   if (connectionStatus === 'connecting' || connectionStatus === 'waiting') {
-    return <WaitingScreen code={roomCode} onCancel={() => game.newGame()} />
+    return (
+      <WaitingScreen
+        code={roomCode}
+        mode={mode}
+        onCancel={() => game.newGame()}
+        onBotFallback={(name, emoji) => {
+          game.newGame()
+          router.push(`/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` as Href)
+        }}
+      />
+    )
   }
 
   // ── Étapes pseudo / choix (idle ou déconnecté) ─────────────────────────────
@@ -222,15 +232,35 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   )
 }
 
-// ── Écran d'attente avec pulsation ──────────────────────────────────────────────
+// ── Constantes bot de secours ────────────────────────────────────────────────
 
-function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () => void }) {
+const BOT_WAIT_SECS = 60
+const MOROCCAN_NAMES: string[] = ['Fatima', 'Khadija', 'Nour', 'Salma', 'Hind', 'Zineb', 'Meryem']
+const BOT_EMOJIS: string[]     = ['👩‍🦱', '👩🏻', '👩🏽‍🦳', '👩‍🦰']
+
+// ── Écran d'attente ──────────────────────────────────────────────────────────
+
+function WaitingScreen({
+  code, mode = 'quick', onCancel, onBotFallback,
+}: {
+  code: string | null
+  mode?: 'quick' | 'friend'
+  onCancel: () => void
+  onBotFallback?: (name: string, emoji: string) => void
+}) {
   const { t: tr } = useI18n()
-  const pulse = useRef(new Animated.Value(0.4)).current
+  const pulse     = useRef(new Animated.Value(0.4)).current
+  const barAnim   = useRef(new Animated.Value(0)).current
+  const barPulse  = useRef(new Animated.Value(1)).current
+  const calledRef = useRef(false)
+  const [elapsed, setElapsed] = useState(0)
+  const [copied, setCopied]   = useState(false)
+
+  // Texte principal — pulse d'opacité
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,   duration: 800, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true }),
       ]),
     )
@@ -238,7 +268,47 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
     return () => loop.stop()
   }, [])
 
-  const [copied, setCopied] = useState(false)
+  // Barre de progression — pulse d'opacité (quick uniquement)
+  useEffect(() => {
+    if (mode !== 'quick') return
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(barPulse, { toValue: 0.55, duration: 600, useNativeDriver: true }),
+        Animated.timing(barPulse, { toValue: 1,    duration: 600, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  // Compteur 1 s (quick uniquement)
+  useEffect(() => {
+    if (mode !== 'quick') return
+    const id = setInterval(() => { setElapsed(s => s + 1) }, 1000)
+    return () => clearInterval(id)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
+
+  // Réagit aux changements de elapsed : anime la barre + déclenche le bot
+  useEffect(() => {
+    if (mode !== 'quick' || calledRef.current) return
+    Animated.timing(barAnim, {
+      toValue: Math.min(elapsed / BOT_WAIT_SECS, 1),
+      duration: 900,
+      useNativeDriver: false,
+    }).start()
+    if (elapsed >= BOT_WAIT_SECS && onBotFallback) {
+      calledRef.current = true
+      const name  = MOROCCAN_NAMES[Math.floor(Math.random() * MOROCCAN_NAMES.length)] ?? 'Fatima'
+      const emoji = BOT_EMOJIS[Math.floor(Math.random() * BOT_EMOJIS.length)] ?? '👩🏻'
+      onBotFallback(name, emoji)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsed])
+
+  const formatTime = (sec: number) =>
+    `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 
   const shareCode = async () => {
     if (!code) return
@@ -247,7 +317,7 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
         message: `Rejoins ma partie de Ronda ! 🎴\nCode : ${code}\nLien : ${GAME_URL}/join?code=${code}`,
       })
     } catch {
-      // partage annulé / indisponible — sans effet
+      // partage annulé / indisponible
     }
   }
 
@@ -258,9 +328,16 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch {
-      // clipboard indisponible — sans effet
+      // clipboard indisponible
     }
   }
+
+  const barWidthPct = barAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: ['0%', '100%'],
+  })
+
+  const remaining = Math.max(0, BOT_WAIT_SECS - elapsed)
 
   return (
     <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
@@ -269,7 +346,28 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
           {tr('waitingOpponent')}
         </Animated.Text>
 
-        {code ? (
+        {/* Mode recherche rapide : timer + barre + hint bot */}
+        {mode === 'quick' && (
+          <>
+            <Text style={s.searchTimer}>⏳ Recherche en cours... {formatTime(elapsed)}</Text>
+            <View style={s.progressTrack}>
+              <Animated.View
+                style={[s.progressBar, {
+                  width:   barWidthPct as unknown as Animated.AnimatedInterpolation<string | number>,
+                  opacity: barPulse,
+                }]}
+              />
+            </View>
+            <Text style={s.botHint}>
+              {remaining > 0
+                ? `Un bot rejoindra dans ${remaining}s si aucun joueur n'est trouvé`
+                : 'Lancement contre un bot…'}
+            </Text>
+          </>
+        )}
+
+        {/* Mode ami : affiche le code de la chambre */}
+        {mode === 'friend' && code && (
           <>
             <View style={s.codeBox}>
               <Text style={s.codeLabel}>{tr('joinWithCode')}</Text>
@@ -284,9 +382,6 @@ function WaitingScreen({ code, onCancel }: { code: string | null; onCancel: () =
               </TouchableOpacity>
             </View>
           </>
-        ) : (
-          // Partie rapide (sans code) : on attend juste un adversaire.
-          <Text style={s.codeLabel}>{tr('waitingOpponent')}</Text>
         )}
 
         <TouchableOpacity style={s.btnCancel} onPress={onCancel}>
@@ -347,7 +442,18 @@ const s = StyleSheet.create({
   },
   errorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.bone },
 
-  waitTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
+  waitTxt:      { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
+  searchTimer:  { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass, textAlign: 'center' },
+  progressTrack: {
+    width: '100%', height: 6,
+    backgroundColor: 'rgba(201,162,39,0.18)',
+    borderRadius: 3, overflow: 'hidden',
+  },
+  progressBar: { height: '100%', backgroundColor: C.brass, borderRadius: 3 },
+  botHint: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff,
+    textAlign: 'center', lineHeight: 16,
+  },
   codeBox: {
     backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 28,
     alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',

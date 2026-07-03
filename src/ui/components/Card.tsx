@@ -62,6 +62,7 @@ export const CardFace = memo(function CardFace({
       </View>
       {img && (
         <Image
+          key={`${card.suit}_${card.value}`}
           source={img}
           style={styles.cardImg}
           resizeMode="cover"
