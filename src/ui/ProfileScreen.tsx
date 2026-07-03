@@ -14,7 +14,7 @@ import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
 import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
-  incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired,
+  incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
 } from '../profile/profile'
 import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
 
@@ -287,7 +287,12 @@ export function ProfileScreen() {
 
   const handleSignOut = async () => {
     setAuthLoading(true)
-    try { await signOut() } finally { setAuthLoading(false) }
+    try {
+      await signOut()
+      await resetProfile()
+    } finally {
+      setAuthLoading(false)
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

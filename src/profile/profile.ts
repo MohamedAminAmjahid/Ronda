@@ -670,3 +670,38 @@ export function clearActiveRoom(): void {
   activeRoom = null
   void AsyncStorage.removeItem(ACTIVE_ROOM_KEY).catch(() => {})
 }
+
+/**
+ * Réinitialise complètement le profil local après une déconnexion.
+ * Génère un nouveau pseudo aléatoire, remet gold/stats/cosmétiques à zéro,
+ * vide les clés AsyncStorage du profil.
+ */
+export async function resetProfile(): Promise<void> {
+  profile = {
+    username: randomUsername(),
+    gold: STARTING_GOLD,
+    gamesPlayed: 0, gamesWon: 0, usernameChanges: 0,
+    rondaPlayed: 0, rondaWon: 0, dijoujPlayed: 0, dijoujWon: 0,
+    avatarType: 'initial', avatarEmoji: '', avatarImage: '',
+    dailyTransferSent: 0, dailyTransferDate: todayStr(),
+    goldHistoryPublic: true,
+    statsPublic: true,
+    table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE],
+    cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
+    avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
+    xp: 0, level: 1,
+  }
+  // Réinitialise les flags de chargement pour que loadProfile() fonctionne proprement
+  // si l'utilisateur se reconnecte dans la même session.
+  loaded = true
+  loadingPromise = null
+  activeRoom = null
+  activeRoomLoaded = true
+  await Promise.allSettled([
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(profile)),
+    AsyncStorage.removeItem(ACTIVE_ROOM_KEY),
+    AsyncStorage.removeItem(REFERRAL_CODE_KEY),
+    AsyncStorage.removeItem(LEVELUP_KEY),
+  ])
+  emit()
+}
