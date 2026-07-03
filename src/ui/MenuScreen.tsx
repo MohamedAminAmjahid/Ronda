@@ -149,13 +149,13 @@ function QuickBtn({
 
 const qb = StyleSheet.create({
   btn: {
-    width: 52, height: 52, borderRadius: 26,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: 'rgba(0,0,0,0.55)',
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
     alignItems: 'center', justifyContent: 'center', gap: 1,
   },
   btnDisabled: { opacity: 0.4 },
-  icon:  { fontSize: 22, lineHeight: 26 },
+  icon:  { fontSize: 18, lineHeight: 22 },
   label: { fontFamily: 'Cairo_400Regular', fontSize: 9, color: 'rgba(244,236,216,0.55)', lineHeight: 11 },
   badge: {
     position: 'absolute', top: 3, right: 3,
@@ -219,11 +219,6 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const [toastGold,     setToastGold]     = useState<number | null>(null)
   const toastAnim    = useRef(new Animated.Value(0)).current
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Mesure layout pour centrer quickBar sur la zone des boutons d'action
-  const [heroH,   setHeroH]   = useState(230)
-  const [actionH, setActionH] = useState(200)
-  const qbTop = 8 + heroH + 16  // scrollPaddingTop + heroHeight + gap
 
   const handleOpenChest = async () => {
     if (!chest) return
@@ -386,7 +381,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
           {/* ── Hero ──────────────────────────────────────────── */}
-          <View style={s.hero} onLayout={e => setHeroH(e.nativeEvent.layout.height)}>
+          <View style={s.hero}>
 
             {/* Barre profil : avatar+nom à gauche, globe+gold à droite */}
             {user ? (
@@ -444,31 +439,48 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           </View>
 
           {/* ── 3 boutons d'action ──────────────────────────────── */}
-          <View style={s.actionSection} onLayout={e => setActionH(e.nativeEvent.layout.height)}>
+          <View style={s.actionSection}>
 
-            <TouchableOpacity style={s.actionBtnOnline} onPress={() => setAction('online')} activeOpacity={0.75}>
-              <Text style={s.actionBtnIcon}>⚡</Text>
-              <View style={s.actionBtnBody}>
-                <Text style={s.actionBtnLblDark}>{t('playOnline')}</Text>
-                <Text style={s.actionBtnSubDark}>{t('onlineSub')}</Text>
-              </View>
-            </TouchableOpacity>
+            <View style={s.actionRow}>
+              {!!user && <QuickBtn icon="🔥" label="Streak" hasBadge={!streakClaimed && streakPending !== null} onPress={() => setShowStreak(true)} />}
+              <TouchableOpacity style={[s.actionBtnOnline, s.actionBtnFlex]} onPress={() => setAction('online')} activeOpacity={0.75}>
+                <Text style={s.actionBtnIcon}>⚡</Text>
+                <View style={s.actionBtnBody}>
+                  <Text style={s.actionBtnLblDark}>{t('playOnline')}</Text>
+                  <Text style={s.actionBtnSubDark}>{t('onlineSub')}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity style={s.actionBtnFriend} onPress={() => setAction('friend')} activeOpacity={0.75}>
-              <Text style={s.actionBtnIcon}>👥</Text>
-              <View style={s.actionBtnBody}>
-                <Text style={s.actionBtnLbl}>{t('playWithFriend')}</Text>
-                <Text style={s.actionBtnSub}>{t('friendSub')}</Text>
-              </View>
-            </TouchableOpacity>
+            <View style={s.actionRow}>
+              {!!user && <QuickBtn icon="🎰" label="Roue" hasBadge={canSpin} onPress={() => setShowSpin(true)} />}
+              <TouchableOpacity style={[s.actionBtnFriend, s.actionBtnFlex]} onPress={() => setAction('friend')} activeOpacity={0.75}>
+                <Text style={s.actionBtnIcon}>👥</Text>
+                <View style={s.actionBtnBody}>
+                  <Text style={s.actionBtnLbl}>{t('playWithFriend')}</Text>
+                  <Text style={s.actionBtnSub}>{t('friendSub')}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
-            <TouchableOpacity style={s.actionBtnTraining} onPress={() => setAction('training')} activeOpacity={0.75}>
-              <Text style={[s.actionBtnIcon, s.trainingIcon]}>🤖</Text>
-              <View style={s.actionBtnBody}>
-                <Text style={s.actionBtnLblMuted}>{t('training')}</Text>
-                <Text style={s.actionBtnSubMuted}>{t('trainingSub')}</Text>
-              </View>
-            </TouchableOpacity>
+            <View style={s.actionRow}>
+              {!!user && (
+                <QuickBtn
+                  svgIcon={<ChestSVG level={chest?.level ?? 'bronze'} size={24} />}
+                  label={chest ? 'Coffre' : lastChestGold !== null ? `+${lastChestGold}🪙` : 'Coffre'}
+                  hasBadge={chest !== null}
+                  disabled={chest === null}
+                  onPress={() => { if (chest) setShowChest(true) }}
+                />
+              )}
+              <TouchableOpacity style={[s.actionBtnTraining, s.actionBtnFlex]} onPress={() => setAction('training')} activeOpacity={0.75}>
+                <Text style={[s.actionBtnIcon, s.trainingIcon]}>🤖</Text>
+                <View style={s.actionBtnBody}>
+                  <Text style={s.actionBtnLblMuted}>{t('training')}</Text>
+                  <Text style={s.actionBtnSubMuted}>{t('trainingSub')}</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
 
           </View>
 
@@ -483,34 +495,6 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
         </ScrollView>
       </View>
-
-      {/* ── QuickBar — overlay absolu centré sur la zone d'action ── */}
-      {!!user && (
-        <View
-          style={[s.quickBar, { top: qbTop, height: actionH }]}
-          pointerEvents="box-none"
-        >
-          <QuickBtn
-            icon="🔥"
-            label="Streak"
-            hasBadge={!streakClaimed && streakPending !== null}
-            onPress={() => setShowStreak(true)}
-          />
-          <QuickBtn
-            icon="🎰"
-            label="Roue"
-            hasBadge={canSpin}
-            onPress={() => setShowSpin(true)}
-          />
-          <QuickBtn
-            svgIcon={<ChestSVG level={chest?.level ?? 'bronze'} size={28} />}
-            label={chest ? 'Coffre' : lastChestGold !== null ? `+${lastChestGold}🪙` : 'Coffre'}
-            hasBadge={chest !== null}
-            disabled={chest === null}
-            onPress={() => { if (chest) setShowChest(true) }}
-          />
-        </View>
-      )}
 
       {/* ── Modales ──────────────────────────────────────────────── */}
       {showLangModal && (
@@ -571,16 +555,6 @@ const s = StyleSheet.create({
     zIndex: 99,
   },
   chestToastTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: '#C9A227' },
-
-  // QuickBar — absolu dans SafeAreaView, centré sur la zone d'action
-  quickBar: {
-    position: 'absolute',
-    right: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    zIndex: 20,
-  },
 
   // Scrollable
   scroll:        { flex: 1 },
@@ -643,23 +617,25 @@ const s = StyleSheet.create({
   },
 
   // 3 boutons d'action
-  actionSection: { gap: 12 },
+  actionSection: { gap: 10 },
+  actionRow:     { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  actionBtnFlex: { flex: 1 },
 
   actionBtnOnline: {
     flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
-    paddingVertical: 20, paddingHorizontal: 22,
+    paddingVertical: 14, paddingHorizontal: 22,
     backgroundColor: '#D4A827',
     shadowColor: C.brass, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.50, shadowRadius: 16, elevation: 10,
   },
   actionBtnFriend: {
     flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
-    paddingVertical: 18, paddingHorizontal: 22,
+    paddingVertical: 12, paddingHorizontal: 22,
     borderWidth: 1.5, borderColor: 'rgba(201,162,39,0.55)', backgroundColor: 'rgba(201,162,39,0.11)',
     shadowColor: '#8B1A4A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 7,
   },
   actionBtnTraining: {
     flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
-    paddingVertical: 16, paddingHorizontal: 22,
+    paddingVertical: 10, paddingHorizontal: 22,
     borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,236,216,0.35)',
     backgroundColor: 'rgba(0,0,0,0.25)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 5,
