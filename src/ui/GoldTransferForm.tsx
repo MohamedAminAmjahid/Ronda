@@ -31,7 +31,7 @@ interface Props {
 export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
   const { t } = useI18n()
   const {
-    transferGold, dailyTransferSent, dailyTransferDate, DAILY_TRANSFER_LIMIT: LIMIT,
+    transferGold, dailyTransferSent, dailyTransferDate, DAILY_TRANSFER_LIMIT: LIMIT, gold,
   } = useProfile()
 
   const sentToday = dailyTransferDate === todayKey() ? dailyTransferSent : 0
@@ -43,9 +43,11 @@ export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
   const [okMsg, setOkMsg]     = useState<string | null>(null)
 
   const amount = parseInt(input, 10) || 0
+  const exceedsQuota   = amount > remaining
+  const exceedsBalance = amount > gold
 
   const submit = async () => {
-    if (amount <= 0 || sending) return
+    if (amount <= 0 || sending || exceedsQuota || exceedsBalance) return
     setSending(true); setErrMsg(null); setOkMsg(null)
     const res = await transferGold(targetUid, amount, targetName)
     setSending(false)
@@ -63,11 +65,23 @@ export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
     }
   }
 
+  const isDisabled = remaining <= 0 || amount <= 0 || sending || exceedsQuota || exceedsBalance
+
+  const btnLabel = () => {
+    if (sending) return '…'
+    if (remaining <= 0 || exceedsQuota) return t('dailyLimitReached').replace('{max}', String(LIMIT))
+    if (exceedsBalance) return t('insufficientBalance')
+    return t('sendAction')
+  }
+
   return (
     <View style={s.wrap}>
       <Text style={s.quotaTxt}>
         {t('transferRemaining').replace('{n}', String(remaining)).replace('{max}', String(LIMIT))}
       </Text>
+      {remaining <= 0 && (
+        <Text style={s.errMsg}>{t('dailyLimitReached').replace('{max}', String(LIMIT))}</Text>
+      )}
       <Text style={s.label}>{t('transferAmountLabel')}</Text>
       <View style={s.inputRow}>
         <Text style={s.coin}>🪙</Text>
@@ -75,20 +89,20 @@ export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
           style={s.input}
           value={input}
           onChangeText={(v) => { setInput(v.replace(/[^0-9]/g, '').slice(0, 4)); setOkMsg(null); setErrMsg(null) }}
-          placeholder={`max ${remaining}`}
+          placeholder={remaining <= 0 ? '—' : `max ${Math.min(remaining, gold)}`}
           placeholderTextColor={C.boneOff}
           keyboardType="number-pad"
           inputMode="numeric"
         />
       </View>
       <TouchableOpacity
-        style={[s.btn, (amount <= 0 || sending) && s.btnDisabled]}
+        style={[s.btn, isDisabled && s.btnDisabled]}
         onPress={submit}
-        disabled={amount <= 0 || sending}
+        disabled={isDisabled}
         activeOpacity={0.85}
       >
-        <Text style={[s.btnTxt, (amount <= 0 || sending) && s.btnTxtDisabled]}>
-          {sending ? '…' : t('sendAction')}
+        <Text style={[s.btnTxt, isDisabled && s.btnTxtDisabled]}>
+          {btnLabel()}
         </Text>
       </TouchableOpacity>
 
