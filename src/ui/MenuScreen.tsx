@@ -30,7 +30,7 @@ const C = {
   brass:       '#C9A227',
   brassBorder: 'rgba(201,162,39,0.30)',
   bone:        '#F4ECD8',
-  boneOff:     'rgba(244,236,216,0.45)',
+  boneOff:     'rgba(244,236,216,0.60)',
   boneGhost:   'rgba(244,236,216,0.12)',
   ink:         '#1C2622',
 } as const
@@ -446,7 +446,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           {/* ── 3 boutons d'action ──────────────────────────────── */}
           <View style={s.actionSection} onLayout={e => setActionH(e.nativeEvent.layout.height)}>
 
-            <TouchableOpacity style={s.actionBtnOnline} onPress={() => setAction('online')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.actionBtnOnline} onPress={() => setAction('online')} activeOpacity={0.75}>
               <Text style={s.actionBtnIcon}>⚡</Text>
               <View style={s.actionBtnBody}>
                 <Text style={s.actionBtnLblDark}>{t('playOnline')}</Text>
@@ -454,7 +454,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
               </View>
             </TouchableOpacity>
 
-            <TouchableOpacity style={s.actionBtnFriend} onPress={() => setAction('friend')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.actionBtnFriend} onPress={() => setAction('friend')} activeOpacity={0.75}>
               <Text style={s.actionBtnIcon}>👥</Text>
               <View style={s.actionBtnBody}>
                 <Text style={s.actionBtnLbl}>{t('playWithFriend')}</Text>
@@ -646,33 +646,33 @@ const s = StyleSheet.create({
   actionSection: { gap: 12 },
 
   actionBtnOnline: {
-    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
     paddingVertical: 20, paddingHorizontal: 22,
-    backgroundColor: C.brass,
-    shadowColor: C.brass, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.45, shadowRadius: 12, elevation: 8,
+    backgroundColor: '#D4A827',
+    shadowColor: C.brass, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.50, shadowRadius: 16, elevation: 10,
   },
   actionBtnFriend: {
-    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
     paddingVertical: 18, paddingHorizontal: 22,
-    borderWidth: 1.5, borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.07)',
+    borderWidth: 1.5, borderColor: 'rgba(201,162,39,0.55)', backgroundColor: 'rgba(201,162,39,0.11)',
     shadowColor: '#8B1A4A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 7,
   },
   actionBtnTraining: {
-    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 20,
     paddingVertical: 16, paddingHorizontal: 22,
-    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,236,216,0.22)',
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,236,216,0.35)',
     backgroundColor: 'rgba(0,0,0,0.25)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 5,
   },
   actionBtnIcon:     { fontSize: 26 },
   trainingIcon:      { opacity: 0.70 },
   actionBtnBody:     { gap: 2 },
-  actionBtnLblDark:  { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.ink, letterSpacing: 0.3 },
+  actionBtnLblDark:  { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.ink, letterSpacing: 0.5 },
   actionBtnSubDark:  { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(28,38,34,0.60)' },
-  actionBtnLbl:      { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.3 },
+  actionBtnLbl:      { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.5 },
   actionBtnSub:      { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff },
-  actionBtnLblMuted: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: 'rgba(244,236,216,0.45)', letterSpacing: 0.3 },
-  actionBtnSubMuted: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.28)' },
+  actionBtnLblMuted: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: 'rgba(244,236,216,0.60)', letterSpacing: 0.5 },
+  actionBtnSubMuted: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.60)' },
 
   // Liens texte (sans règles/crédits)
   textLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 4 },

@@ -29,7 +29,7 @@ const C = {
   brassDim:    'rgba(201,162,39,0.18)',
   brassBorder: 'rgba(201,162,39,0.30)',
   bone:        '#F4ECD8',
-  boneOff:     'rgba(244,236,216,0.50)',
+  boneOff:     'rgba(244,236,216,0.60)',
   ghost:       'rgba(244,236,216,0.10)',
   red:         '#C0392B',
   green:       '#27AE60',
@@ -774,7 +774,7 @@ function StatCell({ label, value }: { label: string; value: string | number }) {
 const sc = StyleSheet.create({
   cell:  { alignItems: 'center', flex: 1 },
   value: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: '#C9A227' },
-  label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.50)', letterSpacing: 0.5 },
+  label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.60)', letterSpacing: 0.5 },
 })
 
 function WinRateCell({ pct }: { pct: number }) {
@@ -797,7 +797,7 @@ const wrc = StyleSheet.create({
     backgroundColor: 'rgba(201,162,39,0.15)', overflow: 'hidden', marginVertical: 2,
   },
   fill:  { height: 4, backgroundColor: '#C9A227', borderRadius: 2 },
-  label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.50)', letterSpacing: 0.5 },
+  label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.60)', letterSpacing: 0.5 },
 })
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -841,13 +841,14 @@ const s = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: C.card, borderRadius: 16, padding: 18, gap: 12,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.12)',
+    backgroundColor: C.card, borderRadius: 18, padding: 18, gap: 12,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 7,
   },
   cardRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardLabel: {
     fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff,
-    letterSpacing: 2, textTransform: 'uppercase',
+    letterSpacing: 2.5, textTransform: 'uppercase',
   },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 28, color: C.brass, marginTop: 2 },
   toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 },

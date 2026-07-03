@@ -30,7 +30,7 @@ const C = {
   clay:    '#B5532A',
   bone:    '#F4ECD8',
   ink:     '#1C2622',
-  boneOff: 'rgba(244,236,216,0.45)',
+  boneOff: 'rgba(244,236,216,0.60)',
 } as const
 
 const GAME_URL = 'https://ronda-virid.vercel.app'
@@ -749,9 +749,9 @@ const s = StyleSheet.create({
   scroll: { paddingVertical: 12, gap: 14, paddingBottom: 32 },
 
   card: {
-    backgroundColor: 'rgba(0,0,0,0.32)', borderRadius: 16, padding: 16, gap: 10,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 10, elevation: 5,
+    backgroundColor: 'rgba(0,0,0,0.32)', borderRadius: 18, padding: 16, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 7,
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone },
@@ -815,16 +815,16 @@ const s = StyleSheet.create({
 
   sectionLabel: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass,
-    letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6, marginLeft: 2,
+    letterSpacing: 2.0, textTransform: 'uppercase', marginTop: 6, marginLeft: 2,
   },
   packGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
-  shimmerOverflow: { overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 14 },
+  shimmerOverflow: { overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 18 },
   pack: {
-    width: '47%', backgroundColor: C.deep, borderRadius: 14, paddingVertical: 18,
+    width: '47%', backgroundColor: C.deep, borderRadius: 18, paddingVertical: 18,
     paddingHorizontal: 12, alignItems: 'center', gap: 4,
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
     overflow: 'hidden', position: 'relative',
-    shadowColor: '#C9A227', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.20, shadowRadius: 8, elevation: 4,
+    shadowColor: '#C9A227', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.35, shadowRadius: 14, elevation: 7,
   },
   packCoin: { fontSize: 26 },
   packGold: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
