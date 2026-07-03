@@ -50,7 +50,7 @@ function TabItem({
   return (
     <TouchableOpacity style={s.tab} onPress={onPress} activeOpacity={1}>
       <Animated.View style={[s.tabInner, { transform: [{ scale }] }]}>
-        {active && <View style={s.activeBar} />}
+        {active && <View style={s.activePill} />}
         <View style={s.iconWrap}>
           <Text style={[s.icon, active && s.iconActive]}>{tab.icon}</Text>
           {badge > 0 && (
@@ -146,23 +146,28 @@ export function BottomNav() {
 const s = StyleSheet.create({
   bar: {
     flexDirection: 'row',
-    backgroundColor: C.bg,
+    backgroundColor: 'rgba(13,13,26,0.97)',
     borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingTop: 6,
+    borderTopColor: 'rgba(201,162,39,0.30)',
+    paddingTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.40,
+    shadowRadius: 10,
+    elevation: 14,
     ...Platform.select({ web: { position: 'sticky' as never, bottom: 0 } as object, default: {} }),
   },
 
   tab:      { flex: 1 },
-  tabInner: { alignItems: 'center', paddingVertical: 4, gap: 3 },
+  tabInner: { alignItems: 'center', paddingVertical: 5, gap: 3 },
 
-  activeBar: {
+  activePill: {
     position: 'absolute',
-    top: -6,
-    width: 24,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: C.brass,
+    width: 50, height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(201,162,39,0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(201,162,39,0.30)',
   },
 
   iconWrap: { position: 'relative' },

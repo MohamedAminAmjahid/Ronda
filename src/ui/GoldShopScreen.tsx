@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
-  Share, Linking, AppState, Modal, ActivityIndicator, type AppStateStatus,
+  Share, Linking, AppState, Modal, ActivityIndicator, Animated, type AppStateStatus,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfile } from '../profile/useProfile'
@@ -374,7 +374,7 @@ export function GoldShopScreen({ onBack }: Props) {
           </View>
 
           {/* 4. Packs payants (Stripe) */}
-          <Text style={s.sectionLabel}>{t('goldPacks')}</Text>
+          <Text style={s.sectionLabel}>🪙 {t('goldPacks')}</Text>
           <View style={s.packGrid}>
             {STRIPE_PACKS.map((p) => (
               <TouchableOpacity
@@ -383,6 +383,9 @@ export function GoldShopScreen({ onBack }: Props) {
                 activeOpacity={0.82}
                 onPress={() => setPayPack({ id: p.id, gold: p.gold, label: p.label })}
               >
+                <View style={s.shimmerOverflow}>
+                  <ShimmerOverlay />
+                </View>
                 <Text style={s.packCoin}>🪙</Text>
                 <Text style={s.packGold}>{p.gold}</Text>
                 <Text style={s.packPrice}>{p.label}</Text>
@@ -524,6 +527,34 @@ export function GoldShopScreen({ onBack }: Props) {
     </SafeAreaView>
   )
 }
+
+// ── Shimmer sur les packs payants ─────────────────────────────────────────────
+
+function ShimmerOverlay() {
+  const anim = useRef(new Animated.Value(-80)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 160, duration: 1100, useNativeDriver: true }),
+        Animated.delay(3200),
+      ])
+    ).start()
+  }, [anim])
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[gs.shimmer, { transform: [{ translateX: anim }] }]}
+    />
+  )
+}
+
+const gs = StyleSheet.create({
+  shimmer: {
+    position: 'absolute', top: 0, bottom: 0, width: 45,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    transform: [{ skewX: '-20deg' }],
+  },
+})
 
 // ── Carte « offrir un cadeau » / « envoyer du gold » ────────────────────────────
 
@@ -718,8 +749,9 @@ const s = StyleSheet.create({
   scroll: { paddingVertical: 12, gap: 14, paddingBottom: 32 },
 
   card: {
-    backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 14, padding: 16, gap: 10,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.18)',
+    backgroundColor: 'rgba(0,0,0,0.32)', borderRadius: 16, padding: 16, gap: 10,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 10, elevation: 5,
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone },
@@ -782,14 +814,17 @@ const s = StyleSheet.create({
   okMsg:  { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, textAlign: 'center', lineHeight: 20 },
 
   sectionLabel: {
-    fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
+    fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass,
     letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6, marginLeft: 2,
   },
   packGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  shimmerOverflow: { overflow: 'hidden', position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 14 },
   pack: {
     width: '47%', backgroundColor: C.deep, borderRadius: 14, paddingVertical: 18,
     paddingHorizontal: 12, alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.22)',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    overflow: 'hidden', position: 'relative',
+    shadowColor: '#C9A227', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.20, shadowRadius: 8, elevation: 4,
   },
   packCoin: { fontSize: 26 },
   packGold: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },

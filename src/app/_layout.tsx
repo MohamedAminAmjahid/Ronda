@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Platform, I18nManager, View } from 'react-native'
+import { Platform, I18nManager, View, Text, StyleSheet } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font'
@@ -24,6 +24,29 @@ import { useProfile } from '../profile/useProfile'
 import { LEVELUP_KEY } from '../profile/profile'
 
 SplashScreen.preventAutoHideAsync()
+
+const SUIT_SYMBOLS = ['♠', '♣', '♥', '♦', '♠', '♣', '♥', '♦', '♠', '♣', '♥', '♦', '♠', '♣', '♥', '♦', '♠', '♣', '♥', '♦', '♠', '♣']
+const SUIT_POSITIONS: Array<Record<string, string | number>> = [
+  { top: '2%', left: '4%' }, { top: '2%', left: '26%' }, { top: '2%', left: '52%' }, { top: '2%', right: '4%' },
+  { top: '15%', left: '12%' }, { top: '15%', right: '14%' },
+  { top: '30%', left: '3%' }, { top: '30%', right: '5%' },
+  { top: '45%', left: '20%' }, { top: '45%', right: '20%' },
+  { top: '60%', left: '6%' }, { top: '60%', right: '7%' },
+  { top: '75%', left: '3%' }, { top: '75%', left: '32%' }, { top: '75%', left: '58%' }, { top: '75%', right: '4%' },
+  { top: '88%', left: '14%' }, { top: '88%', right: '13%' },
+  { top: '94%', left: '5%' }, { top: '94%', left: '44%' }, { top: '94%', right: '6%' },
+  { top: '50%', left: '42%' },
+]
+
+const ly = StyleSheet.create({
+  suitSymbol: {
+    position: 'absolute',
+    fontSize: 20,
+    color: '#C9A227',
+    opacity: 0.022,
+    fontFamily: undefined,
+  },
+})
 
 function DailyBonusGate() {
   const { user }            = useAuth()
@@ -109,7 +132,12 @@ export default function RootLayout() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: '#0D0D1A' }}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        {SUIT_SYMBOLS.map((sym, i) => (
+          <Text key={i} style={[ly.suitSymbol, SUIT_POSITIONS[i] as object]}>{sym}</Text>
+        ))}
+      </View>
       <TopBar />
       <Stack
         screenOptions={{

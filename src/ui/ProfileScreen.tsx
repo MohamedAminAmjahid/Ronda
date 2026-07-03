@@ -514,6 +514,7 @@ export function ProfileScreen() {
 
         {/* ── Avatar + pseudo ───────────────────────────────────── */}
         <View style={s.avatarSection}>
+          <View style={s.avatarHalo} />
           <TouchableOpacity onPress={() => setAvatarModal(true)} activeOpacity={0.85} style={s.avatarWrap}>
             <AvatarDisplay
               type={avatarType} initial={initial}
@@ -613,7 +614,7 @@ export function ProfileScreen() {
             <View style={s.statCols}>
               <StatCell label="Parties" value={gamesPlayed} />
               <StatCell label="Victoires" value={gamesWon} />
-              <StatCell label="Taux" value={`${winRate}%`} />
+              <WinRateCell pct={winRate} />
             </View>
           </View>
           <View style={s.statRow}>
@@ -623,7 +624,7 @@ export function ProfileScreen() {
             <View style={s.statCols}>
               <StatCell label="Parties" value={rondaPlayed} />
               <StatCell label="Victoires" value={rondaWon} />
-              <StatCell label="Taux" value={`${rondaWinRate}%`} />
+              <WinRateCell pct={rondaWinRate} />
             </View>
           </View>
           <View style={s.statRow}>
@@ -633,7 +634,7 @@ export function ProfileScreen() {
             <View style={s.statCols}>
               <StatCell label="Parties" value={dijoujPlayed} />
               <StatCell label="Victoires" value={dijoujWon} />
-              <StatCell label="Taux" value={`${dijoujWinRate}%`} />
+              <WinRateCell pct={dijoujWinRate} />
             </View>
           </View>
         </View>
@@ -776,6 +777,29 @@ const sc = StyleSheet.create({
   label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.50)', letterSpacing: 0.5 },
 })
 
+function WinRateCell({ pct }: { pct: number }) {
+  return (
+    <View style={wrc.cell}>
+      <Text style={wrc.value}>{pct}%</Text>
+      <View style={wrc.track}>
+        <View style={[wrc.fill, { width: `${Math.min(100, pct)}%` as `${number}%` }]} />
+      </View>
+      <Text style={wrc.label}>Taux</Text>
+    </View>
+  )
+}
+
+const wrc = StyleSheet.create({
+  cell:  { alignItems: 'center', flex: 1 },
+  value: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: '#C9A227' },
+  track: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(201,162,39,0.15)', overflow: 'hidden', marginVertical: 2,
+  },
+  fill:  { height: 4, backgroundColor: '#C9A227', borderRadius: 2 },
+  label: { fontFamily: 'Cairo_400Regular', fontSize: 10, color: 'rgba(244,236,216,0.50)', letterSpacing: 0.5 },
+})
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -785,6 +809,16 @@ const s = StyleSheet.create({
 
   // Avatar section
   avatarSection: { alignItems: 'center', paddingVertical: 8, gap: 8 },
+  avatarHalo: {
+    position: 'absolute',
+    width: 140, height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(201,162,39,0.06)',
+    shadowColor: '#C9A227',
+    shadowOpacity: 0.30,
+    shadowRadius: 28,
+    elevation: 8,
+  },
   avatarWrap:    { position: 'relative' },
   avatarEditBadge: {
     position: 'absolute', bottom: 0, right: 0,
@@ -802,8 +836,8 @@ const s = StyleSheet.create({
   levelRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   levelBadge:  { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
   xpTxt:       { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff },
-  xpBarTrack:  { height: 8, backgroundColor: 'rgba(201,162,39,0.15)', borderRadius: 4, overflow: 'hidden' },
-  xpBarFill:   { height: 8, backgroundColor: C.brass, borderRadius: 4 },
+  xpBarTrack:  { height: 12, backgroundColor: 'rgba(201,162,39,0.15)', borderRadius: 6, overflow: 'hidden' },
+  xpBarFill:   { height: 12, backgroundColor: C.brass, borderRadius: 6, shadowColor: '#C9A227', shadowOpacity: 0.70, shadowRadius: 8, elevation: 6 },
 
   // Cards
   card: {

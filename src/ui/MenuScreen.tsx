@@ -165,6 +165,33 @@ const qb = StyleSheet.create({
   },
 })
 
+// ── Fond décoratif ────────────────────────────────────────────────────────────
+
+function BgPattern() {
+  const symbols = ['◆','◇','◆','◇','◆','◇','◆','◇','◆','◇','◆','◇','◆','◇','◆']
+  const positions: Array<Record<string, string | number>> = [
+    { top: '4%', left: '7%' }, { top: '4%', right: '9%' },
+    { top: '18%', left: '3%' }, { top: '16%', right: '4%' },
+    { top: '32%', left: '11%' }, { top: '30%', right: '12%' },
+    { top: '47%', left: '5%' }, { top: '45%', right: '6%' },
+    { top: '62%', left: '9%' }, { top: '60%', right: '8%' },
+    { top: '76%', left: '4%' }, { top: '74%', right: '5%' },
+    { top: '88%', left: '14%' }, { top: '86%', right: '13%' },
+    { top: '24%', left: '44%' },
+  ]
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {positions.map((pos, i) => (
+        <Text key={i} style={[bgp.sym, pos as object]}>{symbols[i % symbols.length]}</Text>
+      ))}
+    </View>
+  )
+}
+
+const bgp = StyleSheet.create({
+  sym: { position: 'absolute', fontSize: 16, color: '#C9A227', opacity: 0.03 },
+})
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -216,6 +243,17 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
       })
     }, 3000)
   }
+
+  // Shimmer du titre
+  const titleGlow = useRef(new Animated.Value(0.72)).current
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(titleGlow, { toValue: 1, duration: 1600, useNativeDriver: true }),
+        Animated.timing(titleGlow, { toValue: 0.72, duration: 1600, useNativeDriver: true }),
+      ])
+    ).start()
+  }, [titleGlow])
 
   // ── Animation de fond ────────────────────────────────────────────────────
   const bgPulse = useRef(new Animated.Value(0)).current
@@ -293,6 +331,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
   return (
     <Animated.View style={[s.rootBg, { backgroundColor: bgColor }]}>
+      <BgPattern />
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
 
       {/* ── Contenu principal ─────────────────────────────────── */}
@@ -386,7 +425,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
             {/* Titre */}
             <View style={s.titleRow}>
-              <Text style={s.platformTitle}>Dar Lwar9a</Text>
+              <Animated.Text style={[s.platformTitle, { opacity: titleGlow }]}>Dar Lwar9a</Animated.Text>
               <Text style={s.platformTM}>TM</Text>
             </View>
             <Text style={s.platformAr}>دار الورقة</Text>
@@ -578,6 +617,9 @@ const s = StyleSheet.create({
   profileBar: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     alignSelf: 'stretch', marginBottom: 4,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)',
   },
   profileLeft:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profileRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -613,12 +655,14 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16,
     paddingVertical: 18, paddingHorizontal: 22,
     borderWidth: 1.5, borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.07)',
+    shadowColor: '#8B1A4A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 7,
   },
   actionBtnTraining: {
     flexDirection: 'row', alignItems: 'center', gap: 16, borderRadius: 16,
     paddingVertical: 16, paddingHorizontal: 22,
-    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,236,216,0.18)',
-    backgroundColor: 'rgba(0,0,0,0.18)',
+    borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(244,236,216,0.22)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 5,
   },
   actionBtnIcon:     { fontSize: 26 },
   trainingIcon:      { opacity: 0.70 },
