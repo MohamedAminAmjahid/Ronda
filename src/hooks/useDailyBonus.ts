@@ -34,6 +34,8 @@ function yesterday(): string {
 export function useDailyBonus() {
   const [pending, setPending] = useState<DailyBonusState | null>(null)
   const [claimed, setClaimed] = useState(false)
+  const [streak, setStreak] = useState(1)
+  const [alreadyClaimed, setAlreadyClaimed] = useState(false)
 
   useEffect(() => {
     void (async () => {
@@ -42,16 +44,20 @@ export function useDailyBonus() {
         const stored: Stored | null = raw ? (JSON.parse(raw) as Stored) : null
         const td = today()
 
-        if (stored?.lastClaim === td) return  // déjà réclamé aujourd'hui
-
-        let streak = 1
-        if (stored?.lastClaim === yesterday()) {
-          // Connexion consécutive
-          streak = stored.streak < 7 ? stored.streak + 1 : 1
+        if (stored?.lastClaim === td) {
+          setStreak(stored.streak)
+          setAlreadyClaimed(true)
+          return
         }
 
-        const goldToday = STREAK_REWARDS[streak - 1]
-        setPending({ streak, goldToday })
+        let newStreak = 1
+        if (stored?.lastClaim === yesterday()) {
+          newStreak = stored.streak < 7 ? stored.streak + 1 : 1
+        }
+
+        setStreak(newStreak)
+        const goldToday = STREAK_REWARDS[newStreak - 1]
+        setPending({ streak: newStreak, goldToday })
       } catch {
         // AsyncStorage indisponible — on skip silencieusement
       }
@@ -65,11 +71,12 @@ export function useDailyBonus() {
       await AsyncStorage.setItem(KEY, JSON.stringify(stored))
       addGold(pending.goldToday)
       setClaimed(true)
+      setAlreadyClaimed(true)
       setPending(null)
     } catch {
       // sans effet
     }
   }
 
-  return { pending, claimed, claim }
+  return { pending, claimed, claim, streak, alreadyClaimed }
 }

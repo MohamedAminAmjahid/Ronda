@@ -15,9 +15,11 @@ import { GoldTransferForm } from './GoldTransferForm'
 import { PaymentModal } from '../payment/PaymentModal'
 import { STRIPE_PACKS, type PackId } from '../payment/stripe'
 import { SpinWheelModal } from './SpinWheelModal'
-import { DailyChestModal } from './DailyChestModal'
+import { DailyChestModal, ChestSVG } from './DailyChestModal'
+import { StreakInfoModal } from './StreakInfoModal'
 import { useSpinWheel } from '../hooks/useSpinWheel'
 import { useDailyChest } from '../hooks/useDailyChest'
+import { useDailyBonus } from '../hooks/useDailyBonus'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
 
@@ -72,8 +74,10 @@ export function GoldShopScreen({ onBack }: Props) {
   const { gold, addGold } = useProfile()
   const { canSpin, spin }    = useSpinWheel()
   const { reward: chest, openChest } = useDailyChest()
-  const [showSpin, setShowSpin]   = useState(false)
-  const [showChest, setShowChest] = useState(false)
+  const { pending: streakPending, alreadyClaimed: streakClaimed, claim: claimStreak, streak } = useDailyBonus()
+  const [showSpin, setShowSpin]     = useState(false)
+  const [showChest, setShowChest]   = useState(false)
+  const [showStreak, setShowStreak] = useState(false)
 
   const [shareCount, setShareCount] = useState(0)
   const [fbClaimed, setFbClaimed] = useState(false)
@@ -244,42 +248,64 @@ export function GoldShopScreen({ onBack }: Props) {
 
           {/* Roue de la fortune */}
           <View style={s.card}>
-            <View style={s.cardHead}>
-              <Text style={s.cardTitle}>🎰 {t('spinWheel')}</Text>
-              {canSpin && <Text style={s.reward}>🆓 {t('spinBtn')}</Text>}
+            <View style={s.cardIconRow}>
+              <Text style={s.cardBigIcon}>🎰</Text>
+              <View style={s.cardIconBody}>
+                <View style={s.cardHead}>
+                  <Text style={s.cardTitle}>{t('spinWheel')}</Text>
+                  {canSpin && <Text style={s.reward}>🆓 {t('spinBtn')}</Text>}
+                </View>
+                <Text style={s.cardDesc}>
+                  {canSpin ? t('spinResult').replace('{n}', '50–5000') : t('spinTomorrow')}
+                </Text>
+                <TouchableOpacity
+                  style={[s.btnPrimary, !canSpin && s.btnDisabled]}
+                  onPress={() => setShowSpin(true)}
+                >
+                  <Text style={[s.btnPrimaryTxt, !canSpin && s.btnDisabledTxt]}>
+                    {canSpin ? t('spinBtn') : t('spinTomorrow')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={s.cardDesc}>
-              {canSpin ? t('spinResult').replace('{n}', '50–5000') : t('spinTomorrow')}
-            </Text>
-            <TouchableOpacity
-              style={[s.btnPrimary, !canSpin && s.btnDisabled]}
-              onPress={() => setShowSpin(true)}
-            >
-              <Text style={[s.btnPrimaryTxt, !canSpin && s.btnDisabledTxt]}>
-                {canSpin ? t('spinBtn') : t('spinTomorrow')}
-              </Text>
-            </TouchableOpacity>
           </View>
 
           {/* Coffre quotidien */}
           <View style={s.card}>
+            <View style={s.cardIconRow}>
+              <ChestSVG level={chest?.level ?? 'bronze'} size={48} />
+              <View style={s.cardIconBody}>
+                <View style={s.cardHead}>
+                  <Text style={s.cardTitle}>{t('dailyChest')}</Text>
+                  {chest && <Text style={s.reward}>🆓</Text>}
+                </View>
+                <Text style={s.cardDesc}>
+                  {chest ? `${chest.minGold}–${chest.maxGold} 🪙` : t('chestTomorrow')}
+                </Text>
+                <TouchableOpacity
+                  style={[s.btnPrimary, !chest && s.btnDisabled]}
+                  onPress={() => chest && setShowChest(true)}
+                  disabled={!chest}
+                >
+                  <Text style={[s.btnPrimaryTxt, !chest && s.btnDisabledTxt]}>
+                    {chest ? t('chestOpen') : t('chestTomorrow')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          {/* Connexion journalière (streak) */}
+          <TouchableOpacity style={s.card} onPress={() => setShowStreak(true)} activeOpacity={0.85}>
             <View style={s.cardHead}>
-              <Text style={s.cardTitle}>🎁 {t('dailyChest')}</Text>
-              {chest && <Text style={s.reward}>🆓</Text>}
+              <Text style={s.cardTitle}>🔥 {t('dailyBonusTitle')}</Text>
+              {streakPending && <Text style={s.reward}>🪙 +{streakPending.goldToday}</Text>}
             </View>
             <Text style={s.cardDesc}>
-              {chest ? `${chest.minGold}–${chest.maxGold} 🪙` : t('chestTomorrow')}
+              {t('dailyStreakOf').replace('{n}', String(streak))}
+              {streakClaimed ? `  ${t('streakAlreadyClaimed')}` : ''}
             </Text>
-            <TouchableOpacity
-              style={[s.btnPrimary, !chest && s.btnDisabled]}
-              onPress={() => chest && setShowChest(true)}
-              disabled={!chest}
-            >
-              <Text style={[s.btnPrimaryTxt, !chest && s.btnDisabledTxt]}>
-                {chest ? t('chestOpen') : t('chestTomorrow')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </TouchableOpacity>
 
           {/* Offrir un cadeau (simulation, illimité) */}
           <GiftTransferCard mode="gift" />
@@ -433,6 +459,17 @@ export function GoldShopScreen({ onBack }: Props) {
           gold={chest.gold}
           onOpen={openChest}
           onClose={() => setShowChest(false)}
+        />
+      )}
+
+      {/* Connexion journalière — streak */}
+      {showStreak && (
+        <StreakInfoModal
+          streak={streak}
+          pending={streakPending}
+          alreadyClaimed={streakClaimed}
+          onClaim={claimStreak}
+          onClose={() => setShowStreak(false)}
         />
       )}
 
@@ -686,6 +723,9 @@ const s = StyleSheet.create({
   },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone },
+  cardIconRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  cardBigIcon: { fontSize: 38 },
+  cardIconBody: { flex: 1, gap: 8 },
   reward: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
   cardDesc: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, lineHeight: 18 },
   counter: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, textAlign: 'center' },
