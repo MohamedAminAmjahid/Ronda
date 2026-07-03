@@ -176,7 +176,7 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
-  const { username, gold, avatarType, avatarEmoji, avatarImage, avatarFrame } = useProfile()
+  const { username, gold, avatarType, avatarEmoji, avatarImage, avatarFrame, level } = useProfile()
   const { t, lang, setLang } = useI18n()
   const { user } = useAuth()
 
@@ -360,6 +360,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
                     image={avatarImage ?? ''}
                     size={40}
                     frame={avatarFrame ?? 'none'}
+                    level={level}
                   />
                   <Text style={s.profileUsername} numberOfLines={1}>{username}</Text>
                 </TouchableOpacity>
@@ -431,16 +432,6 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
           </View>
 
-          {/* ── Liens texte ──────────────────────────────────────── */}
-          <View style={s.textLinks}>
-            <TouchableOpacity style={s.linkBtn} onPress={() => router.push('/daily-quests' as Href)}>
-              <Text style={s.linkTxt}>{t('dailyQuests')}</Text>
-            </TouchableOpacity>
-            <Text style={s.linkSep}>·</Text>
-            <TouchableOpacity style={s.linkBtn} onPress={onLeaderboard}>
-              <Text style={s.linkTxt}>{t('leaderboard')}</Text>
-            </TouchableOpacity>
-          </View>
 
           {/* ── Pied ─────────────────────────────────────────────── */}
           <View style={s.footer}>

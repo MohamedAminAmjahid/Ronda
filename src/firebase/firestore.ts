@@ -83,6 +83,7 @@ export interface FriendDoc {
   avatarType: string
   avatarEmoji: string
   avatarImage: string
+  level?: number
 }
 
 /** Profil local utilisé pour initialiser le document Firebase au 1er login. */

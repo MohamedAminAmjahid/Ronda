@@ -466,6 +466,7 @@ export function ProfileScreen() {
               type={avatarType} initial={initial}
               emoji={avatarEmoji} image={avatarImage} size={88}
               frame={avatarFrame}
+              level={level}
             />
             <View style={s.avatarEditBadge}>
               <Text style={s.avatarEditIcon}>✎</Text>

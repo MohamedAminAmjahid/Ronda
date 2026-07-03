@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../firebase/auth'
 import {
-  getChatId, sendMessage, subscribeMessages, markChatRead, getUserAvatar,
+  getChatId, sendMessage, subscribeMessages, markChatRead, getUserById,
   subscribeOnlineStatus,
   type MessageDoc, type PresenceInfo,
 } from '../firebase/firestore'
@@ -44,17 +44,22 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [inputFocused, setInputFocused] = useState(false)
 
-  // Avatar de l'ami, chargé depuis Firestore
+  // Avatar + niveau de l'ami, chargés depuis Firestore
   const [friendAvatar, setFriendAvatar] = useState<{
     avatarType: string; avatarEmoji: string; avatarImage: string
   }>({ avatarType: 'initial', avatarEmoji: '', avatarImage: '' })
+  const [friendLevel, setFriendLevel] = useState<number | undefined>(undefined)
 
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
 
   const chatId = user ? getChatId(user.uid, friendUid) : ''
 
   useEffect(() => {
-    void getUserAvatar(friendUid).then(setFriendAvatar)
+    void getUserById(friendUid).then(doc => {
+      if (!doc) return
+      setFriendAvatar({ avatarType: doc.avatarType, avatarEmoji: doc.avatarEmoji, avatarImage: doc.avatarImage })
+      setFriendLevel(doc.level)
+    })
   }, [friendUid])
 
   useEffect(() => {
@@ -103,6 +108,7 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
             emoji={friendAvatar.avatarEmoji}
             image={friendAvatar.avatarImage}
             size={36}
+            level={friendLevel}
           />
           <PresenceDot info={presence} ring={C.bg} />
         </View>

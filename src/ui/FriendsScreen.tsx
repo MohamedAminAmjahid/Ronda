@@ -221,6 +221,7 @@ export function FriendsScreen({ onBack }: Props) {
                           emoji={f.avatarEmoji ?? ''}
                           image={f.avatarImage ?? ''}
                           size={40}
+                          level={f.level}
                         />
                         <PresenceDot info={info} ring={C.table} />
                       </View>
@@ -269,6 +270,7 @@ export function FriendsScreen({ onBack }: Props) {
                       emoji={r.avatarEmoji ?? ''}
                       image={r.avatarImage ?? ''}
                       size={40}
+                      level={r.level}
                     />
                     <Text style={s.rowName} numberOfLines={1}>{r.username}</Text>
                     <View style={s.rowActions}>
@@ -314,6 +316,7 @@ export function FriendsScreen({ onBack }: Props) {
                     emoji={result.avatarEmoji ?? ''}
                     image={result.avatarImage ?? ''}
                     size={40}
+                    level={result.level}
                   />
                   <Text style={s.rowName} numberOfLines={1}>{result.username}</Text>
                   <TouchableOpacity style={s.btnSmall} onPress={() => add(result)}>
