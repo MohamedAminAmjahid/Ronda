@@ -14,7 +14,9 @@ const C = {
 } as const
 
 // Mêmes préfixes que BottomNav + replay.
+// '/' est caché : profil/gold affichés directement dans MenuScreen.
 const HIDDEN_PREFIXES = [
+  '/',
   '/game', '/online', '/play', '/ronda', '/dijouj',
   '/dijouj-online', '/dijouj-lobby', '/lobby2v2',
   '/auth', '/lang-picker', '/bet', '/join',

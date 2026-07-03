@@ -8,6 +8,7 @@ import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/pro
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 import { GameChoiceModal, type GameKey } from './GameChoiceModal'
+import { AvatarDisplay } from './ProfileScreen'
 import { useAuth } from '../firebase/auth'
 import { useDailyBonus } from '../hooks/useDailyBonus'
 import { useSpinWheel } from '../hooks/useSpinWheel'
@@ -75,7 +76,7 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
-  const { username } = useProfile()
+  const { username, gold, avatarType, avatarEmoji, avatarImage, avatarFrame } = useProfile()
   const { t, lang, setLang } = useI18n()
   const { user } = useAuth()
 
@@ -243,7 +244,36 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
             </View>
             <Text style={s.platformAr}>دار الورقة</Text>
             <View style={s.divider} />
-            <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
+
+            {/* ── Widget profil centré ─────────────────────────── */}
+            {user ? (
+              <View style={s.profileWidget}>
+                <TouchableOpacity
+                  onPress={() => router.push('/profile' as Href)}
+                  activeOpacity={0.80}
+                >
+                  <AvatarDisplay
+                    type={(avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                    initial={username?.[0]?.toUpperCase() ?? '?'}
+                    emoji={avatarEmoji ?? ''}
+                    image={avatarImage ?? ''}
+                    size={58}
+                    frame={avatarFrame ?? 'none'}
+                  />
+                </TouchableOpacity>
+                <Text style={s.profileUsername} numberOfLines={1}>{username}</Text>
+                <TouchableOpacity
+                  style={s.goldPill}
+                  onPress={() => router.push('/gold-shop' as Href)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={s.goldCoin}>🪙</Text>
+                  <Text style={s.goldAmount}>{gold}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
+            )}
           </View>
 
           {/* ── 3 boutons d'action ───────────────────────────────── */}
@@ -419,6 +449,20 @@ const s = StyleSheet.create({
   helloTxt: {
     fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)',
   },
+
+  // Widget profil centré
+  profileWidget: { alignItems: 'center', gap: 8 },
+  profileUsername: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.bone, letterSpacing: 0.3,
+  },
+  goldPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16,
+    backgroundColor: 'rgba(201,162,39,0.12)',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+  },
+  goldCoin:   { fontSize: 15 },
+  goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
 
   // ── 3 boutons d'action ────────────────────────────────────────────────────
   actionSection: { gap: 12 },
