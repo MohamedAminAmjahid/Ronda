@@ -10,6 +10,7 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
+import { recordResult } from '../profile/profile'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
@@ -162,8 +163,13 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const lastCardPulse = useRef(new Animated.Value(1)).current
   const [showLastCardMsg, setShowLastCardMsg] = useState(false)
 
+  const djResultRecorded = useRef(false)
   useEffect(() => {
-    if (!isGameOver) { setShowLastCardMsg(false); return }
+    if (!isGameOver) { djResultRecorded.current = false; return }
+    if (!djResultRecorded.current) {
+      djResultRecorded.current = true
+      recordResult(winner === DJ_HUMAN_ID, 'dijouj')
+    }
     setShowLastCardMsg(true)
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(lastCardPulse, { toValue: 0.35, duration: 350, useNativeDriver: true }),
@@ -172,7 +178,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     loop.start()
     const tid = setTimeout(() => { loop.stop(); lastCardPulse.setValue(1); setShowLastCardMsg(false) }, 2000)
     return () => { clearTimeout(tid); loop.stop(); lastCardPulse.setValue(1) }
-  }, [isGameOver])
+  }, [isGameOver, winner])
 
   // Halo défausse : couleur active selon la couleur de la carte du dessus
   const haloOpacity = useRef(new Animated.Value(0.4)).current

@@ -120,6 +120,9 @@ export function FriendProfileScreen({ onBack }: Props) {
                 <PresenceDot info={presence} size={16} ring={C.table} />
               </View>
               <Text style={s.username} numberOfLines={1}>{profile.username}</Text>
+              {typeof profile.level === 'number' && (
+                <Text style={s.levelBadge}>⭐ {t('level')} {profile.level}</Text>
+              )}
               {(() => {
                 const label = presenceLabel(presence, t, { hours: true })
                 if (!label) return null
@@ -273,7 +276,8 @@ const s = StyleSheet.create({
 
   identity: { alignItems: 'center', gap: 8, paddingVertical: 8 },
   avatarWrap: { position: 'relative' },
-  username: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
+  username:    { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
+  levelBadge:  { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
   presenceTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
   presenceOnline: { color: '#27AE60' },
 

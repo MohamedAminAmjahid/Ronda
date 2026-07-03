@@ -4,7 +4,7 @@ import { useAuth } from './auth'
 import { createOrUpdateUser, registerPendingReferral } from './firestore'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
-  setStatsPublicLocal, setCosmeticsLocal,
+  setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
@@ -31,6 +31,7 @@ export function useFirebaseProfileSync(): void {
         const {
           username, gold, usernameChanges, goldHistoryPublic, statsPublic,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
+          xp, level,
         } = await createOrUpdateUser(user, {
           username: p.username,
           gold: p.gold,
@@ -48,6 +49,8 @@ export function useFirebaseProfileSync(): void {
           ownedBacks: p.ownedBacks,
           avatarFrame: p.avatarFrame,
           ownedFrames: p.ownedFrames,
+          xp: p.xp,
+          level: p.level,
         })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
         if (!cancelled) {
@@ -57,6 +60,7 @@ export function useFirebaseProfileSync(): void {
           setGoldHistoryPublicLocal(goldHistoryPublic)
           setStatsPublicLocal(statsPublic)
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
+          setXpLevelLocal(xp, level)
         }
 
         // Parrainage : enregistre le filleul « en attente » chez le parrain (le

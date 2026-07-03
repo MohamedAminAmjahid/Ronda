@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Platform, I18nManager, View } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font'
 import { ReemKufi_700Bold } from '@expo-google-fonts/reem-kufi'
@@ -13,12 +14,15 @@ import { BottomNav } from '../ui/BottomNav'
 import { TopBar } from '../ui/TopBar'
 import { DailyBonusModal } from '../ui/DailyBonusModal'
 import { DailyChestModal } from '../ui/DailyChestModal'
+import { LevelUpModal } from '../ui/LevelUpModal'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { InstallPrompt } from '../ui/InstallPrompt'
 import { useDailyBonus } from '../hooks/useDailyBonus'
 import { useDailyChest } from '../hooks/useDailyChest'
 import { useAuth } from '../firebase/auth'
+import { useProfile } from '../profile/useProfile'
+import { LEVELUP_KEY } from '../profile/profile'
 
 SplashScreen.preventAutoHideAsync()
 
@@ -27,6 +31,26 @@ function DailyBonusGate() {
   const { pending, claim }  = useDailyBonus()
   if (!user || !pending) return null
   return <DailyBonusModal bonus={pending} onClaim={claim} />
+}
+
+function LevelUpGate() {
+  const { level } = useProfile()
+  const [pending, setPending] = useState<{ level: number; goldBonus: number } | null>(null)
+
+  useEffect(() => {
+    void AsyncStorage.getItem(LEVELUP_KEY).then((raw) => {
+      if (!raw) return
+      try { setPending(JSON.parse(raw) as { level: number; goldBonus: number }) } catch { /* ignore */ }
+    })
+  }, [level])
+
+  const claim = async () => {
+    await AsyncStorage.removeItem(LEVELUP_KEY).catch(() => {})
+    setPending(null)
+  }
+
+  if (!pending) return null
+  return <LevelUpModal level={pending.level} goldBonus={pending.goldBonus} onClaim={() => { void claim() }} />
 }
 
 function DailyChestGate() {
@@ -98,6 +122,7 @@ export default function RootLayout() {
       <BottomNav />
       <DailyBonusGate />
       <DailyChestGate />
+      <LevelUpGate />
       <IncomingInviteModal />
       <OfflineBanner />
       <InstallPrompt />

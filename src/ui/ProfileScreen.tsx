@@ -14,7 +14,7 @@ import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
 import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
-  incrementUsernameChanges, USERNAME_CHANGE_COST,
+  incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired,
 } from '../profile/profile'
 import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
 
@@ -140,6 +140,7 @@ export function ProfileScreen() {
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
     goldHistoryPublic, statsPublic, avatarFrame,
+    xp, level,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
     setGoldHistoryPublic, setStatsPublic,
@@ -442,6 +443,19 @@ export function ProfileScreen() {
           {user && <Text style={s.emailText}>{user.email}</Text>}
         </View>
 
+        {/* ── Niveau & XP ────────────────────────────────────────── */}
+        <View style={s.card}>
+          <View style={s.levelRow}>
+            <Text style={s.levelBadge}>⭐ {t('level')} {level}</Text>
+            <Text style={s.xpTxt}>
+              {t('xpProgress').replace('{xp}', String(xp)).replace('{max}', String(xpRequired(level)))}
+            </Text>
+          </View>
+          <View style={s.xpBarTrack}>
+            <View style={[s.xpBarFill, { width: `${Math.min(100, Math.round((xp / xpRequired(level)) * 100))}%` as `${number}%` }]} />
+          </View>
+        </View>
+
         {/* ── Or ────────────────────────────────────────────────── */}
         <View style={s.card}>
           <View style={s.cardRow}>
@@ -680,6 +694,13 @@ const s = StyleSheet.create({
   usernameText: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone, letterSpacing: 0.3 },
   editIcon:     { fontSize: 16, color: C.boneOff },
   emailText:    { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.35)' },
+
+  // Niveau & XP
+  levelRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  levelBadge:  { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
+  xpTxt:       { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff },
+  xpBarTrack:  { height: 8, backgroundColor: 'rgba(201,162,39,0.15)', borderRadius: 4, overflow: 'hidden' },
+  xpBarFill:   { height: 8, backgroundColor: C.brass, borderRadius: 4 },
 
   // Cards
   card: {

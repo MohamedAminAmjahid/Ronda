@@ -9,6 +9,7 @@ import {
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
   updateStatsPublic as firestoreUpdateStatsPublic,
   updateCosmetics as firestoreUpdateCosmetics,
+  updateXpLevel as firestoreUpdateXpLevel,
   applyReferral, REFERRAL_REWARD,
 } from '../firebase/firestore'
 import { apiGift, apiTransfer } from '../online/serverApi'
@@ -25,6 +26,7 @@ const STORAGE_KEY = 'ronda_profile'
 const ACTIVE_ROOM_KEY = 'ronda_active_room'
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
 const STARTING_GOLD = 200
+export const LEVELUP_KEY = 'ronda_levelup_pending'
 const MAX_USERNAME = 16
 /** Or gagné en remportant une partie (solo ou en ligne). */
 export const WIN_REWARD = 20
@@ -66,6 +68,8 @@ export interface Profile {
   ownedBacks: string[]
   avatarFrame: string
   ownedFrames: string[]
+  xp: number
+  level: number
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -102,6 +106,8 @@ let profile: Profile = {
   ownedBacks: [DEFAULT_BACK],
   avatarFrame: DEFAULT_FRAME,
   ownedFrames: [DEFAULT_FRAME],
+  xp: 0,
+  level: 1,
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -163,6 +169,8 @@ export function loadProfile(): Promise<Profile> {
           ownedBacks:  Array.isArray(parsed.ownedBacks) ? parsed.ownedBacks : [DEFAULT_BACK],
           avatarFrame: typeof parsed.avatarFrame === 'string' ? parsed.avatarFrame : DEFAULT_FRAME,
           ownedFrames: Array.isArray(parsed.ownedFrames) ? parsed.ownedFrames : [DEFAULT_FRAME],
+          xp:    typeof parsed.xp === 'number' ? parsed.xp : 0,
+          level: typeof parsed.level === 'number' ? parsed.level : 1,
         }
       } else {
         profile = {
@@ -176,6 +184,7 @@ export function loadProfile(): Promise<Profile> {
           statsPublic: true,
           table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
           avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
+          xp: 0, level: 1,
         }
       }
     } catch {
@@ -190,6 +199,7 @@ export function loadProfile(): Promise<Profile> {
         statsPublic: true,
         table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
         avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
+        xp: 0, level: 1,
       }
     }
     loaded = true
@@ -250,6 +260,59 @@ function syncCosmeticsToFirestore(): void {
     avatarFrame: profile.avatarFrame,
     ownedFrames: profile.ownedFrames,
   }).catch(() => {})
+}
+
+function syncXpLevelToFirestore(): void {
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (!uid) return
+  void firestoreUpdateXpLevel(uid, profile.xp, profile.level).catch(() => {})
+}
+
+/** XP requis pour passer du niveau `level` au suivant. */
+export function xpRequired(level: number): number {
+  return level * 100
+}
+
+/** Ajoute de l'XP, gère les montées de niveau et crédite le bonus or. */
+export function addXP(amount: number): void {
+  if (amount <= 0) return
+  let newXp = profile.xp + amount
+  let newLevel = profile.level
+  let leveledUp = false
+  let totalGoldBonus = 0
+
+  while (newXp >= xpRequired(newLevel)) {
+    newXp -= xpRequired(newLevel)
+    newLevel++
+    leveledUp = true
+    totalGoldBonus += newLevel * 50
+  }
+
+  profile = {
+    ...profile,
+    xp: newXp,
+    level: newLevel,
+    gold: profile.gold + totalGoldBonus,
+  }
+  void persist()
+  syncXpLevelToFirestore()
+  if (totalGoldBonus > 0) syncGoldToFirestore(profile.gold)
+  emit()
+
+  if (leveledUp) {
+    void AsyncStorage.setItem(
+      LEVELUP_KEY,
+      JSON.stringify({ level: newLevel, goldBonus: totalGoldBonus })
+    ).catch(() => {})
+  }
+}
+
+/** Applique XP et niveau depuis Firebase au login (local uniquement, sans ré-écriture). */
+export function setXpLevelLocal(xp: number, level: number): void {
+  if (xp === profile.xp && level === profile.level) return
+  profile = { ...profile, xp, level }
+  void persist()
+  emit()
 }
 
 // ── Mutations ──────────────────────────────────────────────────────────────────
@@ -471,7 +534,11 @@ export function incrementUsernameChanges(): void {
  * et (si gagnée) le compteur de victoires + crédite WIN_REWARD d'or.
  * Retourne l'or gagné (0 si défaite) pour l'affichage sur l'écran de fin.
  */
-export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): number {
+export function recordResult(
+  won: boolean,
+  game: 'ronda' | 'dijouj' = 'ronda',
+  opts: { mode?: '1v1' | '2v2'; online?: boolean } = {}
+): number {
   const wasFirstGame = profile.gamesPlayed === 0
   const reward = won ? WIN_REWARD : 0
   profile = {
@@ -492,6 +559,11 @@ export function recordResult(won: boolean, game: 'ronda' | 'dijouj' = 'ronda'): 
   if (won) void markQuestProgress('winGame')
   // Parrainage : déclenché à la TOUTE première partie (anti faux comptes).
   if (wasFirstGame) void maybeApplyReferral()
+  // XP : victoire > défaite, bonus 2v2, bonus online.
+  const xpGain = won
+    ? (game === 'dijouj' ? 40 : opts.mode === '2v2' ? 75 : 50)
+    : 10
+  addXP(xpGain + (opts.online ? 15 : 0))
   return reward
 }
 

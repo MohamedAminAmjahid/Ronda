@@ -40,6 +40,8 @@ export interface UserDoc {
   referralUsed: boolean
   referredBy: string
   referralCount: number
+  xp: number
+  level: number
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -101,6 +103,8 @@ export interface LocalProfileSeed {
   ownedBacks: string[]
   avatarFrame: string
   ownedFrames: string[]
+  xp?: number
+  level?: number
 }
 
 function userRef(uid: string) {
@@ -143,6 +147,7 @@ export async function createOrUpdateUser(
   username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
   avatarFrame: string; ownedFrames: string[]; statsPublic: boolean
+  xp: number; level: number
 }> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
@@ -176,6 +181,8 @@ export async function createOrUpdateUser(
       referralUsed: false,
       referredBy: null,
       referralCount: 0,
+      xp: local.xp ?? 0,
+      level: local.level ?? 1,
       email: user.email ?? null,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
@@ -187,6 +194,7 @@ export async function createOrUpdateUser(
       cardBack: local.cardBack, ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame, ownedFrames: local.ownedFrames,
       statsPublic: true,
+      xp: local.xp ?? 0, level: local.level ?? 1,
     }
   }
 
@@ -210,6 +218,8 @@ export async function createOrUpdateUser(
     avatarFrame: (data.avatarFrame as string) ?? local.avatarFrame,
     ownedFrames: (data.ownedFrames as string[]) ?? local.ownedFrames,
     statsPublic: typeof data.statsPublic === 'boolean' ? (data.statsPublic as boolean) : true,
+    xp:    typeof data.xp === 'number' ? (data.xp as number) : 0,
+    level: typeof data.level === 'number' ? (data.level as number) : 1,
   }
 }
 
@@ -295,6 +305,8 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     referralUsed:  (data.referralUsed as boolean) ?? false,
     referredBy:    (data.referredBy as string) ?? '',
     referralCount: (data.referralCount as number) ?? 0,
+    xp:    (data.xp as number) ?? 0,
+    level: (data.level as number) ?? 1,
   }
 }
 
@@ -321,6 +333,11 @@ export async function getUserById(uid: string): Promise<UserDoc | null> {
 /** Synchronise les statistiques de parties dans Firestore. */
 export async function updateStats(uid: string, stats: StatsUpdate): Promise<void> {
   await updateDoc(userRef(uid), { ...stats })
+}
+
+/** Synchronise XP et niveau dans Firestore. */
+export async function updateXpLevel(uid: string, xp: number, level: number): Promise<void> {
+  await updateDoc(userRef(uid), { xp, level })
 }
 
 /** Active/désactive la visibilité publique de l'historique de gold. */
