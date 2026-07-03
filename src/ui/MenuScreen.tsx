@@ -37,13 +37,34 @@ const C = {
 // ── Bouton rond accès rapide ──────────────────────────────────────────────────
 
 function QuickBtn({
-  icon, label, hasBadge, onPress,
-}: { icon: string; label: string; hasBadge: boolean; onPress: () => void }) {
+  icon, label, hasBadge, disabled, onPress,
+}: { icon: string; label: string; hasBadge: boolean; disabled?: boolean; onPress: () => void }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current
+
+  useEffect(() => {
+    if (!hasBadge) { pulseAnim.setValue(1); return }
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.35, duration: 550, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1,    duration: 550, useNativeDriver: true }),
+      ]),
+    )
+    anim.start()
+    return () => anim.stop()
+  }, [hasBadge, pulseAnim])
+
   return (
-    <TouchableOpacity style={qb.btn} onPress={onPress} activeOpacity={0.80}>
+    <TouchableOpacity
+      style={[qb.btn, disabled && qb.btnDisabled]}
+      onPress={onPress}
+      activeOpacity={0.80}
+      disabled={disabled}
+    >
       <Text style={qb.icon}>{icon}</Text>
       <Text style={qb.label}>{label}</Text>
-      {hasBadge && <View style={qb.badge} />}
+      {hasBadge && (
+        <Animated.View style={[qb.badge, { transform: [{ scale: pulseAnim }] }]} />
+      )}
     </TouchableOpacity>
   )
 }
@@ -55,6 +76,7 @@ const qb = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
     alignItems: 'center', justifyContent: 'center', gap: 1,
   },
+  btnDisabled: { opacity: 0.4 },
   icon:  { fontSize: 22, lineHeight: 26 },
   label: { fontFamily: 'Cairo_400Regular', fontSize: 9, color: 'rgba(244,236,216,0.55)', lineHeight: 11 },
   badge: {
@@ -84,9 +106,17 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { pending: streakPending, alreadyClaimed: streakClaimed, claim: claimStreak, streak } = useDailyBonus()
   const { canSpin, spin } = useSpinWheel()
   const { reward: chest, openChest } = useDailyChest()
-  const [showStreak, setShowStreak] = useState(false)
-  const [showSpin,   setShowSpin]   = useState(false)
-  const [showChest,  setShowChest]  = useState(false)
+  const [showStreak,    setShowStreak]    = useState(false)
+  const [showSpin,      setShowSpin]      = useState(false)
+  const [showChest,     setShowChest]     = useState(false)
+  const [lastChestGold, setLastChestGold] = useState<number | null>(null)
+
+  const handleOpenChest = async () => {
+    if (!chest) return
+    const g = chest.gold
+    await openChest()
+    setLastChestGold(g)
+  }
 
   // ── Animation de fond ─────────────────────────────────────────────────────
   const bgPulse = useRef(new Animated.Value(0)).current
@@ -169,7 +199,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
         {/* ── Accès rapide flottant (droite) ───────────────────── */}
         {!!user && (
-          <View style={s.quickBar}>
+          <View style={s.quickBar} pointerEvents="box-none">
             <QuickBtn
               icon="🔥" label="Streak"
               hasBadge={!streakClaimed && streakPending !== null}
@@ -181,8 +211,10 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
               onPress={() => setShowSpin(true)}
             />
             <QuickBtn
-              icon="🎁" label="Coffre"
+              icon={chest ? '🎁' : '📦'}
+              label={chest ? 'Coffre' : lastChestGold !== null ? `+${lastChestGold}🪙` : 'Coffre'}
               hasBadge={chest !== null}
+              disabled={chest === null}
               onPress={() => { if (chest) setShowChest(true) }}
             />
           </View>
@@ -387,7 +419,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
         <DailyChestModal
           level={chest.level}
           gold={chest.gold}
-          onOpen={openChest}
+          onOpen={handleOpenChest}
           onClose={() => setShowChest(false)}
         />
       )}
