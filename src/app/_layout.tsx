@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Platform, I18nManager, View } from 'react-native'
 import { Stack } from 'expo-router'
 import { useFonts } from 'expo-font'
@@ -12,10 +12,12 @@ import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
 import { TopBar } from '../ui/TopBar'
 import { DailyBonusModal } from '../ui/DailyBonusModal'
+import { DailyChestModal } from '../ui/DailyChestModal'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { InstallPrompt } from '../ui/InstallPrompt'
 import { useDailyBonus } from '../hooks/useDailyBonus'
+import { useDailyChest } from '../hooks/useDailyChest'
 import { useAuth } from '../firebase/auth'
 
 SplashScreen.preventAutoHideAsync()
@@ -25,6 +27,29 @@ function DailyBonusGate() {
   const { pending, claim }  = useDailyBonus()
   if (!user || !pending) return null
   return <DailyBonusModal bonus={pending} onClaim={claim} />
+}
+
+function DailyChestGate() {
+  const { user }              = useAuth()
+  const { reward, openChest } = useDailyChest()
+  const [visible, setVisible] = useState(false)
+
+  // Délai 2 s pour ne pas empiler avec la modale de bonus journalier.
+  useEffect(() => {
+    if (!user || !reward) return
+    const t = setTimeout(() => setVisible(true), 2000)
+    return () => clearTimeout(t)
+  }, [user, reward])
+
+  if (!visible || !reward) return null
+  return (
+    <DailyChestModal
+      level={reward.level}
+      gold={reward.gold}
+      onOpen={openChest}
+      onClose={() => setVisible(false)}
+    />
+  )
 }
 
 export default function RootLayout() {
@@ -72,6 +97,7 @@ export default function RootLayout() {
       />
       <BottomNav />
       <DailyBonusGate />
+      <DailyChestGate />
       <IncomingInviteModal />
       <OfflineBanner />
       <InstallPrompt />
