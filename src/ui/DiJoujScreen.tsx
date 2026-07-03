@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
   ScrollView, Modal, Animated, useWindowDimensions,
@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
+import { Svg, Circle, Path, G } from 'react-native-svg'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
@@ -39,6 +40,82 @@ const SUIT_COLOR: Record<Suit, string> = {
 }
 const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos: 3 }
 function cardKey(c: Card) { return `${c.suit}_${c.value}` }
+
+// ── Icônes SVG des couleurs ───────────────────────────────────────────────────
+
+function OrosIcon() {
+  return (
+    <Svg width={40} height={40} viewBox="0 0 40 40">
+      <Circle cx="20" cy="20" r="17" fill="#C9A227" />
+      <Circle cx="20" cy="20" r="12" fill="rgba(255,255,255,0.18)" />
+      <Circle cx="20" cy="20" r="7"  fill="rgba(255,255,255,0.22)" />
+    </Svg>
+  )
+}
+
+function CopasIcon() {
+  return (
+    <Svg width={40} height={40} viewBox="0 0 40 40">
+      {/* Coupe / calice : bol arrondi + pied */}
+      <G fill="#C0392B">
+        {/* bol de la coupe */}
+        <Path d="M8 8 Q8 24 20 26 Q32 24 32 8 Z" />
+        {/* pied vertical */}
+        <Path d="M18 26 L18 35 L22 35 L22 26 Z" />
+        {/* base */}
+        <Path d="M13 33 L27 33 L27 37 L13 37 Z" />
+      </G>
+    </Svg>
+  )
+}
+
+function EspadasIcon() {
+  return (
+    <Svg width={40} height={40} viewBox="0 0 40 40">
+      {/* Épée verticale : lame pointue + garde + poignée */}
+      <G fill="#2980B9">
+        {/* lame (triangle effilé) */}
+        <Path d="M20 2 L24 30 L20 27 L16 30 Z" />
+        {/* garde horizontale */}
+        <Path d="M10 30 L30 30 L30 33 L10 33 Z" />
+        {/* poignée */}
+        <Path d="M18 33 L22 33 L22 40 L18 40 Z" />
+      </G>
+    </Svg>
+  )
+}
+
+function BastosIcon() {
+  return (
+    <Svg width={40} height={40} viewBox="0 0 40 40">
+      {/* Bâton/massue épais avec nœuds */}
+      <G fill="#27AE60">
+        {/* corps du bâton, légèrement incliné */}
+        <Path d="M17 38 L16 12 L20 10 L24 12 L23 38 Z" />
+        {/* nœud du bas */}
+        <Path d="M14 34 Q20 37 26 34 Q20 31 14 34 Z" />
+        {/* nœud du milieu */}
+        <Path d="M13 22 Q20 25 27 22 Q20 19 13 22 Z" />
+        {/* tête du bâton (boule) */}
+        <Circle cx="20" cy="9" r="7" />
+      </G>
+    </Svg>
+  )
+}
+
+const SUIT_ICON: Record<Suit, () => React.ReactElement> = {
+  oros:    OrosIcon,
+  copas:   CopasIcon,
+  espadas: EspadasIcon,
+  bastos:  BastosIcon,
+}
+
+const SUIT_BG: Record<Suit, string> = {
+  oros:    'rgba(201,162,39,0.20)',
+  copas:   'rgba(192,57,43,0.20)',
+  espadas: 'rgba(41,128,185,0.20)',
+  bastos:  'rgba(39,174,96,0.20)',
+}
 
 // ── Helper : rangée de dos de cartes ─────────────────────────────────────────
 
@@ -372,13 +449,20 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             <View style={s.modalBox}>
               <Text style={s.modalTitle}>{t('djChooseSuit')}</Text>
               <View style={s.suitGrid}>
-                {SUITS.map(suit => (
-                  <TouchableOpacity key={suit} style={[s.suitBtn, { borderColor: SUIT_COLOR[suit] }]}
-                    onPress={() => { playCard(pendingWild!, suit); setPendingWild(null) }} activeOpacity={0.8}>
-                    <View style={[s.suitCircle, { backgroundColor: SUIT_COLOR[suit] }]} />
-                    <Text style={s.suitLabel}>{suit}</Text>
-                  </TouchableOpacity>
-                ))}
+                {SUITS.map(suit => {
+                  const Icon = SUIT_ICON[suit]
+                  return (
+                    <TouchableOpacity
+                      key={suit}
+                      style={[s.suitBtn, { borderColor: SUIT_COLOR[suit], backgroundColor: SUIT_BG[suit] }]}
+                      onPress={() => { playCard(pendingWild!, suit); setPendingWild(null) }}
+                      activeOpacity={0.8}
+                    >
+                      <Icon />
+                      <Text style={s.suitLabel}>{suit}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
               </View>
               <TouchableOpacity onPress={() => setPendingWild(null)} style={s.cancelBtn}>
                 <Text style={s.cancelTxt}>{t('cancel')}</Text>
@@ -602,10 +686,9 @@ const s = StyleSheet.create({
   modalTitle: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 16, letterSpacing: 0.5 },
   suitGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
   suitBtn: {
-    width: 128, flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 2, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
+    width: 120, flexDirection: 'column', alignItems: 'center', gap: 8,
+    borderWidth: 2, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 10,
   },
-  suitCircle:  { width: 14, height: 14, borderRadius: 7 },
   suitLabel:   { fontFamily: 'Cairo_400Regular', color: C.bone, fontSize: 13, textTransform: 'capitalize' },
   cancelBtn:   { paddingVertical: 4 },
   cancelTxt:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
