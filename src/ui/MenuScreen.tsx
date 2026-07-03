@@ -268,37 +268,24 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
         {/* ── Contenu scrollable ────────────────────────────────── */}
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
-          {/* ── Titre plateforme ──────────────────────────────────── */}
+          {/* ── Hero ────────────────────────────────────────────── */}
           <View style={s.hero}>
-            <View style={s.titleRow}>
-              <Text style={s.platformTitle}>Dar Lwar9a</Text>
-              <Text style={s.platformTM}>TM</Text>
-            </View>
-            <Text style={s.platformAr}>دار الورقة</Text>
-            <View style={s.divider} />
 
-            {/* ── Widget profil centré ─────────────────────────── */}
+            {/* Barre profil : photo à gauche, gold à droite */}
             {user ? (
-              <View style={s.profileWidget}>
-                <TouchableOpacity
-                  onPress={() => router.push('/profile' as Href)}
-                  activeOpacity={0.80}
-                >
+              <View style={s.profileBar}>
+                <TouchableOpacity style={s.profileLeft} onPress={() => router.push('/profile' as Href)} activeOpacity={0.80}>
                   <AvatarDisplay
                     type={(avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
                     initial={username?.[0]?.toUpperCase() ?? '?'}
                     emoji={avatarEmoji ?? ''}
                     image={avatarImage ?? ''}
-                    size={58}
+                    size={40}
                     frame={avatarFrame ?? 'none'}
                   />
+                  <Text style={s.profileUsername} numberOfLines={1}>{username}</Text>
                 </TouchableOpacity>
-                <Text style={s.profileUsername} numberOfLines={1}>{username}</Text>
-                <TouchableOpacity
-                  style={s.goldPill}
-                  onPress={() => router.push('/gold-shop' as Href)}
-                  activeOpacity={0.75}
-                >
+                <TouchableOpacity style={s.goldPill} onPress={() => router.push('/gold-shop' as Href)} activeOpacity={0.75}>
                   <Text style={s.goldCoin}>🪙</Text>
                   <Text style={s.goldAmount}>{gold}</Text>
                 </TouchableOpacity>
@@ -306,6 +293,14 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
             ) : (
               <Text style={s.helloTxt}>Salut {username || '…'} 👋</Text>
             )}
+
+            {/* Titre plateforme */}
+            <View style={s.titleRow}>
+              <Text style={s.platformTitle}>Dar Lwar9a</Text>
+              <Text style={s.platformTM}>TM</Text>
+            </View>
+            <Text style={s.platformAr}>دار الورقة</Text>
+            <View style={s.divider} />
           </View>
 
           {/* ── 3 boutons d'action ───────────────────────────────── */}
@@ -446,7 +441,7 @@ const s = StyleSheet.create({
   scrollContent: { gap: 16, paddingBottom: 28, paddingTop: 8 },
 
   // Hero
-  hero:     { alignItems: 'center', paddingVertical: 28, gap: 6 },
+  hero: { alignItems: 'center', paddingTop: 16, paddingBottom: 20, gap: 6 },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   platformTitle: {
     fontFamily: 'Cairo_600SemiBold',
@@ -482,10 +477,15 @@ const s = StyleSheet.create({
     fontFamily: 'Cairo_400Regular', fontSize: 14, color: 'rgba(244,236,216,0.50)',
   },
 
-  // Widget profil centré
-  profileWidget: { alignItems: 'center', gap: 8 },
+  // Barre profil (photo gauche, gold droite)
+  profileBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    alignSelf: 'stretch', marginBottom: 4,
+  },
+  profileLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   profileUsername: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.bone, letterSpacing: 0.3,
+    fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone,
+    letterSpacing: 0.3, maxWidth: 130,
   },
   goldPill: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
