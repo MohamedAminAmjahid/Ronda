@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { useI18n } from '../i18n/useI18n'
-import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/profile'
+import { loadActiveRoom, clearActiveRoom, xpRequired, type ActiveRoom } from '../profile/profile'
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 import { GameChoiceModal, type GameKey } from './GameChoiceModal'
@@ -176,7 +176,7 @@ interface Props {
 // ── Écran ─────────────────────────────────────────────────────────────────────
 
 export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
-  const { username, gold, avatarType, avatarEmoji, avatarImage, avatarFrame, level } = useProfile()
+  const { username, gold, avatarType, avatarEmoji, avatarImage, avatarFrame, level, xp } = useProfile()
   const { t, lang, setLang } = useI18n()
   const { user } = useAuth()
 
@@ -361,6 +361,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
                     size={40}
                     frame={avatarFrame ?? 'none'}
                     level={level}
+                    xp={xp} xpMax={xpRequired(level ?? 1)}
                   />
                   <Text style={s.profileUsername} numberOfLines={1}>{username}</Text>
                 </TouchableOpacity>

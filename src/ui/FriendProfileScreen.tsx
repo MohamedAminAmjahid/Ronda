@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
+import { xpRequired } from '../profile/profile'
 import { GoldTransferForm } from './GoldTransferForm'
 import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
@@ -117,6 +118,7 @@ export function FriendProfileScreen({ onBack }: Props) {
                   image={profile.avatarImage ?? ''}
                   size={88}
                   level={profile.level}
+                  xp={profile.xp} xpMax={xpRequired(profile.level)}
                 />
                 <PresenceDot info={presence} size={16} ring={C.table} />
               </View>

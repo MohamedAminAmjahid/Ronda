@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
+import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
 import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
@@ -222,6 +223,7 @@ export function FriendsScreen({ onBack }: Props) {
                           image={f.avatarImage ?? ''}
                           size={40}
                           level={f.level}
+                          xp={f.xp} xpMax={xpRequired(f.level ?? 1)}
                         />
                         <PresenceDot info={info} ring={C.table} />
                       </View>
@@ -271,6 +273,7 @@ export function FriendsScreen({ onBack }: Props) {
                       image={r.avatarImage ?? ''}
                       size={40}
                       level={r.level}
+                      xp={r.xp} xpMax={xpRequired(r.level ?? 1)}
                     />
                     <Text style={s.rowName} numberOfLines={1}>{r.username}</Text>
                     <View style={s.rowActions}>
@@ -317,6 +320,7 @@ export function FriendsScreen({ onBack }: Props) {
                     image={result.avatarImage ?? ''}
                     size={40}
                     level={result.level}
+                    xp={result.xp} xpMax={xpRequired(result.level)}
                   />
                   <Text style={s.rowName} numberOfLines={1}>{result.username}</Text>
                   <TouchableOpacity style={s.btnSmall} onPress={() => add(result)}>

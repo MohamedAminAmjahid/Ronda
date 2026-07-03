@@ -17,6 +17,7 @@ import {
   incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
 } from '../profile/profile'
 import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
+import { Svg, Circle } from 'react-native-svg'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
@@ -57,11 +58,38 @@ interface AvatarDisplayProps {
   frame?: string
   /** Si fourni → badge niveau laiton en bas de l'avatar. */
   level?: number
+  /** XP actuel — affiche l'anneau de progression. */
+  xp?: number
+  /** XP requis pour le prochain niveau (xpRequired(level)). */
+  xpMax?: number
 }
 
-export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level }: AvatarDisplayProps) {
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
+
+export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level, xp, xpMax }: AvatarDisplayProps) {
   const radius   = size / 2
   const fontSize = type === 'emoji' ? size * 0.48 : size * 0.45
+
+  // Anneau XP — géométrie
+  const ringR   = size / 2 + 3.5
+  const ringStW = 3
+  const ringDia = ringR * 2 + ringStW
+  const ringOff = (ringDia - size) / 2
+  const circ    = 2 * Math.PI * ringR
+
+  const dashAnim = useRef(new Animated.Value(circ)).current
+  const hasXp    = xp !== undefined && !!xpMax
+
+  useEffect(() => {
+    if (!hasXp) return
+    const target = circ * (1 - Math.min((xp as number) / (xpMax as number), 1))
+    dashAnim.setValue(circ)
+    Animated.timing(dashAnim, { toValue: Math.max(0, target), duration: 600, useNativeDriver: false }).start()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xp, xpMax])
+
+  const nearFull  = hasXp && (xp as number) >= (xpMax as number)
+  const ringColor = nearFull ? '#27AE60' : '#C9A227'
 
   const inner = (type === 'image' && image) ? (
     <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
@@ -81,16 +109,40 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
 
   const avatar = frame === 'none' ? inner : <FramedAvatar frame={frame} size={size}>{inner}</FramedAvatar>
 
-  if (level === undefined) return avatar
+  if (level === undefined && !hasXp) return avatar
 
   return (
     <View style={av.withLevel}>
       {avatar}
-      <View style={av.levelWrap}>
-        <View style={av.levelBadge}>
-          <Text style={av.levelTxt}>{level}</Text>
+
+      {hasXp && (
+        <View pointerEvents="none" style={[av.ringWrap, { width: ringDia, height: ringDia, top: -ringOff, left: -ringOff }]}>
+          <Svg width={ringDia} height={ringDia}>
+            <Circle
+              cx={ringDia / 2} cy={ringDia / 2} r={ringR}
+              stroke="rgba(244,236,216,0.12)" strokeWidth={ringStW} fill="none"
+            />
+            <AnimatedCircle
+              cx={ringDia / 2} cy={ringDia / 2} r={ringR}
+              stroke={ringColor} strokeWidth={ringStW} fill="none"
+              strokeDasharray={circ}
+              strokeDashoffset={dashAnim as unknown as number}
+              strokeLinecap="round"
+              rotation={-90}
+              originX={ringDia / 2}
+              originY={ringDia / 2}
+            />
+          </Svg>
         </View>
-      </View>
+      )}
+
+      {level !== undefined && (
+        <View style={av.levelWrap}>
+          <View style={av.levelBadge}>
+            <Text style={av.levelTxt}>{level}</Text>
+          </View>
+        </View>
+      )}
     </View>
   )
 }
@@ -142,6 +194,7 @@ const av = StyleSheet.create({
   },
   text: { fontFamily: 'Cairo_600SemiBold', color: '#C9A227', textAlign: 'center' },
   withLevel: { alignSelf: 'flex-start' },
+  ringWrap: { position: 'absolute' },
   levelWrap: {
     position: 'absolute', bottom: -6,
     left: 0, right: 0, alignItems: 'center',
@@ -467,6 +520,7 @@ export function ProfileScreen() {
               emoji={avatarEmoji} image={avatarImage} size={88}
               frame={avatarFrame}
               level={level}
+              xp={xp} xpMax={xpRequired(level)}
             />
             <View style={s.avatarEditBadge}>
               <Text style={s.avatarEditIcon}>✎</Text>

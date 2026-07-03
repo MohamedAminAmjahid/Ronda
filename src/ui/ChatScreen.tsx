@@ -12,6 +12,7 @@ import {
 } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
 import { AvatarDisplay } from './ProfileScreen'
+import { xpRequired } from '../profile/profile'
 import { PresenceDot, presenceLabel } from './PresenceDot'
 
 const C = {
@@ -49,6 +50,7 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
     avatarType: string; avatarEmoji: string; avatarImage: string
   }>({ avatarType: 'initial', avatarEmoji: '', avatarImage: '' })
   const [friendLevel, setFriendLevel] = useState<number | undefined>(undefined)
+  const [friendXp,    setFriendXp]    = useState<number | undefined>(undefined)
 
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
 
@@ -59,6 +61,7 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
       if (!doc) return
       setFriendAvatar({ avatarType: doc.avatarType, avatarEmoji: doc.avatarEmoji, avatarImage: doc.avatarImage })
       setFriendLevel(doc.level)
+      setFriendXp(doc.xp)
     })
   }, [friendUid])
 
@@ -109,6 +112,8 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
             image={friendAvatar.avatarImage}
             size={36}
             level={friendLevel}
+            xp={friendXp}
+            xpMax={friendLevel !== undefined ? xpRequired(friendLevel) : undefined}
           />
           <PresenceDot info={presence} ring={C.bg} />
         </View>
