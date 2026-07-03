@@ -8,6 +8,13 @@ import { loadActiveRoom, clearActiveRoom, type ActiveRoom } from '../profile/pro
 import { reconnect as reconnect1v1 } from '../online/store'
 import { reconnectLobby } from '../online/lobby2v2'
 import { GameChoiceModal, type GameKey } from './GameChoiceModal'
+import { useAuth } from '../firebase/auth'
+import { useDailyBonus } from '../hooks/useDailyBonus'
+import { useSpinWheel } from '../hooks/useSpinWheel'
+import { useDailyChest } from '../hooks/useDailyChest'
+import { StreakInfoModal } from './StreakInfoModal'
+import { SpinWheelModal } from './SpinWheelModal'
+import { DailyChestModal } from './DailyChestModal'
 
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
@@ -26,6 +33,37 @@ const C = {
   ink:         '#1C2622',
 } as const
 
+// ── Bouton rond accès rapide ──────────────────────────────────────────────────
+
+function QuickBtn({
+  icon, label, hasBadge, onPress,
+}: { icon: string; label: string; hasBadge: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={qb.btn} onPress={onPress} activeOpacity={0.80}>
+      <Text style={qb.icon}>{icon}</Text>
+      <Text style={qb.label}>{label}</Text>
+      {hasBadge && <View style={qb.badge} />}
+    </TouchableOpacity>
+  )
+}
+
+const qb = StyleSheet.create({
+  btn: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: 'rgba(0,0,0,0.30)',
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+    alignItems: 'center', justifyContent: 'center', gap: 1,
+  },
+  icon:  { fontSize: 22, lineHeight: 26 },
+  label: { fontFamily: 'Cairo_400Regular', fontSize: 9, color: 'rgba(244,236,216,0.55)', lineHeight: 11 },
+  badge: {
+    position: 'absolute', top: 3, right: 3,
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: '#E53935',
+    borderWidth: 1.5, borderColor: '#0D0D1A',
+  },
+})
+
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -39,6 +77,15 @@ interface Props {
 export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { username } = useProfile()
   const { t, lang, setLang } = useI18n()
+  const { user } = useAuth()
+
+  // ── Accès rapide : streak / roue / coffre ─────────────────────────────────
+  const { pending: streakPending, alreadyClaimed: streakClaimed, claim: claimStreak, streak } = useDailyBonus()
+  const { canSpin, spin } = useSpinWheel()
+  const { reward: chest, openChest } = useDailyChest()
+  const [showStreak, setShowStreak] = useState(false)
+  const [showSpin,   setShowSpin]   = useState(false)
+  const [showChest,  setShowChest]  = useState(false)
 
   // ── Animation de fond ─────────────────────────────────────────────────────
   const bgPulse = useRef(new Animated.Value(0)).current
@@ -118,6 +165,27 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
     <Animated.View style={[s.rootBg, { backgroundColor: bgColor }]}>
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
+
+        {/* ── Accès rapide flottant (droite) ───────────────────── */}
+        {!!user && (
+          <View style={s.quickBar}>
+            <QuickBtn
+              icon="🔥" label="Streak"
+              hasBadge={!streakClaimed && streakPending !== null}
+              onPress={() => setShowStreak(true)}
+            />
+            <QuickBtn
+              icon="🎰" label="Roue"
+              hasBadge={canSpin}
+              onPress={() => setShowSpin(true)}
+            />
+            <QuickBtn
+              icon="🎁" label="Coffre"
+              hasBadge={chest !== null}
+              onPress={() => { if (chest) setShowChest(true) }}
+            />
+          </View>
+        )}
 
         {/* ── Modale de reconnexion ────────────────────────────── */}
         <Modal visible={resumeRoom !== null} transparent animationType="fade" onRequestClose={onForfeit}>
@@ -267,6 +335,32 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
         </ScrollView>
       </View>
+
+      {/* ── Modales accès rapide ─────────────────────────────── */}
+      {showStreak && (
+        <StreakInfoModal
+          streak={streak}
+          pending={streakPending}
+          alreadyClaimed={streakClaimed}
+          onClaim={claimStreak}
+          onClose={() => setShowStreak(false)}
+        />
+      )}
+      {showSpin && (
+        <SpinWheelModal
+          canSpin={canSpin}
+          onSpin={spin}
+          onClose={() => setShowSpin(false)}
+        />
+      )}
+      {showChest && chest && (
+        <DailyChestModal
+          level={chest.level}
+          gold={chest.gold}
+          onOpen={openChest}
+          onClose={() => setShowChest(false)}
+        />
+      )}
     </SafeAreaView>
     </Animated.View>
   )
@@ -278,6 +372,12 @@ const s = StyleSheet.create({
   rootBg: { flex: 1 },
   root:   { flex: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
+
+  // Accès rapide flottant
+  quickBar: {
+    position: 'absolute', right: 12, top: 0, bottom: 0,
+    justifyContent: 'center', alignItems: 'center', gap: 10, zIndex: 10,
+  },
 
   // Scrollable
   scroll:        { flex: 1 },
