@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
@@ -40,11 +41,13 @@ export function DailyQuestsScreen({ onBack }: Props) {
   const { gold } = useProfile()
   const quests = useDailyQuests()
   const {
-    pending:      streakPending,
+    pending:        streakPending,
     alreadyClaimed: streakClaimed,
-    claim:        claimStreak,
-    streak:       loginStreak,
+    claim:          claimStreak,
+    streak:         loginStreak,
   } = useDailyBonus()
+
+  const [claimed, setClaimed] = useState(false)
 
   if (!authLoading && !user) {
     return (
@@ -60,8 +63,9 @@ export function DailyQuestsScreen({ onBack }: Props) {
   }
 
   const handleCollect = async () => {
+    if (claimed || streakClaimed) return
     await claimStreak()
-    router.push('/gold-shop' as Href)
+    setClaimed(true)
   }
 
   return (
@@ -91,14 +95,14 @@ export function DailyQuestsScreen({ onBack }: Props) {
               <Text style={s.streakTitle}>{t('streakTitle')}</Text>
               <Text style={s.streakDays}>{t('streakDays').replace('{n}', String(loginStreak))}</Text>
             </View>
-            {streakClaimed ? (
+            {(streakClaimed || claimed) ? (
               <View style={[s.badge, s.badgeDone]}>
                 <Text style={[s.badgeTxt, s.badgeTxtDone]}>✅ Réclamé</Text>
               </View>
             ) : (
               <TouchableOpacity
                 style={[s.actionBtn, streakPending === null && s.actionBtnDisabled]}
-                onPress={handleCollect}
+                onPress={() => { void handleCollect() }}
                 disabled={streakPending === null}
                 activeOpacity={0.80}
               >
