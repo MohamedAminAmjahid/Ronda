@@ -116,13 +116,11 @@ export function FriendProfileScreen({ onBack }: Props) {
                   emoji={profile.avatarEmoji ?? ''}
                   image={profile.avatarImage ?? ''}
                   size={88}
+                  level={profile.level}
                 />
                 <PresenceDot info={presence} size={16} ring={C.table} />
               </View>
               <Text style={s.username} numberOfLines={1}>{profile.username}</Text>
-              {typeof profile.level === 'number' && (
-                <Text style={s.levelBadge}>⭐ {t('level')} {profile.level}</Text>
-              )}
               {(() => {
                 const label = presenceLabel(presence, t, { hours: true })
                 if (!label) return null

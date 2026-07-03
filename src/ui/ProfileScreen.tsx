@@ -55,9 +55,11 @@ interface AvatarDisplayProps {
   size?: number
   /** Cadre premium équipé (défaut : 'none'). */
   frame?: string
+  /** Si fourni → badge niveau laiton en bas de l'avatar. */
+  level?: number
 }
 
-export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none' }: AvatarDisplayProps) {
+export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level }: AvatarDisplayProps) {
   const radius   = size / 2
   const fontSize = type === 'emoji' ? size * 0.48 : size * 0.45
 
@@ -77,8 +79,20 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
     </View>
   )
 
-  if (frame === 'none') return inner
-  return <FramedAvatar frame={frame} size={size}>{inner}</FramedAvatar>
+  const avatar = frame === 'none' ? inner : <FramedAvatar frame={frame} size={size}>{inner}</FramedAvatar>
+
+  if (level === undefined) return avatar
+
+  return (
+    <View style={av.withLevel}>
+      {avatar}
+      <View style={av.levelWrap}>
+        <View style={av.levelBadge}>
+          <Text style={av.levelTxt}>{level}</Text>
+        </View>
+      </View>
+    </View>
+  )
 }
 
 /** Anneau (cadre) autour de l'avatar, avec lueur animée. */
@@ -127,6 +141,22 @@ const av = StyleSheet.create({
     overflow: 'hidden',
   },
   text: { fontFamily: 'Cairo_600SemiBold', color: '#C9A227', textAlign: 'center' },
+  withLevel: { alignSelf: 'flex-start' },
+  levelWrap: {
+    position: 'absolute', bottom: -6,
+    left: 0, right: 0, alignItems: 'center',
+  },
+  levelBadge: {
+    minWidth: 18, height: 18, borderRadius: 9,
+    backgroundColor: '#C9A227',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 1.5, borderColor: '#0D0D1A',
+  },
+  levelTxt: {
+    fontFamily: 'Cairo_600SemiBold',
+    fontSize: 9, lineHeight: 12, color: '#1C2622',
+  },
 })
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -489,14 +519,27 @@ export function ProfileScreen() {
         <View style={s.card}>
           <Text style={s.cardLabel}>{t('referral')}</Text>
           <Text style={s.referralDesc}>{t('referralDesc')}</Text>
-          <View style={s.referralBtns}>
-            <TouchableOpacity style={s.referralCopyBtn} onPress={() => { void copyReferral() }} activeOpacity={0.85}>
-              <Text style={s.referralCopyTxt}>{linkCopied ? t('referralSuccess') : t('referralCopy')}</Text>
+          {user ? (
+            <View style={s.referralBtns}>
+              <TouchableOpacity style={s.referralCopyBtn} onPress={() => { void copyReferral() }} activeOpacity={0.85}>
+                <Text style={s.referralCopyTxt}>{linkCopied ? t('referralSuccess') : t('referralCopy')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.referralShareBtn} onPress={() => { void shareReferral() }} activeOpacity={0.85}>
+                <Text style={s.referralShareTxt}>{t('referralShare')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[s.authBtn, s.googleBtn]}
+              onPress={() => { void handleSignIn() }}
+              disabled={authLoading}
+              activeOpacity={0.85}
+            >
+              {authLoading
+                ? <ActivityIndicator color="#1C2622" />
+                : <Text style={s.googleBtnTxt}>🔐 Se connecter pour parrainer</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={s.referralShareBtn} onPress={() => { void shareReferral() }} activeOpacity={0.85}>
-              <Text style={s.referralShareTxt}>{t('referralShare')}</Text>
-            </TouchableOpacity>
-          </View>
+          )}
           {user && (
             <Text style={s.referralCount}>{t('referralCount').replace('{n}', String(referralCount))}</Text>
           )}
