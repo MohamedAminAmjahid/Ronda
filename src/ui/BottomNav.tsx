@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Modal } from 'react-native'
 import { Svg, Path, Rect } from 'react-native-svg'
+import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { usePathname, router, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../firebase/auth'
@@ -90,6 +91,7 @@ function AppStoreIcon({ size = 14 }: { size?: number }) {
 function MobileTabItem() {
   const [show, setShow] = useState(false)
   const scale = useRef(new Animated.Value(1)).current
+  const { canInstall, install } = useInstallPrompt()
 
   const onPress = () => {
     Animated.sequence([
@@ -138,6 +140,17 @@ function MobileTabItem() {
                 💡 En attendant, tu peux installer cette page comme application (PWA) depuis les options de ton navigateur.
               </Text>
             </View>
+
+            {/* Bouton installer PWA */}
+            {canInstall ? (
+              <TouchableOpacity style={s.installBtn} onPress={install} activeOpacity={0.85}>
+                <Text style={s.installBtnTxt}>📲 Installer l'app</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={[s.installBtn, s.installBtnDisabled]}>
+                <Text style={s.installBtnDisabledTxt}>📲 Installer l'app</Text>
+              </View>
+            )}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -253,4 +266,12 @@ const s = StyleSheet.create({
     padding: 14, borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)',
   },
   pwaTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.70)', lineHeight: 18 },
+
+  installBtn: {
+    width: '100%', backgroundColor: '#C9A227', borderRadius: 13,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  installBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: '#1C2622' },
+  installBtnDisabled: { backgroundColor: 'rgba(244,236,216,0.10)' },
+  installBtnDisabledTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: 'rgba(244,236,216,0.30)' },
 })

@@ -17,7 +17,6 @@ import { DailyChestModal } from '../ui/DailyChestModal'
 import { LevelUpModal } from '../ui/LevelUpModal'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
-import { InstallPrompt } from '../ui/InstallPrompt'
 import { useDailyBonus } from '../hooks/useDailyBonus'
 import { useDailyChest } from '../hooks/useDailyChest'
 import { useAuth } from '../firebase/auth'
@@ -125,7 +124,6 @@ export default function RootLayout() {
       <LevelUpGate />
       <IncomingInviteModal />
       <OfflineBanner />
-      <InstallPrompt />
     </View>
   )
 }
