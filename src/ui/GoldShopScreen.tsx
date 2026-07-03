@@ -332,25 +332,6 @@ export function GoldShopScreen({ onBack }: Props) {
             <Text style={s.counter}>{t('todayCount').replace('{count}', String(shareCount)).replace('{limit}', String(SHARE_DAILY_LIMIT))}</Text>
           </View>
 
-          {/* 2. Facebook */}
-          <FollowCard
-            label={t('followFb')}
-            reward={FOLLOW_REWARD}
-            claimed={fbClaimed}
-            onPress={() => openFollow('fb')}
-            claimedTxt={t('claimed')}
-            onceTxt={t('followOnce')}
-          />
-
-          {/* 3. Instagram */}
-          <FollowCard
-            label={t('followIg')}
-            reward={FOLLOW_REWARD}
-            claimed={igClaimed}
-            onPress={() => openFollow('ig')}
-            claimedTxt={t('claimed')}
-            onceTxt={t('followOnce')}
-          />
 
           {/* Regarder une vidéo (pub récompensée — simulation web) */}
           <View style={s.card}>
@@ -669,7 +650,6 @@ function GiftTransferCard({ mode }: { mode: 'gift' | 'transfer' }) {
               )}
               {(() => {
                 const cost = giftCost(giftAmount)
-                console.log('[Gift] giftAmount:', giftAmount, 'giftCost:', cost, 'gold:', gold, 'sending:', sending)
                 const disabled = giftAmount <= 0 || sending || gold < cost
                 const cannotAfford = giftAmount > 0 && gold < cost
                 return (

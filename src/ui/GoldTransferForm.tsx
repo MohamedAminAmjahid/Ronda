@@ -88,7 +88,7 @@ export function GoldTransferForm({ targetUid, targetName, onDone }: Props) {
         <TextInput
           style={s.input}
           value={input}
-          onChangeText={(v) => { setInput(v.replace(/[^0-9]/g, '').slice(0, 4)); setOkMsg(null); setErrMsg(null) }}
+          onChangeText={(v) => { setInput(v.replace(/[^0-9]/g, '').slice(0, String(remaining).length)); setOkMsg(null); setErrMsg(null) }}
           placeholder={remaining <= 0 ? '—' : `max ${Math.min(remaining, gold)}`}
           placeholderTextColor={C.boneOff}
           keyboardType="number-pad"

@@ -201,7 +201,13 @@ export function FriendsScreen({ onBack }: Props) {
 
           {tab === 'friends' && !loading && (
             friends.length === 0
-              ? <Text style={s.empty}>{t('noFriends')}</Text>
+              ? (
+                <View style={s.onboardingWrap}>
+                  <Text style={s.onboardingIcon}>👥</Text>
+                  <Text style={s.onboardingTitle}>{t('noFriends')}</Text>
+                  <Text style={s.onboardingHint}>{t('noFriendsHint')}</Text>
+                </View>
+              )
               : friends.map((f) => {
                 const unread = unreadCounts[f.uid] ?? 0
                 const initial = f.username?.[0]?.toUpperCase() ?? '?'
@@ -396,6 +402,11 @@ const s = StyleSheet.create({
 
   body: { paddingVertical: 8, gap: 8, paddingBottom: 24 },
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 24, lineHeight: 20 },
+
+  onboardingWrap: { alignItems: 'center', marginTop: 48, gap: 10 },
+  onboardingIcon:  { fontSize: 48, lineHeight: 56 },
+  onboardingTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone, textAlign: 'center' },
+  onboardingHint:  { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, textAlign: 'center', lineHeight: 20 },
 
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,

@@ -12,7 +12,7 @@ import {
   updateXpLevel as firestoreUpdateXpLevel,
   applyReferral, REFERRAL_REWARD,
 } from '../firebase/firestore'
-import { apiGift, apiTransfer } from '../online/serverApi'
+import { apiGift, apiTransfer, notifyGold } from '../online/serverApi'
 import { markQuestProgress, registerGoldSetter } from '../quests/quests'
 import { TABLES, BACKS, DEFAULT_TABLE, DEFAULT_BACK, type CosmeticKind } from '../cosmetics/catalog'
 import { FRAMES, DEFAULT_FRAME } from '../cosmetics/avatarFrames'
@@ -386,6 +386,7 @@ export async function transferGold(toUid: string, amount: number, _toName = ''):
     profile = { ...profile, dailyTransferSent: DAILY_TRANSFER_LIMIT - newRemaining, dailyTransferDate: todayStr() }
     void persist()
     emit()
+    notifyGold(toUid, amount, 'transfer')
     return { ok: true }
   }
   if (r.reason === 'balance') return { ok: false, reason: 'balance', remaining: r.remaining ?? remaining }
@@ -410,6 +411,7 @@ export async function giftGold(toUid: string, amount: number, _toName = ''): Pro
   const r = await apiGift(toUid, amount)
   if (!r.ok) throw new Error('gift_failed')
   removeGold(cost)
+  notifyGold(toUid, amount, 'gift')
   void markQuestProgress('sendGift')
 }
 
