@@ -189,6 +189,9 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const [showChest,     setShowChest]     = useState(false)
   const [showLangModal, setShowLangModal] = useState(false)
   const [lastChestGold, setLastChestGold] = useState<number | null>(null)
+  const [toastGold,     setToastGold]     = useState<number | null>(null)
+  const toastAnim    = useRef(new Animated.Value(0)).current
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Mesure layout pour centrer quickBar sur la zone des boutons d'action
   const [heroH,   setHeroH]   = useState(230)
@@ -200,6 +203,18 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
     const g = chest.gold
     await openChest()
     setLastChestGold(g)
+  }
+
+  const showChestToast = (gold: number) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    setToastGold(gold)
+    toastAnim.setValue(0)
+    Animated.timing(toastAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start()
+    toastTimerRef.current = setTimeout(() => {
+      Animated.timing(toastAnim, { toValue: 0, duration: 280, useNativeDriver: true }).start(() => {
+        setToastGold(null)
+      })
+    }, 3000)
   }
 
   // ── Animation de fond ────────────────────────────────────────────────────
@@ -488,7 +503,21 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           gold={chest.gold}
           onOpen={handleOpenChest}
           onClose={() => setShowChest(false)}
+          onOpened={showChestToast}
         />
+      )}
+
+      {/* Toast coffre : affiché 3 s après fermeture de la modale */}
+      {toastGold !== null && (
+        <Animated.View
+          style={[s.chestToast, {
+            opacity: toastAnim,
+            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          }]}
+          pointerEvents="none"
+        >
+          <Text style={s.chestToastTxt}>🎉 +{toastGold} 🪙</Text>
+        </Animated.View>
       )}
 
     </SafeAreaView>
@@ -502,6 +531,15 @@ const s = StyleSheet.create({
   rootBg: { flex: 1 },
   root:   { flex: 1, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
+
+  chestToast: {
+    position: 'absolute', bottom: 88, alignSelf: 'center',
+    backgroundColor: 'rgba(13,13,26,0.94)',
+    borderRadius: 22, paddingVertical: 12, paddingHorizontal: 24,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.45)',
+    zIndex: 99,
+  },
+  chestToastTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: '#C9A227' },
 
   // QuickBar — absolu dans SafeAreaView, centré sur la zone d'action
   quickBar: {

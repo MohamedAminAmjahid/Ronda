@@ -63,13 +63,15 @@ export function ChestSVG({ level, size = 90 }: { level: ChestLevel; size?: numbe
 }
 
 interface Props {
-  level:   ChestLevel
-  gold:    number
-  onOpen:  () => Promise<void>
-  onClose: () => void
+  level:     ChestLevel
+  gold:      number
+  onOpen:    () => Promise<void>
+  onClose:   () => void
+  /** Appelé avec le montant au moment où l'utilisateur ferme après ouverture. */
+  onOpened?: (gold: number) => void
 }
 
-export function DailyChestModal({ level, gold, onOpen, onClose }: Props) {
+export function DailyChestModal({ level, gold, onOpen, onClose, onOpened }: Props) {
   const { t }        = useI18n()
   const meta         = LEVEL_META[level]
   const shakeAnim    = useRef(new Animated.Value(0)).current
@@ -101,6 +103,11 @@ export function DailyChestModal({ level, gold, onOpen, onClose }: Props) {
     Animated.spring(rewardScale, { toValue: 1, friction: 5, tension: 200, useNativeDriver: true }).start()
   }, [opened, rewardScale])
 
+  const handleClose = () => {
+    if (opened) onOpened?.(gold)
+    onClose()
+  }
+
   const handleOpen = async () => {
     if (opened) return
     Animated.spring(scaleAnim, {
@@ -120,7 +127,7 @@ export function DailyChestModal({ level, gold, onOpen, onClose }: Props) {
         <Animated.View style={[s.card, { opacity: fadeAnim }]}>
 
           {/* ✕ Fermer */}
-          <TouchableOpacity style={s.closeBtn} onPress={onClose} hitSlop={10}>
+          <TouchableOpacity style={s.closeBtn} onPress={handleClose} hitSlop={10}>
             <Text style={s.closeTxt}>✕</Text>
           </TouchableOpacity>
 
@@ -141,7 +148,7 @@ export function DailyChestModal({ level, gold, onOpen, onClose }: Props) {
           {/* Récompense après ouverture */}
           {opened ? (
             <Animated.View style={[s.rewardBox, { transform: [{ scale: rewardScale }] }]}>
-              <Text style={s.rewardTxt}>🪙 +{gold}</Text>
+              <Text style={s.rewardTxt}>🎉 +{gold} 🪙</Text>
             </Animated.View>
           ) : (
             <Text style={s.hintTxt}>{Math.floor(gold * 0.7)}–{gold} 🪙</Text>
@@ -153,7 +160,7 @@ export function DailyChestModal({ level, gold, onOpen, onClose }: Props) {
                 <Text style={s.openBtnTxt}>{t('chestOpen')}</Text>
               </TouchableOpacity>
             ) : (
-              <TouchableOpacity style={s.openBtn} onPress={onClose} activeOpacity={0.85}>
+              <TouchableOpacity style={s.openBtn} onPress={handleClose} activeOpacity={0.85}>
                 <Text style={s.openBtnTxt}>{t('adClose')}</Text>
               </TouchableOpacity>
             )}
@@ -188,7 +195,7 @@ const s = StyleSheet.create({
   title:     { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
   hintTxt:   { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
   rewardBox: { alignItems: 'center' },
-  rewardTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 36, color: C.brass },
+  rewardTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 40, color: C.brass },
   btnRow:    { width: '100%', marginTop: 4 },
   openBtn: {
     backgroundColor: C.brass, borderRadius: 14,
