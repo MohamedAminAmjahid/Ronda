@@ -15,10 +15,11 @@ const C = {
 } as const
 
 const TABS = [
-  { icon: '🎮', label: 'Jeux',       href: '/'            },
-  { icon: '🏆', label: 'Classement', href: '/leaderboard' },
-  { icon: '👥', label: 'Amis',       href: '/friends'     },
-  { icon: '👤', label: 'Profil',     href: '/profile'     },
+  { icon: '🎮', label: 'Jeux',       href: '/'             },
+  { icon: '🏆', label: 'Classement', href: '/leaderboard'  },
+  { icon: '👥', label: 'Amis',       href: '/friends'      },
+  { icon: '🎯', label: 'Quêtes',     href: '/daily-quests' },
+  { icon: '👤', label: 'Profil',     href: '/profile'      },
 ] as const
 
 const HIDDEN_PREFIXES = [
