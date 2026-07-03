@@ -17,6 +17,7 @@ const C = {
 // '/' est caché : profil/gold affichés directement dans MenuScreen.
 const HIDDEN_PREFIXES = [
   '/',
+  '/profile',
   '/game', '/online', '/play', '/ronda', '/dijouj',
   '/dijouj-online', '/dijouj-lobby', '/lobby2v2',
   '/auth', '/lang-picker', '/bet', '/join',
