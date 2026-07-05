@@ -18,7 +18,7 @@ import { LevelUpModal } from '../ui/LevelUpModal'
 import { IncomingInviteModal } from '../ui/IncomingInviteModal'
 import { OfflineBanner } from '../ui/OfflineBanner'
 import { useDailyBonus } from '../hooks/useDailyBonus'
-import { useDailyChest } from '../hooks/useDailyChest'
+import { useDailyChest, type ChestLevel } from '../hooks/useDailyChest'
 import { useAuth } from '../firebase/auth'
 import { useProfile } from '../profile/useProfile'
 import { LEVELUP_KEY } from '../profile/profile'
@@ -78,22 +78,24 @@ function LevelUpGate() {
 function DailyChestGate() {
   const { user }              = useAuth()
   const { reward, openChest } = useDailyChest()
-  const [visible, setVisible] = useState(false)
+  // Snapshot figé au moment de l'affichage : survit à reward→null après ouverture,
+  // sinon la modale se démonterait avant l'animation d'ouverture.
+  const [shown, setShown] = useState<{ level: ChestLevel; gold: number } | null>(null)
 
   // Délai 2 s pour ne pas empiler avec la modale de bonus journalier.
   useEffect(() => {
-    if (!user || !reward) return
-    const t = setTimeout(() => setVisible(true), 2000)
+    if (!user || !reward || shown) return
+    const t = setTimeout(() => setShown({ level: reward.level, gold: reward.gold }), 2000)
     return () => clearTimeout(t)
-  }, [user, reward])
+  }, [user, reward, shown])
 
-  if (!visible || !reward) return null
+  if (!shown) return null
   return (
     <DailyChestModal
-      level={reward.level}
-      gold={reward.gold}
+      level={shown.level}
+      gold={shown.gold}
       onOpen={openChest}
-      onClose={() => setVisible(false)}
+      onClose={() => setShown(null)}
     />
   )
 }

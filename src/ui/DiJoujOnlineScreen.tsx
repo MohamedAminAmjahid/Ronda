@@ -94,7 +94,7 @@ export function DiJoujOnlineScreen() {
   const {
     state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
-    connectionStatus, roomCode, bet, opponents, opponentDisconnected,
+    connectionStatus, roomCode, isQuick, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
     chatMessages, sendChatMsg, autoSkip, playerForfeited,
   } = useOnlineDiJouj()
@@ -174,7 +174,7 @@ export function DiJoujOnlineScreen() {
   // (sans code) bascule sur un bot après le délai — sans jamais le révéler.
   const [mmElapsed, setMmElapsed] = useState(0)
   const botCalledRef  = useRef(false)
-  const isQuickWaiting = connectionStatus === 'waiting' && !roomCode
+  const isQuickWaiting = connectionStatus === 'waiting' && isQuick
 
   useEffect(() => {
     if (connectionStatus !== 'waiting') { setMmElapsed(0); botCalledRef.current = false; return }
@@ -304,18 +304,8 @@ export function DiJoujOnlineScreen() {
             <View style={s.headerSpacer} />
           </View>
           <View style={s.center}>
-            {roomCode ? (
-              // Room privée : on attend un ami → affiche le code.
-              <>
-                <Text style={s.centerTitle}>{t('waitingOpponent')}</Text>
-                <View style={s.codeBox}>
-                  <Text style={s.codeLabel}>{t('copy')}</Text>
-                  <Text style={s.codeValue}>{roomCode}</Text>
-                </View>
-                <ActivityIndicator color={C.brass} size="large" style={{ marginTop: 24 }} />
-              </>
-            ) : (
-              // Partie rapide : animation de matchmaking (aucune mention de bot).
+            {isQuick ? (
+              // Partie rapide : animation de matchmaking (aucun code, aucune mention de bot).
               <Matchmaking
                 accent={C.brass}
                 track="rgba(201,162,39,0.16)"
@@ -323,6 +313,18 @@ export function DiJoujOnlineScreen() {
                 label={t('searchingOpponent')}
                 timeLabel={fmtTime(mmElapsed)}
               />
+            ) : (
+              // Room privée : on attend un ami → affiche le code.
+              <>
+                <Text style={s.centerTitle}>{t('waitingOpponent')}</Text>
+                {roomCode && (
+                  <View style={s.codeBox}>
+                    <Text style={s.codeLabel}>{t('copy')}</Text>
+                    <Text style={s.codeValue}>{roomCode}</Text>
+                  </View>
+                )}
+                <ActivityIndicator color={C.brass} size="large" style={{ marginTop: 24 }} />
+              </>
             )}
           </View>
         </SafeAreaView>

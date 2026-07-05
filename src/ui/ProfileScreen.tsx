@@ -12,6 +12,7 @@ import * as ImagePicker from 'expo-image-picker'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
+import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
   incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
@@ -230,6 +231,7 @@ export function ProfileScreen() {
   } = useProfile()
   const { user }   = useAuth()
   const { t }      = useI18n()
+  const { canInstall, install } = useInstallPrompt()
 
   const [editingUsername, setEditingUsername]   = useState(false)
   const [draft, setDraft]                       = useState('')
@@ -665,6 +667,19 @@ export function ProfileScreen() {
         {/* ── Compte ────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Compte</Text>
+
+          {/* Installer la PWA */}
+          <TouchableOpacity
+            style={[s.authBtn, canInstall ? s.installBtn : s.installBtnDisabled]}
+            onPress={() => { if (canInstall) install() }}
+            disabled={!canInstall}
+            activeOpacity={0.85}
+          >
+            <Text style={canInstall ? s.installBtnTxt : s.installBtnDisabledTxt}>
+              {canInstall ? '📲 Installer l\'app' : '✅ Déjà installée ou non disponible'}
+            </Text>
+          </TouchableOpacity>
+
           {user ? (
             <TouchableOpacity
               style={[s.authBtn, s.signOutBtn]}
@@ -912,6 +927,14 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(192,57,43,0.15)', borderWidth: 1, borderColor: 'rgba(192,57,43,0.4)',
   },
   authBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
+
+  // Installer PWA
+  installBtn:    { backgroundColor: C.brass },
+  installBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: '#1C2622', letterSpacing: 0.3 },
+  installBtnDisabled: {
+    backgroundColor: 'rgba(244,236,216,0.08)', borderWidth: 1, borderColor: 'rgba(244,236,216,0.15)',
+  },
+  installBtnDisabledTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff },
 
   // Modal commun
   backdrop: {

@@ -18,7 +18,7 @@ import { SpinWheelModal } from './SpinWheelModal'
 import { DailyChestModal, ChestSVG } from './DailyChestModal'
 import { StreakInfoModal } from './StreakInfoModal'
 import { useSpinWheel } from '../hooks/useSpinWheel'
-import { useDailyChest } from '../hooks/useDailyChest'
+import { useDailyChest, type ChestLevel } from '../hooks/useDailyChest'
 import { useDailyBonus } from '../hooks/useDailyBonus'
 
 // ── Tokens (cohérents avec le reste de l'app) ──────────────────────────────────
@@ -76,7 +76,9 @@ export function GoldShopScreen({ onBack }: Props) {
   const { reward: chest, openChest } = useDailyChest()
   const { pending: streakPending, alreadyClaimed: streakClaimed, claim: claimStreak, streak } = useDailyBonus()
   const [showSpin, setShowSpin]     = useState(false)
-  const [showChest, setShowChest]   = useState(false)
+  // Snapshot figé : survit à chest→null après ouverture (sinon la modale se démonte
+  // avant l'animation d'ouverture).
+  const [chestSnap, setChestSnap]   = useState<{ level: ChestLevel; gold: number } | null>(null)
   const [showStreak, setShowStreak] = useState(false)
 
   const [shareCount, setShareCount] = useState(0)
@@ -284,7 +286,7 @@ export function GoldShopScreen({ onBack }: Props) {
                 </Text>
                 <TouchableOpacity
                   style={[s.btnPrimary, !chest && s.btnDisabled]}
-                  onPress={() => chest && setShowChest(true)}
+                  onPress={() => chest && setChestSnap({ level: chest.level, gold: chest.gold })}
                   disabled={!chest}
                 >
                   <Text style={[s.btnPrimaryTxt, !chest && s.btnDisabledTxt]}>
@@ -437,12 +439,12 @@ export function GoldShopScreen({ onBack }: Props) {
       )}
 
       {/* Coffre quotidien */}
-      {showChest && chest && (
+      {chestSnap && (
         <DailyChestModal
-          level={chest.level}
-          gold={chest.gold}
+          level={chestSnap.level}
+          gold={chestSnap.gold}
           onOpen={openChest}
-          onClose={() => setShowChest(false)}
+          onClose={() => setChestSnap(null)}
         />
       )}
 

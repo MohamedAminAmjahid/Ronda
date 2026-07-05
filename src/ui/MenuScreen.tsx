@@ -12,7 +12,7 @@ import { AvatarDisplay } from './ProfileScreen'
 import { useAuth } from '../firebase/auth'
 import { useDailyBonus } from '../hooks/useDailyBonus'
 import { useSpinWheel } from '../hooks/useSpinWheel'
-import { useDailyChest } from '../hooks/useDailyChest'
+import { useDailyChest, type ChestLevel } from '../hooks/useDailyChest'
 import { StreakInfoModal } from './StreakInfoModal'
 import { SpinWheelModal } from './SpinWheelModal'
 import { DailyChestModal, ChestSVG } from './DailyChestModal'
@@ -213,7 +213,9 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const { reward: chest, openChest } = useDailyChest()
   const [showStreak,    setShowStreak]    = useState(false)
   const [showSpin,      setShowSpin]      = useState(false)
-  const [showChest,     setShowChest]     = useState(false)
+  // Snapshot figé du coffre : survit à chest→null après ouverture (sinon la modale
+  // se démonte avant l'animation d'ouverture).
+  const [chestSnap,     setChestSnap]     = useState<{ level: ChestLevel; gold: number } | null>(null)
   const [showLangModal, setShowLangModal] = useState(false)
   const [lastChestGold, setLastChestGold] = useState<number | null>(null)
   const [toastGold,     setToastGold]     = useState<number | null>(null)
@@ -221,10 +223,9 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleOpenChest = async () => {
-    if (!chest) return
-    const g = chest.gold
+    const g = chestSnap?.gold ?? chest?.gold
     await openChest()
-    setLastChestGold(g)
+    if (g != null) setLastChestGold(g)
   }
 
   const showChestToast = (gold: number) => {
@@ -470,7 +471,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
                   label={chest ? 'Coffre' : lastChestGold !== null ? `+${lastChestGold}🪙` : 'Coffre'}
                   hasBadge={chest !== null}
                   disabled={chest === null}
-                  onPress={() => { if (chest) setShowChest(true) }}
+                  onPress={() => { if (chest) setChestSnap({ level: chest.level, gold: chest.gold }) }}
                 />
               )}
               <TouchableOpacity style={[s.actionBtnTraining, s.actionBtnFlex]} onPress={() => setAction('training')} activeOpacity={0.75}>
@@ -512,12 +513,12 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
       {showSpin && (
         <SpinWheelModal canSpin={canSpin} onSpin={spin} onClose={() => setShowSpin(false)} />
       )}
-      {showChest && chest && (
+      {chestSnap && (
         <DailyChestModal
-          level={chest.level}
-          gold={chest.gold}
+          level={chestSnap.level}
+          gold={chestSnap.gold}
           onOpen={handleOpenChest}
-          onClose={() => setShowChest(false)}
+          onClose={() => setChestSnap(null)}
           onOpened={showChestToast}
         />
       )}

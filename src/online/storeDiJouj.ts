@@ -51,6 +51,8 @@ export interface ChatMessage {
 export interface DjSnapshot {
   status:               ConnectionStatus
   roomCode:             string | null
+  /** true = matchmaking rapide (adversaire aléatoire) → repli bot + animation, code masqué. */
+  isQuick:              boolean
   mySeat:               number | null
   bet:                  number
   server:               DjServerState | null
@@ -69,6 +71,7 @@ let djChatCounter = 0
 let snapshot: DjSnapshot = {
   status:               'idle',
   roomCode:             null,
+  isQuick:              false,
   mySeat:               null,
   bet:                  0,
   server:               null,
@@ -161,9 +164,9 @@ function wireRoom(r: Room): void {
   )
 }
 
-async function connect(factory: () => Promise<Room>): Promise<void> {
+async function connect(factory: () => Promise<Room>, isQuick = false): Promise<void> {
   reset()
-  set({ status: 'connecting', error: null })
+  set({ status: 'connecting', error: null, isQuick })
   try {
     const r = await factory()
     wireRoom(r)
@@ -177,7 +180,7 @@ async function connect(factory: () => Promise<Room>): Promise<void> {
 
 export function connectDiJoujQuick(pseudo: string, bet = 0): Promise<void> {
   set({ bet })
-  return connect(() => joinDiJoujQuick(pseudo, bet))
+  return connect(() => joinDiJoujQuick(pseudo, bet), true)
 }
 
 export function connectDiJoujPrivate(pseudo: string): Promise<void> {
@@ -219,6 +222,7 @@ export function reset(): void {
   set({
     status:               'idle',
     roomCode:             null,
+    isQuick:              false,
     mySeat:               null,
     bet:                  0,
     server:               null,

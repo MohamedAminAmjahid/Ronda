@@ -146,6 +146,7 @@ export function useOnlineDiJouj() {
     // ── Extras en ligne ──
     connectionStatus:     snap.status,
     roomCode:             snap.roomCode,
+    isQuick:              snap.isQuick,
     bet:                  snap.bet,
     opponents,
     opponentPseudo:       primaryOpponent?.pseudo ?? null,
