@@ -321,7 +321,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   function handleCardPress(card: Card) {
     if (!isHumanTurn) return
     if (!playableSet.has(cardKey(card))) return
-    if (card.value === 7 && card.suit === 'oros') { setPendingWild(card) }
+    // 7 d'oros = joker (choix de couleur), SAUF si c'est la dernière carte :
+    // la poser gagne la partie → inutile de choisir la prochaine couleur.
+    if (card.value === 7 && card.suit === 'oros' && human.hand.length > 1) { setPendingWild(card) }
     else { playCard(card) }
   }
 
