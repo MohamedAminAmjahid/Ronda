@@ -4,9 +4,11 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
+import { Matchmaking } from './components/Matchmaking'
 import { useOnlineGame } from '../online/useOnlineGame'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
+import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { VoiceButton } from '../voice/VoiceButton'
@@ -232,12 +234,6 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   )
 }
 
-// ── Constantes bot de secours ────────────────────────────────────────────────
-
-const BOT_WAIT_SECS = 60
-const MOROCCAN_NAMES: string[] = ['Fatima', 'Khadija', 'Nour', 'Salma', 'Hind', 'Zineb', 'Meryem']
-const BOT_EMOJIS: string[]     = ['👩‍🦱', '👩🏻', '👩🏽‍🦳', '👩‍🦰']
-
 // ── Écran d'attente ──────────────────────────────────────────────────────────
 
 function WaitingScreen({
@@ -250,13 +246,11 @@ function WaitingScreen({
 }) {
   const { t: tr } = useI18n()
   const pulse     = useRef(new Animated.Value(0.4)).current
-  const barAnim   = useRef(new Animated.Value(0)).current
-  const barPulse  = useRef(new Animated.Value(1)).current
   const calledRef = useRef(false)
   const [elapsed, setElapsed] = useState(0)
   const [copied, setCopied]   = useState(false)
 
-  // Texte principal — pulse d'opacité
+  // Texte principal (mode ami) — pulse d'opacité
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -266,23 +260,9 @@ function WaitingScreen({
     )
     loop.start()
     return () => loop.stop()
-  }, [])
+  }, [pulse])
 
-  // Barre de progression — pulse d'opacité (quick uniquement)
-  useEffect(() => {
-    if (mode !== 'quick') return
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(barPulse, { toValue: 0.55, duration: 600, useNativeDriver: true }),
-        Animated.timing(barPulse, { toValue: 1,    duration: 600, useNativeDriver: true }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
-
-  // Compteur 1 s (quick uniquement)
+  // Compteur 1 s (quick uniquement) — sert de chrono « matchmaking ».
   useEffect(() => {
     if (mode !== 'quick') return
     const id = setInterval(() => { setElapsed(s => s + 1) }, 1000)
@@ -290,18 +270,13 @@ function WaitingScreen({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
-  // Réagit aux changements de elapsed : anime la barre + déclenche le bot
+  // Repli bot silencieux : au bout du délai, on lance une partie hors-ligne.
+  // Aucune indication à l'écran — le joueur croit avoir trouvé un adversaire.
   useEffect(() => {
     if (mode !== 'quick' || calledRef.current) return
-    Animated.timing(barAnim, {
-      toValue: Math.min(elapsed / BOT_WAIT_SECS, 1),
-      duration: 900,
-      useNativeDriver: false,
-    }).start()
     if (elapsed >= BOT_WAIT_SECS && onBotFallback) {
       calledRef.current = true
-      const name  = MOROCCAN_NAMES[Math.floor(Math.random() * MOROCCAN_NAMES.length)] ?? 'Fatima'
-      const emoji = BOT_EMOJIS[Math.floor(Math.random() * BOT_EMOJIS.length)] ?? '👩🏻'
+      const { name, emoji } = pickBot()
       onBotFallback(name, emoji)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -332,38 +307,26 @@ function WaitingScreen({
     }
   }
 
-  const barWidthPct = barAnim.interpolate({
-    inputRange:  [0, 1],
-    outputRange: ['0%', '100%'],
-  })
-
-  const remaining = Math.max(0, BOT_WAIT_SECS - elapsed)
-
   return (
     <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
       <View style={[s.column, { alignItems: 'center', gap: 18 }]}>
-        <Animated.Text style={[s.waitTxt, { opacity: pulse }]}>
-          {tr('waitingOpponent')}
-        </Animated.Text>
 
-        {/* Mode recherche rapide : timer + barre + hint bot */}
+        {/* Mode recherche rapide : animation de matchmaking (aucune mention de bot) */}
         {mode === 'quick' && (
-          <>
-            <Text style={s.searchTimer}>⏳ Recherche en cours... {formatTime(elapsed)}</Text>
-            <View style={s.progressTrack}>
-              <Animated.View
-                style={[s.progressBar, {
-                  width:   barWidthPct as unknown as Animated.AnimatedInterpolation<string | number>,
-                  opacity: barPulse,
-                }]}
-              />
-            </View>
-            <Text style={s.botHint}>
-              {remaining > 0
-                ? `Un bot rejoindra dans ${remaining}s si aucun joueur n'est trouvé`
-                : 'Lancement contre un bot…'}
-            </Text>
-          </>
+          <Matchmaking
+            accent={C.brass}
+            track="rgba(201,162,39,0.18)"
+            textColor={C.bone}
+            label={tr('searchingOpponent')}
+            timeLabel={formatTime(elapsed)}
+          />
+        )}
+
+        {/* Mode ami : texte d'attente pulsé */}
+        {mode === 'friend' && (
+          <Animated.Text style={[s.waitTxt, { opacity: pulse }]}>
+            {tr('waitingOpponent')}
+          </Animated.Text>
         )}
 
         {/* Mode ami : affiche le code de la chambre */}
@@ -443,17 +406,6 @@ const s = StyleSheet.create({
   errorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.bone },
 
   waitTxt:      { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
-  searchTimer:  { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass, textAlign: 'center' },
-  progressTrack: {
-    width: '100%', height: 6,
-    backgroundColor: 'rgba(201,162,39,0.18)',
-    borderRadius: 3, overflow: 'hidden',
-  },
-  progressBar: { height: '100%', backgroundColor: C.brass, borderRadius: 3 },
-  botHint: {
-    fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff,
-    textAlign: 'center', lineHeight: 16,
-  },
   codeBox: {
     backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 28,
     alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',

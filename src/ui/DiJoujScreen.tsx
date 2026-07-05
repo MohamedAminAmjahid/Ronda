@@ -198,8 +198,12 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const { t } = useI18n()
   const { table } = useProfile()
   const felt = tableColors(table)  // dégradé du tapis équipé
+  // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
+  // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
+  const { botName, botEmoji } = useLocalSearchParams<{ botName?: string; botEmoji?: string }>()
+  const oppLabel = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
   const {
-    state, isHumanTurn, isBotThinking, isAutoSkipping, isDrawPause,
+    state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
   } = useDiJoujGame()
 
@@ -319,10 +323,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   let statusText: string
-  if (isBotThinking)    statusText = t('botThinks').replace('{name}', 'Bot')
-  else if (isDrawPause) statusText = t('botTurn')
-  else if (isHumanTurn) statusText = t('yourTurn')
-  else                  statusText = t('botTurn')
+  if (isHumanTurn) statusText = t('yourTurn')
+  else             statusText = `${oppLabel}…`
 
   const pendingEff = state.pendingEffect
   let bannerText: string | null = null
@@ -348,7 +350,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
         {/* ── Top : adversaire (Bot) ────────────────────────────────────────── */}
         <Animated.View style={[s.topZone, { opacity: botOpacity }]}>
           <CardBackRow count={bot.hand.length} />
-          <Text style={s.oppLabel}>Bot — {bot.hand.length}</Text>
+          <Text style={s.oppLabel}>{oppLabel} — {bot.hand.length}</Text>
         </Animated.View>
 
         {/* ── Bannière effet ────────────────────────────────────────────────── */}

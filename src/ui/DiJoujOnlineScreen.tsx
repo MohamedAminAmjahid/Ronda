@@ -5,14 +5,16 @@ import {
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
-import { router } from 'expo-router'
+import { router, type Href } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
+import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
+import { Matchmaking } from './components/Matchmaking'
 import { VoiceButton } from '../voice/VoiceButton'
 import { GameChat } from '../voice/GameChat'
 
@@ -35,6 +37,7 @@ const SUIT_COLOR: Record<Suit, string> = {
 }
 const SUIT_RANK: Record<Suit, number> = { oros: 0, copas: 1, espadas: 2, bastos: 3 }
 function cardKey(c: Card) { return `${c.suit}_${c.value}` }
+const fmtTime = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
 
 // ── Rangée de dos horizontaux ─────────────────────────────────────────────────
 
@@ -166,6 +169,32 @@ export function DiJoujOnlineScreen() {
     return () => { clearTimeout(tid); loop.stop(); lastCardPulse.setValue(1) }
   }, [isGameOver])
 
+  // ── Matchmaking : chrono + repli bot silencieux (partie rapide uniquement) ──
+  // Une room privée (avec code) attend un ami : jamais de bot. La partie rapide
+  // (sans code) bascule sur un bot après le délai — sans jamais le révéler.
+  const [mmElapsed, setMmElapsed] = useState(0)
+  const botCalledRef  = useRef(false)
+  const isQuickWaiting = connectionStatus === 'waiting' && !roomCode
+
+  useEffect(() => {
+    if (connectionStatus !== 'waiting') { setMmElapsed(0); botCalledRef.current = false; return }
+    const id = setInterval(() => setMmElapsed(s => s + 1), 1000)
+    return () => clearInterval(id)
+  }, [connectionStatus])
+
+  useEffect(() => {
+    if (!isQuickWaiting || botCalledRef.current) return
+    if (mmElapsed >= BOT_WAIT_SECS) {
+      botCalledRef.current = true
+      const { name, emoji } = pickBot()
+      restart()  // quitte la room en ligne
+      router.push(
+        `/dijouj?train=1&botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` as Href,
+      )
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mmElapsed, isQuickWaiting])
+
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   function handleCardPress(card: Card) {
@@ -275,14 +304,26 @@ export function DiJoujOnlineScreen() {
             <View style={s.headerSpacer} />
           </View>
           <View style={s.center}>
-            <Text style={s.centerTitle}>{t('waitingOpponent')}</Text>
-            {roomCode && (
-              <View style={s.codeBox}>
-                <Text style={s.codeLabel}>{t('copy')}</Text>
-                <Text style={s.codeValue}>{roomCode}</Text>
-              </View>
+            {roomCode ? (
+              // Room privée : on attend un ami → affiche le code.
+              <>
+                <Text style={s.centerTitle}>{t('waitingOpponent')}</Text>
+                <View style={s.codeBox}>
+                  <Text style={s.codeLabel}>{t('copy')}</Text>
+                  <Text style={s.codeValue}>{roomCode}</Text>
+                </View>
+                <ActivityIndicator color={C.brass} size="large" style={{ marginTop: 24 }} />
+              </>
+            ) : (
+              // Partie rapide : animation de matchmaking (aucune mention de bot).
+              <Matchmaking
+                accent={C.brass}
+                track="rgba(201,162,39,0.16)"
+                textColor={C.bone}
+                label={t('searchingOpponent')}
+                timeLabel={fmtTime(mmElapsed)}
+              />
             )}
-            <ActivityIndicator color={C.brass} size="large" style={{ marginTop: 24 }} />
           </View>
         </SafeAreaView>
       </LinearGradient>
