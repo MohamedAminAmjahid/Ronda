@@ -98,6 +98,7 @@ let snapshot: DjSnapshot = {
 }
 
 const listeners = new Set<() => void>()
+const voiceListeners = new Set<(data: unknown) => void>()  // signaux WebRTC (chat vocal)
 let room: Room | null = null
 
 function set(patch: Partial<DjSnapshot>): void {
@@ -168,6 +169,8 @@ function wireRoom(r: Room): void {
   // Forfait pour inactivité : la partie se termine (game_over suit). On garde
   // le flag jusqu'au reset pour afficher le bon message de fin.
   r.onMessage('forfeit', (p: { loserUid: string }) => set({ forfeit: p }))
+  // Signalisation WebRTC (chat vocal) relayée par le serveur → abonnés locaux.
+  r.onMessage('voice_signal', (data: unknown) => { for (const l of voiceListeners) l(data) })
 
   r.onLeave(() => {
     if (snapshot.status !== 'playing' || snapshot.server?.phase !== 'GAME_OVER') {
@@ -235,6 +238,15 @@ export function attachRoom(r: Room): void {
 export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
+
+// ── Chat vocal (signalisation WebRTC via Colyseus) ──────────────────────────────
+export function sendVoiceSignal(data: unknown): void { room?.send('voice_signal', data) }
+export function subscribeVoiceSignal(cb: (data: unknown) => void): () => void {
+  voiceListeners.add(cb)
+  return () => { voiceListeners.delete(cb) }
+}
+/** Transport de signalisation stable à passer au VoiceButton. */
+export const voiceTransport = { send: sendVoiceSignal, subscribe: subscribeVoiceSignal }
 
 export function leave(refundBet = true): void {
   // Remboursement : on quitte le matchmaking AVANT le début de la partie → rendre la mise.

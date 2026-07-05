@@ -95,6 +95,7 @@ let snapshot: OnlineSnapshot = {
 }
 
 const listeners = new Set<() => void>()
+const voiceListeners = new Set<(data: unknown) => void>()  // signaux WebRTC (chat vocal)
 let room: Room | null = null
 let continueTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -181,6 +182,8 @@ function wireRoom(r: Room): void {
   r.onMessage('chat', (p: { username: string; text: string }) => {
     set({ chatMessages: [...snapshot.chatMessages, { id: chatCounter++, username: p.username, text: p.text }] })
   })
+  // Signalisation WebRTC (chat vocal) relayée par le serveur → abonnés locaux.
+  r.onMessage('voice_signal', (data: unknown) => { for (const l of voiceListeners) l(data) })
 
   r.onLeave(() => {
     clearContinueTimer()
@@ -248,6 +251,15 @@ export async function reconnect(reconnectionToken: string): Promise<void> {
 export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
+
+// ── Chat vocal (signalisation WebRTC via Colyseus) ──────────────────────────────
+export function sendVoiceSignal(data: unknown): void { room?.send('voice_signal', data) }
+export function subscribeVoiceSignal(cb: (data: unknown) => void): () => void {
+  voiceListeners.add(cb)
+  return () => { voiceListeners.delete(cb) }
+}
+/** Transport de signalisation stable à passer au VoiceButton. */
+export const voiceTransport = { send: sendVoiceSignal, subscribe: subscribeVoiceSignal }
 
 export function leave(refundBet = true): void {
   clearContinueTimer()

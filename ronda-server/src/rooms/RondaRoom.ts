@@ -123,6 +123,11 @@ export class RondaRoom extends Room<RondaState> {
         console.error('[RondaRoom] chat handler error:', e)
       }
     })
+
+    // Chat vocal : relaie la signalisation WebRTC à l'autre joueur.
+    this.onMessage('voice_signal', (client, data) => {
+      this.broadcast('voice_signal', data, { except: client })
+    })
   }
 
   onJoin(client: Client, options: { pseudo: string }): void {

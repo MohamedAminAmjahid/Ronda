@@ -6,7 +6,7 @@ import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { Matchmaking } from './components/Matchmaking'
 import { useOnlineGame } from '../online/useOnlineGame'
-import { leave as leaveRondaRoom } from '../online/store'
+import { leave as leaveRondaRoom, voiceTransport } from '../online/store'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
 import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
@@ -113,7 +113,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             <Text style={s.discSub}>En attente de reconnexion…</Text>
           </View>
         )}
-        <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
+        <VoiceButton transport={voiceTransport} active username={username || 'Joueur'} />
         <GameChat
           messages={game.chatMessages}
           sendMessage={game.sendChatMsg}

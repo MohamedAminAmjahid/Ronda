@@ -1,83 +1,56 @@
 import { useEffect, useRef } from 'react'
-import {
-  View, Text, TouchableOpacity, StyleSheet,
-  Platform, GestureResponderEvent,
-} from 'react-native'
-import { useVoiceChat } from './useVoiceChat'
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native'
+import { useVoiceChat, type VoiceSignalTransport } from './useVoiceChat'
 
 interface Props {
-  roomCode: string | null
+  /** Transport de signalisation lié à la room Colyseus (send/subscribe). */
+  transport: VoiceSignalTransport | null
+  /** true tant qu'on est en partie en ligne (sinon le bouton est masqué). */
+  active: boolean
   username: string
 }
 
-export function VoiceButton({ roomCode, username }: Props) {
-  if (Platform.OS !== 'web') return null
+/**
+ * Bouton micro push-to-talk (WebRTC). Clic pour activer/couper le micro.
+ * Actif → 🔴 rouge pulsant ; inactif → 🎤 gris. Masqué si WebRTC non supporté
+ * (natif) ou hors partie.
+ */
+export function VoiceButton({ transport, active }: Props) {
+  const { supported, micOn, error, toggleMic } = useVoiceChat(transport, active)
+  const pulse = useRef(new Animated.Value(1)).current
 
-  return <VoiceButtonWeb roomCode={roomCode} username={username} />
-}
-
-function VoiceButtonWeb({ roomCode, username }: Props) {
-  const {
-    joinVoice, leaveVoice, toggleMute,
-    isMuted, isSpeaking, isConnected, isConnecting,
-  } = useVoiceChat()
-
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Auto-join when roomCode becomes available
   useEffect(() => {
-    if (roomCode && !isConnected && !isConnecting) {
-      void joinVoice(roomCode, username)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomCode])
+    if (!micOn) { pulse.setValue(1); return }
+    // Driver JS : boucle fiable sur le web.
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.18, duration: 550, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 1,    duration: 550, useNativeDriver: false }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [micOn, pulse])
 
-  // Auto-leave on unmount
-  useEffect(() => {
-    return () => { void leaveVoice() }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const icon = isConnecting ? '⏳' : isMuted ? '🔇' : '🎤'
-  const bg   = isConnecting ? '#444' : isMuted ? '#B71C1C' : '#1B5E20'
-
-  function onPressIn(_: GestureResponderEvent) {
-    longPressTimer.current = setTimeout(() => {
-      void leaveVoice()
-    }, 600)
-  }
-
-  function onPressOut(_: GestureResponderEvent) {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
-
-  function onPress() {
-    if (!isConnected && !isConnecting && roomCode) {
-      void joinVoice(roomCode, username)
-    } else {
-      toggleMute()
-    }
-  }
+  if (!supported || !active) return null
 
   return (
     <View style={s.wrapper} pointerEvents="box-none">
-      {isSpeaking && (
-        <View style={s.bubble}>
-          <Text style={s.bubbleTxt}>{username}</Text>
+      {error && (
+        <View style={s.errBox}>
+          <Text style={s.errTxt}>{error}</Text>
         </View>
       )}
-      <TouchableOpacity
-        style={[s.btn, { backgroundColor: bg }]}
-        onPress={onPress}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        activeOpacity={0.75}
-      >
-        <Text style={s.icon}>{icon}</Text>
-      </TouchableOpacity>
+      <Animated.View style={{ transform: [{ scale: pulse }] }}>
+        <TouchableOpacity
+          style={[s.btn, { backgroundColor: micOn ? '#C0392B' : '#37474F' }]}
+          onPress={toggleMic}
+          activeOpacity={0.75}
+          accessibilityLabel={micOn ? 'Couper le micro' : 'Activer le micro'}
+        >
+          <Text style={s.icon}>{micOn ? '🔴' : '🎤'}</Text>
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   )
 }
@@ -90,31 +63,20 @@ const s = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
   },
-  bubble: {
-    backgroundColor: 'rgba(0,0,0,0.75)',
+  errBox: {
+    backgroundColor: 'rgba(192,57,43,0.92)',
     borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    marginBottom: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 8,
+    maxWidth: 220,
   },
-  bubbleTxt: {
-    color: '#fff',
-    fontSize: 11,
-    fontFamily: 'Cairo_400Regular',
-  },
+  errTxt: { color: '#fff', fontSize: 11, fontFamily: 'Cairo_400Regular', textAlign: 'center' },
   btn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    width: 50, height: 50, borderRadius: 25,
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 6, shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  icon: {
-    fontSize: 22,
-  },
+  icon: { fontSize: 22 },
 })

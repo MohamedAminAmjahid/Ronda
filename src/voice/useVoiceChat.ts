@@ -1,109 +1,181 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Platform } from 'react-native'
 
-const APP_ID = '48a082fb88864bd68f94c7fc982116aa'
-const IS_WEB = Platform.OS === 'web'
-const SPEAKING_THRESHOLD = 30
+// Chat vocal 1v1 via WebRTC natif du navigateur. La signalisation (offer/answer/
+// ICE) transite par le serveur Colyseus (voice_signal relayé à l'autre joueur).
+// Web uniquement : sur natif, RTCPeerConnection n'existe pas → supported=false.
 
-function hashUsername(username: string): number {
-  let h = 0
-  for (let i = 0; i < username.length; i++) {
-    h = (Math.imul(31, h) + username.charCodeAt(i)) | 0
-  }
-  return (Math.abs(h) % 2_000_000_000) || 1
+/** Transport de signalisation (fourni par le store online : send/subscribe). */
+export interface VoiceSignalTransport {
+  send: (data: unknown) => void
+  subscribe: (handler: (data: unknown) => void) => () => void
 }
 
-interface VolumeEntry { uid: number; level: number }
+interface Signal {
+  from?: number
+  description?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+}
 
-export function useVoiceChat() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const clientRef    = useRef<any>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const localTrackRef = useRef<any>(null)
-  const myUidRef     = useRef<number>(0)
+const IS_WEB = Platform.OS === 'web'
+const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+}
 
-  const [isConnected,   setIsConnected]   = useState(false)
-  const [isConnecting,  setIsConnecting]  = useState(false)
-  const [isMuted,       setIsMuted]       = useState(false)
-  const [isSpeaking,    setIsSpeaking]    = useState(false)
-  const [speakingUsers, setSpeakingUsers] = useState<number[]>([])
+function webrtcSupported(): boolean {
+  return (
+    IS_WEB &&
+    typeof RTCPeerConnection !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia
+  )
+}
 
-  const leaveVoice = useCallback(async () => {
-    if (!IS_WEB) return
-    try {
-      localTrackRef.current?.close()
-      localTrackRef.current = null
-      if (clientRef.current) {
-        await clientRef.current.leave()
-        clientRef.current = null
-      }
-    } catch {}
-    setIsConnected(false)
-    setIsConnecting(false)
-    setIsMuted(false)
-    setIsSpeaking(false)
-    setSpeakingUsers([])
+export function useVoiceChat(transport: VoiceSignalTransport | null, active: boolean) {
+  const supported = webrtcSupported()
+
+  const [micOn, setMicOn]         = useState(false)
+  const [connected, setConnected] = useState(false)
+  const [error, setError]         = useState<string | null>(null)
+
+  const pcRef      = useRef<RTCPeerConnection | null>(null)
+  const streamRef  = useRef<MediaStream | null>(null)
+  const senderRef  = useRef<RTCRtpSender | null>(null)
+  const audioRef   = useRef<HTMLAudioElement | null>(null)
+  const myIdRef    = useRef<number>(0)
+  const politeRef  = useRef<boolean>(false)
+  const makingOffer = useRef(false)
+  const ignoreOffer = useRef(false)
+
+  const teardown = useCallback(() => {
+    try { pcRef.current?.close() } catch { /* ignore */ }
+    pcRef.current = null
+    senderRef.current = null
+    try { streamRef.current?.getTracks().forEach(tk => tk.stop()) } catch { /* ignore */ }
+    streamRef.current = null
+    if (audioRef.current) {
+      try { audioRef.current.srcObject = null; audioRef.current.remove() } catch { /* ignore */ }
+      audioRef.current = null
+    }
+    makingOffer.current = false
+    ignoreOffer.current = false
+    setMicOn(false)
+    setConnected(false)
   }, [])
 
-  const joinVoice = useCallback(async (roomCode: string, username: string) => {
-    if (!IS_WEB) return
-    if (clientRef.current) return  // already connected
+  const ensurePc = useCallback((): RTCPeerConnection | null => {
+    if (!supported || !transport) return null
+    if (pcRef.current) return pcRef.current
+    if (!myIdRef.current) myIdRef.current = Math.floor(Math.random() * 1e9) + 1
 
-    setIsConnecting(true)
-    try {
-      const { default: AgoraRTC } = await import('agora-rtc-sdk-ng')
-      AgoraRTC.setLogLevel(3)  // warn only
+    const pc = new RTCPeerConnection(RTC_CONFIG)
+    pcRef.current = pc
 
-      const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' })
-      clientRef.current = client
-
-      client.enableAudioVolumeIndicator()
-      const myUid = hashUsername(username)
-      myUidRef.current = myUid
-
-      client.on('volume-indicator', (volumes: VolumeEntry[]) => {
-        const speaking = volumes.filter(v => v.level > SPEAKING_THRESHOLD).map(v => v.uid)
-        setSpeakingUsers(speaking)
-        setIsSpeaking(speaking.includes(myUid))
-      })
-
-      // null token = testing mode (no token auth)
-      await client.join(APP_ID, roomCode, null, myUid)
-
-      const localTrack = await AgoraRTC.createMicrophoneAudioTrack()
-      localTrackRef.current = localTrack
-      await client.publish([localTrack])
-
-      setIsConnected(true)
-    } catch (e) {
-      console.error('[voice] joinVoice error:', e)
-      await leaveVoice()
-    } finally {
-      setIsConnecting(false)
+    pc.onicecandidate = (ev) => {
+      if (ev.candidate) transport.send({ from: myIdRef.current, candidate: ev.candidate.toJSON() })
     }
-  }, [leaveVoice])
+    pc.onconnectionstatechange = () => {
+      setConnected(pc.connectionState === 'connected')
+    }
+    pc.ontrack = (ev) => {
+      let el = audioRef.current
+      if (!el && typeof document !== 'undefined') {
+        el = document.createElement('audio')
+        el.autoplay = true
+        ;(el as unknown as { playsInline: boolean }).playsInline = true
+        audioRef.current = el
+      }
+      if (el) {
+        el.srcObject = ev.streams[0] ?? new MediaStream([ev.track])
+        void el.play?.().catch(() => { /* autoplay bloqué : reprendra au clic */ })
+      }
+    }
+    pc.onnegotiationneeded = () => {
+      void (async () => {
+        try {
+          makingOffer.current = true
+          await pc.setLocalDescription()
+          transport.send({ from: myIdRef.current, description: pc.localDescription ?? undefined })
+        } catch { /* ignore */ } finally {
+          makingOffer.current = false
+        }
+      })()
+    }
+    return pc
+  }, [supported, transport])
 
-  const toggleMute = useCallback(() => {
-    if (!IS_WEB || !localTrackRef.current) return
-    const next = !isMuted
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    localTrackRef.current.setEnabled(!next)
-    setIsMuted(next)
-  }, [isMuted])
-
-  // Cleanup on unmount
+  // ── Réception des signaux (perfect negotiation) ────────────────────────────
   useEffect(() => {
-    return () => { void leaveVoice() }
-  }, [leaveVoice])
+    if (!supported || !transport || !active) return
+    const unsub = transport.subscribe((raw) => {
+      const data = raw as Signal
+      if (!data || (data.from !== undefined && data.from === myIdRef.current)) return
+      const pc = ensurePc()
+      if (!pc) return
+      // Rôle poli : l'id le plus bas est « impoli » (garde son offer en cas de collision).
+      if (data.from !== undefined) politeRef.current = myIdRef.current > data.from
+      void (async () => {
+        try {
+          if (data.description) {
+            const collision =
+              data.description.type === 'offer' &&
+              (makingOffer.current || pc.signalingState !== 'stable')
+            ignoreOffer.current = !politeRef.current && collision
+            if (ignoreOffer.current) return
+            await pc.setRemoteDescription(data.description)
+            if (data.description.type === 'offer') {
+              await pc.setLocalDescription()
+              transport.send({ from: myIdRef.current, description: pc.localDescription ?? undefined })
+            }
+          } else if (data.candidate) {
+            try { await pc.addIceCandidate(data.candidate) } catch { /* candidat ignoré */ }
+          }
+        } catch { /* erreur de signalisation ignorée */ }
+      })()
+    })
+    return unsub
+  }, [supported, transport, active, ensurePc])
 
-  return {
-    joinVoice,
-    leaveVoice,
-    toggleMute,
-    isMuted,
-    isSpeaking,
-    speakingUsers,
-    isConnected,
-    isConnecting,
-  }
+  // Démontage / sortie de partie → on ferme tout.
+  useEffect(() => { if (!active) teardown() }, [active, teardown])
+  useEffect(() => () => teardown(), [teardown])
+
+  const enableMic = useCallback(async () => {
+    if (!supported || !transport) return
+    setError(null)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      streamRef.current = stream
+      const pc = ensurePc()
+      if (!pc) return
+      const track = stream.getAudioTracks()[0]
+      if (track) {
+        if (senderRef.current) void senderRef.current.replaceTrack(track)
+        else senderRef.current = pc.addTrack(track, stream) // déclenche onnegotiationneeded
+      }
+      setMicOn(true)
+    } catch (e) {
+      const name = (e as { name?: string })?.name
+      setError(
+        name === 'NotAllowedError' || name === 'PermissionDeniedError'
+          ? 'Autorise le micro dans ton navigateur'
+          : 'Micro indisponible',
+      )
+    }
+  }, [supported, transport, ensurePc])
+
+  const toggleMic = useCallback(() => {
+    if (micOn) {
+      // Coupe l'envoi sans renégocier : on désactive la piste locale.
+      const track = streamRef.current?.getAudioTracks()[0]
+      if (track) track.enabled = false
+      setMicOn(false)
+      return
+    }
+    const track = streamRef.current?.getAudioTracks()[0]
+    if (track) { track.enabled = true; setMicOn(true) } // déjà négocié → simple réactivation
+    else void enableMic()
+  }, [micOn, enableMic])
+
+  return { supported, micOn, connected, error, toggleMic }
 }

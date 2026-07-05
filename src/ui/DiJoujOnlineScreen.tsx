@@ -14,7 +14,7 @@ import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
-import { leave as leaveDjRoom } from '../online/storeDiJouj'
+import { leave as leaveDjRoom, voiceTransport } from '../online/storeDiJouj'
 import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
@@ -691,7 +691,7 @@ export function DiJoujOnlineScreen() {
 
       </SafeAreaView>
     </LinearGradient>
-    <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
+    <VoiceButton transport={voiceTransport} active={connectionStatus === 'playing'} username={username || 'Joueur'} />
     <GameChat
       messages={chatMessages}
       sendMessage={sendChatMsg}

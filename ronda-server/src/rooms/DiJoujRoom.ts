@@ -106,6 +106,11 @@ export class DiJoujRoom extends Room<DiJoujState> {
         console.error('[DiJoujRoom] chat handler error:', e)
       }
     })
+
+    // Chat vocal : relaie la signalisation WebRTC à l'autre joueur.
+    this.onMessage('voice_signal', (client, data) => {
+      this.broadcast('voice_signal', data, { except: client })
+    })
   }
 
   async onJoin(client: Client, options: { pseudo: string; uid?: string }): Promise<void> {
