@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, Animated, ActivityIndicator, useWindowDimensions,
+  ScrollView, Modal, Animated, Easing, ActivityIndicator, useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -10,8 +10,8 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
-import { sendFriendRequest } from '../firebase/firestore'
 import { AvatarDisplay } from './ProfileScreen'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
 import { leave as leaveDjRoom } from '../online/storeDiJouj'
@@ -105,9 +105,6 @@ export function DiJoujOnlineScreen() {
     gameOver, error, connectQuick, connectPrivate,
     chatMessages, sendChatMsg, autoSkip, playerForfeited, forfeit,
   } = useOnlineDiJouj()
-
-  // Ajout d'ami vers l'adversaire (partie rapide) — feedback local.
-  const [friendSent, setFriendSent] = useState(false)
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
 
@@ -238,19 +235,30 @@ export function DiJoujOnlineScreen() {
     restart(); router.back()
   }, [connectionStatus, restart])
 
-  // Adversaire (haut) : profil + ajout d'ami. Uniquement si humain identifié.
-  const canInteractOpp = !!opp0 && !opp0.isBot && !!opp0.uid && !!myUid && opp0.uid !== myUid
+  // Adversaire (haut) : tap sur l'avatar → modale profil (jamais la page profil).
+  // Disponible seulement pour un humain identifié (uid présent, pas un bot).
+  const canOpenOppProfile = !!opp0 && !opp0.isBot && !!opp0.uid
+  const [showOppProfile, setShowOppProfile] = useState(false)
 
-  const handleViewOppProfile = useCallback(() => {
-    if (!opp0?.uid) return
-    router.push(`/friend-profile?uid=${opp0.uid}&name=${encodeURIComponent(opp0.pseudo)}` as Href)
-  }, [opp0?.uid, opp0?.pseudo])
+  // ── Compte à rebours du tour (7 s) ──────────────────────────────────────────
+  // Barre + secondes animées : le joueur voit qu'il doit jouer avant expiration.
+  // Passé ce délai, le serveur joue à sa place (auto-skip) puis forfait après 3×.
+  const TURN_SECS = 7
+  const [turnLeft, setTurnLeft] = useState(TURN_SECS)
+  const turnBar = useRef(new Animated.Value(1)).current
+  const isMyLiveTurn = isHumanTurn && connectionStatus === 'playing' && !isGameOver
 
-  const handleAddOppFriend = useCallback(() => {
-    if (!myUid || !opp0?.uid || friendSent) return
-    setFriendSent(true)
-    sendFriendRequest(myUid, opp0.uid).catch(() => setFriendSent(false))
-  }, [myUid, opp0?.uid, friendSent])
+  useEffect(() => {
+    if (!isMyLiveTurn) { turnBar.stopAnimation(); turnBar.setValue(1); setTurnLeft(TURN_SECS); return }
+    setTurnLeft(TURN_SECS)
+    turnBar.setValue(1)
+    Animated.timing(turnBar, {
+      toValue: 0, duration: TURN_SECS * 1000, easing: Easing.linear, useNativeDriver: false,
+    }).start()
+    const id = setInterval(() => setTurnLeft(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  // isDrawPause inclus : relance le chrono si l'état de tour change.
+  }, [isMyLiveTurn, isDrawPause])
 
   // Forfait pour inactivité : message de fin dédié (victoire / élimination).
   // On identifie le perdant par uid si disponible, sinon par le vainqueur
@@ -445,32 +453,21 @@ export function DiJoujOnlineScreen() {
         {/* ── Top : opponent 0 (profil + cartes) ─────────────────────────────── */}
         <Animated.View style={[s.topZone, { opacity: oppOpacity }]}>
           <View style={s.oppProfileRow}>
-            <AvatarDisplay
-              type={(opp0?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
-              initial={(opp0?.pseudo?.[0] ?? '?').toUpperCase()}
-              emoji={opp0?.avatarEmoji ?? ''}
-              image={opp0?.avatarImage ?? ''}
-              size={40}
-              level={opp0?.level}
-            />
-            <View style={s.oppProfileMeta}>
-              <Text style={s.oppTopName} numberOfLines={1}>{opp0?.pseudo ?? 'Adversaire'}</Text>
-              {canInteractOpp && (
-                <View style={s.oppBtnRow}>
-                  <TouchableOpacity style={s.oppBtn} onPress={handleViewOppProfile} activeOpacity={0.75}>
-                    <Text style={s.oppBtnTxt}>👤 {t('viewProfile')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.oppBtn, friendSent && s.oppBtnDone]}
-                    onPress={handleAddOppFriend}
-                    disabled={friendSent}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={s.oppBtnTxt}>{friendSent ? '✓' : `➕ ${t('addFriend')}`}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+            <TouchableOpacity
+              onPress={() => canOpenOppProfile && setShowOppProfile(true)}
+              disabled={!canOpenOppProfile}
+              activeOpacity={0.7}
+            >
+              <AvatarDisplay
+                type={(opp0?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                initial={(opp0?.pseudo?.[0] ?? '?').toUpperCase()}
+                emoji={opp0?.avatarEmoji ?? ''}
+                image={opp0?.avatarImage ?? ''}
+                size={40}
+                level={opp0?.level}
+              />
+            </TouchableOpacity>
+            <Text style={s.oppTopName} numberOfLines={1}>{opp0?.pseudo ?? 'Adversaire'}</Text>
           </View>
           <CardBackRow count={state.players[1]?.hand.length ?? 0} />
           <Text style={s.oppTopLabel}>{state.players[1]?.hand.length ?? 0} 🂠</Text>
@@ -559,6 +556,26 @@ export function DiJoujOnlineScreen() {
         <View style={s.statusBar}>
           <Text style={s.statusTxt}>{statusText}</Text>
         </View>
+
+        {/* ── Compte à rebours du tour (mon tour uniquement) ────────────────── */}
+        {isMyLiveTurn && (
+          <View style={s.turnTimer}>
+            <Text style={[s.turnTimerTxt, turnLeft <= 3 && s.turnTimerTxtUrgent]}>
+              ⏱ {t('yourTurn')} · {turnLeft}s
+            </Text>
+            <View style={s.turnTimerTrack}>
+              <Animated.View
+                style={[
+                  s.turnTimerFill,
+                  {
+                    width: turnBar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                    backgroundColor: turnLeft <= 3 ? C.red : C.brass,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        )}
 
         {/* ── Moi (profil joueur connecté) ──────────────────────────────────── */}
         <View style={s.playerBar}>
@@ -664,6 +681,14 @@ export function DiJoujOnlineScreen() {
           </View>
         )}
 
+        {/* ── Profil de l'adversaire (tap sur l'avatar) ─────────────────────── */}
+        <PlayerProfileModal
+          visible={showOppProfile}
+          uid={opp0?.uid}
+          name={opp0?.pseudo}
+          onClose={() => setShowOppProfile(false)}
+        />
+
       </SafeAreaView>
     </LinearGradient>
     <VoiceButton roomCode={roomCode} username={username || 'Joueur'} />
@@ -733,16 +758,19 @@ const s = StyleSheet.create({
   },
   oppTopLabel: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, letterSpacing: 0.5 },
   oppProfileRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '92%' },
-  oppProfileMeta: { flexShrink: 1, gap: 4 },
-  oppTopName:     { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.3 },
-  oppBtnRow:      { flexDirection: 'row', gap: 8 },
-  oppBtn: {
-    backgroundColor: 'rgba(244,236,216,0.10)', borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+  oppTopName:     { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.3, flexShrink: 1 },
+
+  // Compte à rebours du tour
+  turnTimer: { paddingHorizontal: 32, gap: 4, alignItems: 'center' },
+  turnTimerTxt: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 12, letterSpacing: 0.4,
   },
-  oppBtnDone:  { backgroundColor: 'rgba(39,174,96,0.20)', borderColor: 'rgba(39,174,96,0.45)' },
-  oppBtnTxt:   { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 11 },
+  turnTimerTxtUrgent: { color: C.red },
+  turnTimerTrack: {
+    width: '100%', height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(244,236,216,0.12)', overflow: 'hidden',
+  },
+  turnTimerFill: { height: '100%', borderRadius: 3 },
 
   // Barre profil joueur (bas)
   playerBar: {
