@@ -22,15 +22,19 @@ export const STREAK_MAX  = 100
 export interface QuestState {
   date: string
   streak: number
+  /** Mission accomplie (automatique). */
   completed: Record<QuestKey, boolean>
+  /** Récompense réclamée par le joueur (clic « Réclamer »). */
+  claimed: Record<QuestKey, boolean>
 }
 
+/** Date UTC (YYYY-MM-DD) — le reset quotidien se fait à 00:00 UTC. */
 function today(): string { return new Date().toISOString().slice(0, 10) }
 function yesterday(): string {
   const d = new Date(); d.setDate(d.getDate() - 1)
   return d.toISOString().slice(0, 10)
 }
-function emptyCompleted(): Record<QuestKey, boolean> {
+function emptyFlags(): Record<QuestKey, boolean> {
   return { winGame: false, playOnline: false, sendGift: false }
 }
 
@@ -64,11 +68,12 @@ export async function loadQuests(): Promise<QuestState | null> {
       cache = {
         date: storedDate,
         streak: storedStreak,
-        completed: { ...emptyCompleted(), ...(data?.questsCompleted as Record<QuestKey, boolean> ?? {}) },
+        completed: { ...emptyFlags(), ...(data?.questsCompleted as Record<QuestKey, boolean> ?? {}) },
+        claimed:   { ...emptyFlags(), ...(data?.questsClaimed   as Record<QuestKey, boolean> ?? {}) },
       }
     } else {
-      // Nouveau jour : rien n'est écrit tant qu'aucune quête n'est validée.
-      cache = { date: today(), streak: storedStreak, completed: emptyCompleted() }
+      // Nouveau jour (UTC) : reset local. Rien n'est écrit tant qu'aucune quête n'est validée.
+      cache = { date: today(), streak: storedStreak, completed: emptyFlags(), claimed: emptyFlags() }
     }
     emit()
     return cache
@@ -78,7 +83,10 @@ export async function loadQuests(): Promise<QuestState | null> {
   }
 }
 
-/** Marque une quête comme accomplie (idempotent par jour) et crédite la récompense. */
+/**
+ * Marque une quête comme ACCOMPLIE (idempotent par jour). Ne crédite AUCUN or :
+ * la récompense n'est versée qu'au clic « Réclamer » (voir claimQuest).
+ */
 export async function markQuestProgress(key: QuestKey): Promise<void> {
   const u = uid(); if (!u) return
   try {
@@ -90,34 +98,54 @@ export async function markQuestProgress(key: QuestKey): Promise<void> {
 
     let streak = storedStreak
     let completed = isNewDay
-      ? emptyCompleted()
-      : { ...emptyCompleted(), ...(data?.questsCompleted as Record<QuestKey, boolean> ?? {}) }
-    let bonus = 0
+      ? emptyFlags()
+      : { ...emptyFlags(), ...(data?.questsCompleted as Record<QuestKey, boolean> ?? {}) }
+    const claimed = isNewDay
+      ? emptyFlags()
+      : { ...emptyFlags(), ...(data?.questsClaimed as Record<QuestKey, boolean> ?? {}) }
 
-    if (isNewDay) {
-      // Premier passage du jour → streak + bonus de connexion.
-      streak = storedDate === yesterday() ? storedStreak + 1 : 1
-      bonus = Math.min(streak * STREAK_STEP, STREAK_MAX)
-    }
+    // Nouveau jour → incrémente le streak de connexion (continuité, pas de crédit ici).
+    if (isNewDay) streak = storedDate === yesterday() ? storedStreak + 1 : 1
 
     if (completed[key]) {
-      cache = { date: today(), streak, completed }
+      cache = { date: today(), streak, completed, claimed }
       emit()
       return
     }
     completed = { ...completed, [key]: true }
 
-    await setDoc(questRef(u), { date: today(), streak, questsCompleted: completed }, { merge: true })
+    // Sur un nouveau jour, on remet aussi questsClaimed à zéro côté Firestore.
+    const patch: Record<string, unknown> = { date: today(), streak, questsCompleted: completed }
+    if (isNewDay) patch.questsClaimed = emptyFlags()
+    await setDoc(questRef(u), patch, { merge: true })
 
-    const reward = (QUESTS.find(q => q.key === key)?.reward ?? 0) + bonus
+    cache = { date: today(), streak, completed, claimed }
+    emit()
+  } catch (e) {
+    console.error('[quests] markQuestProgress:', e)
+  }
+}
+
+/**
+ * Réclame la récompense d'une quête accomplie : crédite l'or (une seule fois)
+ * et marque `claimed`. Sans effet si la quête n'est pas accomplie ou déjà réclamée.
+ */
+export async function claimQuest(key: QuestKey): Promise<void> {
+  const u = uid(); if (!u) return
+  const s = cache
+  if (!s || !s.completed[key] || s.claimed[key]) return
+  try {
+    const claimed = { ...s.claimed, [key]: true }
+    await setDoc(questRef(u), { date: today(), questsClaimed: claimed }, { merge: true })
+    cache = { ...s, claimed }
+    emit()
+
+    const reward = QUESTS.find(q => q.key === key)?.reward ?? 0
     if (reward > 0) {
       const r = await apiGift(u, reward)  // crédit serveur (à soi-même)
       if (r.ok && typeof r.gold === 'number' && applyGold) applyGold(r.gold)
     }
-
-    cache = { date: today(), streak, completed }
-    emit()
   } catch (e) {
-    console.error('[quests] markQuestProgress:', e)
+    console.error('[quests] claimQuest:', e)
   }
 }

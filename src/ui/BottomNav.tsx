@@ -4,6 +4,9 @@ import { usePathname, router, type Href } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../firebase/auth'
 import { useNotifBadges } from '../hooks/useNotifBadges'
+import { useDailyQuests } from '../quests/useQuests'
+import { useDailyBonus } from '../hooks/useDailyBonus'
+import { QUESTS } from '../quests/quests'
 
 const C = {
   bg:     '#0D0D1A',
@@ -70,6 +73,15 @@ export function BottomNav() {
   const { user }  = useAuth()
   const { total } = useNotifBadges(user?.uid ?? null)
 
+  // Badge Quêtes : nombre de récompenses accomplies mais pas encore réclamées
+  // (missions + streak de connexion du jour).
+  const { quests } = useDailyQuests()
+  const { pending: streakPending, alreadyClaimed: streakClaimed } = useDailyBonus()
+  const questClaimable = quests
+    ? QUESTS.filter(q => quests.completed[q.key] && !quests.claimed[q.key]).length
+    : 0
+  const questBadge = questClaimable + (streakPending && !streakClaimed ? 1 : 0)
+
   const isHidden = HIDDEN_PREFIXES.some(
     p => pathname === p || pathname.startsWith(p + '?') || pathname.startsWith(p + '/'),
   )
@@ -84,7 +96,11 @@ export function BottomNav() {
         const active = tab.href === '/'
           ? pathname === '/'
           : pathname.startsWith(tab.href)
-        const badge = tab.href === '/friends' ? total : 0
+        const badge = tab.href === '/friends'
+          ? total
+          : tab.href === '/daily-quests'
+            ? questBadge
+            : 0
         return <TabItem key={tab.href} tab={tab} active={active} badge={badge} />
       })}
     </View>
