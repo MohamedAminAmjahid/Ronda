@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView,
+  Modal, View, Text, TouchableOpacity, StyleSheet, Animated, useWindowDimensions,
 } from 'react-native'
-import { STREAK_REWARDS, type DailyBonusState } from '../hooks/useDailyBonus'
+import { streakReward, type DailyBonusState } from '../hooks/useDailyBonus'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -23,6 +23,7 @@ interface Props {
 
 export function DailyBonusModal({ bonus, onClaim }: Props) {
   const { t } = useI18n()
+  const { width } = useWindowDimensions()
 
   // Animation d'entrée de la monnaie.
   const scale  = useRef(new Animated.Value(0.7)).current
@@ -37,10 +38,15 @@ export function DailyBonusModal({ bonus, onClaim }: Props) {
 
   const { streak, goldToday } = bonus
 
+  // Fenêtre glissante de 7 jours centrée sur aujourd'hui (streak-3 → streak+3),
+  // bornée à J1 minimum. Affiche le vrai numéro de jour même au-delà de 7.
+  const start = Math.max(1, streak - 3)
+  const days  = Array.from({ length: 7 }, (_, i) => start + i)
+
   return (
     <Modal visible transparent animationType="fade">
       <View style={s.backdrop}>
-        <Animated.View style={[s.card, { opacity, transform: [{ scale }] }]}>
+        <Animated.View style={[s.card, { opacity, transform: [{ scale }], maxWidth: Math.min(340, width - 32) }]}>
 
           {/* En-tête streak */}
           <View style={s.header}>
@@ -49,17 +55,13 @@ export function DailyBonusModal({ bonus, onClaim }: Props) {
             <Text style={s.title}>{t('dailyBonusTitle')}</Text>
           </View>
 
-          {/* Grille des 7 jours */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={s.daysRow}
-          >
-            {STREAK_REWARDS.map((reward, idx) => {
-              const day     = idx + 1
-              const isPast  = day < streak
-              const isToday = day === streak
-              const isLast  = day === 7
+          {/* Grille des 7 jours (fenêtre centrée sur aujourd'hui), 2 rangées si besoin */}
+          <View style={s.daysRow}>
+            {days.map((day) => {
+              const reward   = streakReward(day)
+              const isPast   = day < streak
+              const isToday  = day === streak
+              const isMaxed  = day >= 7   // palier plafond (750 🪙)
 
               return (
                 <View
@@ -70,14 +72,14 @@ export function DailyBonusModal({ bonus, onClaim }: Props) {
                     isToday && s.dayBoxToday,
                   ]}
                 >
-                  {isLast && !isPast && (
+                  {isMaxed && isToday && (
                     <Text style={s.jackpotTag}>{t('dailyJackpot')}</Text>
                   )}
                   <Text style={[s.dayLabel, isToday && s.dayLabelToday]}>
                     {t('dailyDay').replace('{n}', String(day))}
                   </Text>
                   <Text style={s.dayIcon}>
-                    {isPast ? '✓' : isLast ? '💎' : '🪙'}
+                    {isPast ? '✓' : isMaxed ? '💎' : '🪙'}
                   </Text>
                   <Text style={[s.dayReward, isToday && s.dayRewardToday, isPast && s.dayRewardPast]}>
                     +{reward}
@@ -85,7 +87,7 @@ export function DailyBonusModal({ bonus, onClaim }: Props) {
                 </View>
               )
             })}
-          </ScrollView>
+          </View>
 
           {/* Récompense du jour */}
           <View style={s.todayBanner}>
@@ -112,7 +114,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20,
   },
   card: {
-    width: '100%', maxWidth: 400, backgroundColor: C.bg, borderRadius: 22,
+    width: '100%', backgroundColor: C.bg, borderRadius: 22,
     padding: 24, gap: 20, alignItems: 'center',
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
@@ -124,11 +126,14 @@ const s = StyleSheet.create({
   streakNum:  { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass, letterSpacing: 1.5, textTransform: 'uppercase' },
   title:      { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
 
-  // Grille jours
-  daysRow: { gap: 8, paddingHorizontal: 2 },
+  // Grille jours : rangée qui s'enroule (4 + 3) sur petit écran
+  daysRow: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    justifyContent: 'center', gap: 8,
+  },
   dayBox: {
-    width: 52, alignItems: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 4,
-    borderRadius: 12, backgroundColor: C.muted,
+    width: 38, alignItems: 'center', gap: 3, paddingVertical: 8, paddingHorizontal: 2,
+    borderRadius: 10, backgroundColor: C.muted,
     borderWidth: 1, borderColor: 'rgba(244,236,216,0.10)',
   },
   dayBoxPast: {
@@ -143,14 +148,14 @@ const s = StyleSheet.create({
     shadowOpacity: 0.6, shadowRadius: 8, elevation: 6,
   },
   jackpotTag: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 7, color: C.brass,
-    letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: -2,
+    fontFamily: 'Cairo_600SemiBold', fontSize: 6, color: C.brass,
+    letterSpacing: 0.3, textTransform: 'uppercase', marginBottom: -2,
   },
-  dayLabel:       { fontFamily: 'Cairo_400Regular', fontSize: 10, color: C.boneOff },
+  dayLabel:       { fontFamily: 'Cairo_400Regular', fontSize: 8.5, color: C.boneOff },
   dayLabelToday:  { color: C.brass, fontFamily: 'Cairo_600SemiBold' },
-  dayIcon:        { fontSize: 18 },
-  dayReward:      { fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.boneOff },
-  dayRewardToday: { color: C.brass, fontSize: 12 },
+  dayIcon:        { fontSize: 15 },
+  dayReward:      { fontFamily: 'Cairo_600SemiBold', fontSize: 9.5, color: C.boneOff },
+  dayRewardToday: { color: C.brass, fontSize: 10.5 },
   dayRewardPast:  { color: 'rgba(201,162,39,0.45)' },
 
   // Banner récompense du jour

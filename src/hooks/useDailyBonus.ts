@@ -6,8 +6,13 @@ const KEY = 'ronda_daily_bonus'
 
 export const STREAK_REWARDS = [100, 150, 200, 300, 400, 500, 750] as const
 
+/** Récompense d'un jour de streak : paliers 1–7, puis 750 🪙 pour tout jour ≥ 7. */
+export function streakReward(streak: number): number {
+  return STREAK_REWARDS[Math.min(Math.max(streak, 1) - 1, STREAK_REWARDS.length - 1)]
+}
+
 export interface DailyBonusState {
-  streak:    number   // 1–7
+  streak:    number   // ≥ 1 (continue indéfiniment au-delà de 7)
   goldToday: number   // récompense du jour courant
 }
 
@@ -50,14 +55,15 @@ export function useDailyBonus() {
           return
         }
 
+        // Le streak monte indéfiniment (J8, J9, …) tant qu'on se connecte chaque
+        // jour ; il ne repart à 1 que si un jour est manqué.
         let newStreak = 1
         if (stored?.lastClaim === yesterday()) {
-          newStreak = stored.streak < 7 ? stored.streak + 1 : 1
+          newStreak = stored.streak + 1
         }
 
         setStreak(newStreak)
-        const goldToday = STREAK_REWARDS[newStreak - 1]
-        setPending({ streak: newStreak, goldToday })
+        setPending({ streak: newStreak, goldToday: streakReward(newStreak) })
       } catch {
         // AsyncStorage indisponible — on skip silencieusement
       }
