@@ -167,7 +167,7 @@ export function GameScreen2v2({ onBack, useGame2v2 = useRonda2v2Game, online = f
     if (view.isGameOver) {
       if (!resultRecorded.current) {
         resultRecorded.current = true
-        setWinReward(recordResult(view.teamScores[0] >= 41, 'ronda', { mode: '2v2' }))
+        setWinReward(recordResult(view.teamScores[0] >= 41, 'ronda', { mode: '2v2' }).goldReward)
       }
     } else {
       resultRecorded.current = false

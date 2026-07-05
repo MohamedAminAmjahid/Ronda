@@ -14,7 +14,8 @@ import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { router, type Href } from 'expo-router'
-import { recordResult, addGold } from '../profile/profile'
+import { recordResult, addGold, getProfile } from '../profile/profile'
+import { XpGainBar, type XpGain } from './components/XpGainBar'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { useI18n } from '../i18n/useI18n'
@@ -174,6 +175,8 @@ export function GameOverScreen({
   onReplay,
   goldReward = 0,
   onWatchReplay,
+  onMenu,
+  xpInfo,
 }: {
   won: boolean
   scoreText: string
@@ -182,6 +185,10 @@ export function GameOverScreen({
   goldReward?: number
   /** Ouvre le replay de la partie (bouton affiché si fourni). */
   onWatchReplay?: () => void
+  /** Retour au menu (bouton affiché si fourni) — sans confirmation, partie finie. */
+  onMenu?: () => void
+  /** XP gagné cette partie (barre animée affichée si fourni). */
+  xpInfo?: XpGain | null
 }) {
   const { t } = useI18n()
   const reduceMotion = useReducedMotion()
@@ -216,6 +223,7 @@ export function GameOverScreen({
           {goldReward > 0 && (
             <Text style={styles.gameOverReward}>🪙 +{goldReward}</Text>
           )}
+          {xpInfo && <XpGainBar {...xpInfo} />}
           <TouchableOpacity style={styles.btnPrimary} onPress={onReplay}>
             <Text style={styles.btnPrimaryTxt}>{t('replay')}</Text>
           </TouchableOpacity>
@@ -224,13 +232,18 @@ export function GameOverScreen({
               <Text style={styles.btnGhostTxt}>🎬 {t('watchReplay')}</Text>
             </TouchableOpacity>
           )}
+          {onMenu && (
+            <TouchableOpacity style={styles.btnGhost} onPress={onMenu}>
+              <Text style={styles.btnGhostTxt}>🏠 {t('back')}</Text>
+            </TouchableOpacity>
+          )}
         </ReAnimated.View>
       </View>
     </SafeAreaView>
   )
 }
 
-function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay }: { scores: [number, number]; onReplay: () => void; goldReward?: number; onWatchReplay?: () => void }) {
+function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay, onMenu, xpInfo }: { scores: [number, number]; onReplay: () => void; goldReward?: number; onWatchReplay?: () => void; onMenu?: () => void; xpInfo?: XpGain | null }) {
   const { t } = useI18n()
   return (
     <GameOverScreen
@@ -239,6 +252,8 @@ function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay }: { scores:
       onReplay={onReplay}
       goldReward={goldReward}
       onWatchReplay={onWatchReplay}
+      onMenu={onMenu}
+      xpInfo={xpInfo}
     />
   )
 }
@@ -548,6 +563,7 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   // Récompense de fin de partie : on enregistre le résultat une seule fois quand
   // la partie se termine (incrémente les stats + crédite l'or si victoire).
   const [winReward, setWinReward] = useState(0)
+  const [xpInfo, setXpInfo] = useState<XpGain | null>(null)
   const resultRecorded = useRef(false)
 
   // Pulsation du bouton Ronda/Tringa
@@ -558,24 +574,32 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       if (!resultRecorded.current) {
         resultRecorded.current = true
         const won = view.state.players[HUMAN_ID].score >= 41
-        const reward = recordResult(won)
+        const before = getProfile()
+        const { goldReward, xpGained } = recordResult(won)
         // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
         // → la mise reste retirée. En ligne, ce réglage est géré par le serveur.
         if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
-        setWinReward(reward)
+        setWinReward(goldReward)
+        const after = getProfile()
+        setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
         // Sons de fin de partie.
-        if (won) { playWinSound(); if (reward > 0 || stakeBet > 0) playGoldSound() }
+        if (won) { playWinSound(); if (goldReward > 0 || stakeBet > 0) playGoldSound() }
         else playLoseSound()
       }
     } else {
       resultRecorded.current = false
       setWinReward(0)
+      setXpInfo(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view.isGameOver])
 
-  // Quitter : toujours via une confirmation (en ligne, départ = défaite).
-  const handleQuit = () => setConfirmQuit(true)
+  // Quitter : confirmation seulement si la partie est en cours (en ligne, départ
+  // = défaite). Une fois terminée, retour direct au menu sans alerte.
+  const handleQuit = () => {
+    if (view.isGameOver) { onBack(); return }
+    setConfirmQuit(true)
+  }
 
   // ── Préchargement des sons (une fois) ─────────────────────────────────────
   useEffect(() => { void initSounds() }, [])
@@ -788,12 +812,14 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       <GameOver
         scores={[human.score, bot.score]}
         goldReward={winReward}
+        xpInfo={xpInfo}
         onReplay={() => {
           // Partie misée → « Rejouer » relance le matchmaking (nouvelle mise).
           if (stakeBet > 0) { router.replace('/bet?game=ronda' as Href); return }
           setSelectedRitual(null); newGame()
         }}
         onWatchReplay={() => router.push('/replay' as Href)}
+        onMenu={() => router.replace('/' as Href)}
       />
     )
   }

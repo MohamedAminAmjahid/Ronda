@@ -11,7 +11,8 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
-import { recordResult, addGold } from '../profile/profile'
+import { recordResult, addGold, getProfile } from '../profile/profile'
+import { XpGainBar, type XpGain } from './components/XpGainBar'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
@@ -246,6 +247,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
   const lastCardPulse = useRef(new Animated.Value(1)).current
   const [showLastCardMsg, setShowLastCardMsg] = useState(false)
+  const [xpInfo, setXpInfo] = useState<XpGain | null>(null)
 
   const djResultRecorded = useRef(false)
   useEffect(() => {
@@ -253,10 +255,13 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     if (!djResultRecorded.current) {
       djResultRecorded.current = true
       const won = winner === DJ_HUMAN_ID
-      recordResult(won, 'dijouj')
+      const before = getProfile()
+      const { xpGained } = recordResult(won, 'dijouj')
       // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
       // → la mise reste retirée (déjà déduite à l'écran de mise).
       if (stakeBet > 0 && won) addGold(stakeBet * 2)
+      const after = getProfile()
+      setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
       // Sons de fin de partie.
       if (won) { playWinSound(); if (stakeBet > 0) playGoldSound() }
       else playLoseSound()
@@ -507,6 +512,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
               {stakeBet > 0 && winner === DJ_HUMAN_ID && (
                 <Text style={s.overlayGold}>🪙 +{stakeBet}</Text>
               )}
+              {xpInfo && <XpGainBar {...xpInfo} />}
               <TouchableOpacity
                 style={s.restartBtn}
                 onPress={() => {
@@ -518,8 +524,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
               >
                 <Text style={s.restartTxt}>{t('djNewGame')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backFromOverlay}>
-                <Text style={s.backFromOverlayTxt}>{t('back')}</Text>
+              {/* Partie terminée → retour direct au menu, sans confirmation. */}
+              <TouchableOpacity onPress={() => router.replace('/' as Href)} activeOpacity={0.7} style={s.backFromOverlay}>
+                <Text style={s.backFromOverlayTxt}>🏠 {t('back')}</Text>
               </TouchableOpacity>
             </View>
           </View>

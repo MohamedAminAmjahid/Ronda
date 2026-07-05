@@ -540,7 +540,7 @@ export function recordResult(
   won: boolean,
   game: 'ronda' | 'dijouj' = 'ronda',
   opts: { mode?: '1v1' | '2v2'; online?: boolean } = {}
-): number {
+): { goldReward: number; xpGained: number } {
   const wasFirstGame = profile.gamesPlayed === 0
   const reward = won ? WIN_REWARD : 0
   profile = {
@@ -565,8 +565,9 @@ export function recordResult(
   const xpGain = won
     ? (game === 'dijouj' ? 40 : opts.mode === '2v2' ? 75 : 50)
     : 10
-  addXP(xpGain + (opts.online ? 15 : 0))
-  return reward
+  const xpGained = xpGain + (opts.online ? 15 : 0)
+  addXP(xpGained)
+  return { goldReward: reward, xpGained }
 }
 
 /**
