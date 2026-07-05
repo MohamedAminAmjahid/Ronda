@@ -205,7 +205,9 @@ async function connect(factory: () => Promise<Room>, bet = 0): Promise<void> {
     // En attente du 2e joueur jusqu'au 1er game_state en phase PLAYING.
     set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
   } catch (e) {
-    set({ status: 'disconnected', error: (e as Error).message || 'Connexion impossible.' })
+    // Échec de connexion : la partie n'a jamais commencé → rembourser la mise.
+    if (bet > 0) addGold(bet)
+    set({ status: 'disconnected', error: (e as Error).message || 'Connexion impossible.', bet: 0 })
   }
 }
 

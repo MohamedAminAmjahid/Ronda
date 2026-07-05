@@ -197,7 +197,9 @@ async function connect(factory: () => Promise<Room>, isQuick = false, bet = 0): 
     wireRoom(r)
     set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
   } catch (e) {
-    set({ status: 'disconnected', error: (e as Error).message || 'Connexion impossible.' })
+    // Échec de connexion : la partie n'a jamais commencé → rembourser la mise.
+    if (bet > 0) addGold(bet)
+    set({ status: 'disconnected', error: (e as Error).message || 'Connexion impossible.', bet: 0 })
   }
 }
 
