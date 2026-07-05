@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, ActivityIndicator,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, usePathname } from 'expo-router'
 import { useAuth } from '../firebase/auth'
 import { useProfile } from '../profile/useProfile'
-import { removeGold } from '../profile/profile'
+import { removeGold, recordResult } from '../profile/profile'
 import {
   subscribeIncomingInvites, subscribeInviteById,
   acceptGameInvite, declineGameInvite,
@@ -28,9 +28,17 @@ const C = {
 
 type Phase = 'idle' | 'shown' | 'accepting' | 'waiting_room' | 'error'
 
+// Écrans de jeu : accepter une invitation quitte la partie en cours (= abandon).
+const IN_GAME_PATHS = ['/game', '/dijouj', '/online', '/dijouj-online']
+
 export function IncomingInviteModal() {
   const { user } = useAuth()
   const { gold, username } = useProfile()
+  const pathname = usePathname()
+
+  // Partie en cours ? (/dijouj matche aussi /dijouj-online, tous deux en jeu)
+  const inGame = IN_GAME_PATHS.some(p => pathname === p || pathname.startsWith(`${p}?`) || pathname.startsWith(`${p}/`))
+  const currentGame: 'ronda' | 'dijouj' = pathname.includes('dijouj') ? 'dijouj' : 'ronda'
 
   const [invite, setInvite] = useState<GameInviteDoc | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -81,6 +89,9 @@ export function IncomingInviteModal() {
       setPhase('error')
       return
     }
+
+    // Partie en cours abandonnée : comptée comme défaite avant de rejoindre.
+    if (inGame) recordResult(false, currentGame)
 
     const savedInvite = invite
     setPhase('accepting')
@@ -186,17 +197,25 @@ export function IncomingInviteModal() {
               {invite.betAmount > gold && (
                 <Text style={s.insufficient}>Or insuffisant ({gold} 🪙 disponible)</Text>
               )}
+              {inGame && (
+                <View style={s.warnBox}>
+                  <Text style={s.warnTxt}>⚠️ Tu es en pleine partie — accepter compte comme abandon</Text>
+                </View>
+              )}
               <View style={s.actions}>
                 <TouchableOpacity style={s.declineBtn} onPress={onDecline} activeOpacity={0.8}>
                   <Text style={s.declineTxt}>Refuser</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[s.acceptBtn, invite.betAmount > gold && s.acceptBtnDis]}
+                  style={[
+                    inGame ? s.acceptBtnDanger : s.acceptBtn,
+                    invite.betAmount > gold && s.acceptBtnDis,
+                  ]}
                   onPress={onAccept}
                   disabled={invite.betAmount > gold}
                   activeOpacity={0.85}
                 >
-                  <Text style={s.acceptTxt}>Accepter</Text>
+                  <Text style={s.acceptTxt}>{inGame ? 'Accepter quand même' : 'Accepter'}</Text>
                 </TouchableOpacity>
               </View>
             </>
@@ -277,8 +296,22 @@ const s = StyleSheet.create({
     backgroundColor: C.green,
     shadowColor: C.green, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6,
   },
+  acceptBtnDanger: {
+    flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center',
+    backgroundColor: C.red,
+    shadowColor: C.red, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.45, shadowRadius: 8, elevation: 6,
+  },
   acceptBtnDis: { backgroundColor: 'rgba(39,174,96,0.30)', shadowOpacity: 0 },
   acceptTxt: { fontFamily: 'Cairo_600SemiBold', color: '#fff', fontSize: 14 },
+  warnBox: {
+    backgroundColor: 'rgba(192,57,43,0.14)', borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 10, marginTop: 4,
+    borderWidth: 1, borderColor: 'rgba(192,57,43,0.40)',
+  },
+  warnTxt: {
+    fontFamily: 'Cairo_600SemiBold', color: C.red, fontSize: 12.5,
+    textAlign: 'center', lineHeight: 18,
+  },
   waitTxt:   { fontFamily: 'Cairo_400Regular', color: C.off, fontSize: 14, textAlign: 'center' },
   errTxt:    { fontFamily: 'Cairo_400Regular', color: C.red, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   closeBtn: {
