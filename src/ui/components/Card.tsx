@@ -3,6 +3,11 @@ import { View, Image, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import { Svg, Polygon } from 'react-native-svg'
 import type { Card as CardType, Suit } from '../../engine/types'
 import { getCardImage } from '../assets/cards'
+
+// Toutes les 40 cartes (liste plate) — préchargées au démarrage dans _layout
+// pour éviter le flash du repli texte. Ré-export depuis le module d'assets
+// (source unique des require statiques, pas de duplication).
+export { ALL_CARD_IMAGES as CARD_IMAGES } from '../assets/cards'
 import { useProfile } from '../../profile/useProfile'
 import { backDesign } from '../../cosmetics/catalog'
 

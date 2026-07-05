@@ -59,3 +59,10 @@ const CARDS: Record<Suit, Record<number, ImageSourcePropType>> = {
 export function getCardImage(suit: Suit, value: number): ImageSourcePropType | undefined {
   return CARDS[suit]?.[value]
 }
+
+/**
+ * Toutes les 40 cartes en liste plate — pour le préchargement au démarrage
+ * (expo-asset), afin d'éviter le flash du repli texte au 1er affichage.
+ */
+export const ALL_CARD_IMAGES: ImageSourcePropType[] =
+  Object.values(CARDS).flatMap(suit => Object.values(suit))

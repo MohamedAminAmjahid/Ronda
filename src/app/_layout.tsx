@@ -6,6 +6,8 @@ import { useFonts } from 'expo-font'
 import { ReemKufi_700Bold } from '@expo-google-fonts/reem-kufi'
 import { Cairo_400Regular, Cairo_600SemiBold } from '@expo-google-fonts/cairo'
 import * as SplashScreen from 'expo-splash-screen'
+import { Asset } from 'expo-asset'
+import { CARD_IMAGES } from '../ui/components/Card'
 import { useFirebaseProfileSync } from '../firebase/sync'
 import { usePushRegistration } from '../push/push'
 import { usePresence } from '../presence/usePresence'
@@ -129,13 +131,25 @@ export default function RootLayout() {
     Cairo_600SemiBold,
   })
 
+  // Précharge les 40 images de cartes au démarrage → plus de flash du repli texte
+  // au 1er affichage. Filet de sécurité 4 s pour ne jamais bloquer le lancement.
+  const [cardsReady, setCardsReady] = useState(false)
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    const preload = Promise.all(
+      // require(png) → identifiant d'asset Metro (number) ; le type large est resserré ici.
+      CARD_IMAGES.map(m => Asset.fromModule(m as number).downloadAsync().catch(() => undefined)),
+    )
+    const timeout = new Promise<void>(res => setTimeout(res, 4000))
+    void Promise.race([preload, timeout]).then(() => setCardsReady(true))
+  }, [])
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && cardsReady) {
       SplashScreen.hideAsync()
     }
-  }, [fontsLoaded, fontError])
+  }, [fontsLoaded, fontError, cardsReady])
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !cardsReady) {
     return null
   }
 
