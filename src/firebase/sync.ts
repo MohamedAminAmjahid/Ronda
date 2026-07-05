@@ -53,8 +53,11 @@ export function useFirebaseProfileSync(): void {
           level: p.level,
         })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
+        console.log('[sync] username Firestore:', username, '| local:', p.username)
         if (!cancelled) {
-          if (username) setUsername(username)
+          // Firestore fait autorité : on n'écrase le local QUE si la valeur diffère.
+          // Ne jamais renvoyer le username local vers Firestore ici.
+          if (username && username !== p.username) setUsername(username)
           setGold(gold)
           setUsernameChanges(usernameChanges)
           setGoldHistoryPublicLocal(goldHistoryPublic)

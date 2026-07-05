@@ -155,12 +155,14 @@ export async function createOrUpdateUser(
   const snap = await getDoc(ref)
 
   if (!snap.exists()) {
+    // Document inexistant → premier login : on génère un username unique une fois.
     let finalUsername = local.username
     const available = await isUsernameAvailable(local.username)
     if (!available) {
       const suffix = Math.floor(10 + Math.random() * 90)
       finalUsername = `${local.username.slice(0, 13)}_${suffix}`
     }
+    console.log('[firestore] createOrUpdateUser: NOUVEAU doc pour', user.uid, '→ username =', finalUsername)
     await setDoc(ref, {
       username: finalUsername,
       usernameLower: finalUsername.toLowerCase(),
@@ -200,10 +202,13 @@ export async function createOrUpdateUser(
     }
   }
 
+  // Document existant → on NE régénère JAMAIS le username : Firestore fait autorité.
   const data = snap.data()
+  const existingUsername = (data.username as string) || local.username
+  console.log('[firestore] createOrUpdateUser: doc EXISTANT pour', user.uid, '→ username Firestore =', existingUsername)
   await updateDoc(ref, { lastSeen: serverTimestamp() })
   return {
-    username: (data.username as string) || local.username,
+    username: existingUsername,
     gold: typeof data.gold === 'number' ? (data.gold as number) : local.gold,
     usernameChanges:
       typeof data.usernameChanges === 'number'
