@@ -101,6 +101,14 @@ export function DiJoujOnlineScreen() {
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
 
+  // Quitte la room si l'écran est démonté (navigation, retour…). Sans ça, une
+  // room en attente reste ouverte côté serveur et le prochain matchmaking nous
+  // apparie à ce fantôme → « moi contre moi ». (Miroir de OnlineScreen Ronda.)
+  useEffect(() => {
+    return () => { restart() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const human   = state.players[0]
   const topCard = state.discardPile[state.discardPile.length - 1]
 

@@ -165,6 +165,13 @@ function wireRoom(r: Room): void {
 }
 
 async function connect(factory: () => Promise<Room>, isQuick = false): Promise<void> {
+  // Ferme toute room encore ouverte AVANT d'en rejoindre une nouvelle. Sinon le
+  // matchmaking peut nous apparier à notre propre room en attente encore ouverte
+  // → « moi contre moi ». reset() ne fait que vider le snapshot, pas fermer la ws.
+  if (room) {
+    try { room.leave() } catch { /* déjà fermée */ }
+    room = null
+  }
   reset()
   set({ status: 'connecting', error: null, isQuick })
   try {
