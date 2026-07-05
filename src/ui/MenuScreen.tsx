@@ -16,6 +16,7 @@ import { useDailyChest, type ChestLevel } from '../hooks/useDailyChest'
 import { StreakInfoModal } from './StreakInfoModal'
 import { SpinWheelModal } from './SpinWheelModal'
 import { DailyChestModal, ChestSVG } from './DailyChestModal'
+import { AuthGateModal } from './AuthGateModal'
 
 const LINKEDIN_URL = 'https://www.linkedin.com/in/amjahid-mohamed-amin'
 
@@ -269,6 +270,28 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   // ── Action en cours ──────────────────────────────────────────────────────
   const [action, setAction] = useState<ActionType | null>(null)
 
+  // ── Barrière de connexion (jeu en ligne / avec ami) ───────────────────────
+  // Les invités doivent se connecter pour jouer en ligne ou avec un ami. On
+  // mémorise l'action demandée et on la reprend une fois connecté.
+  const [pendingAuthAction, setPendingAuthAction] = useState<ActionType | null>(null)
+
+  /** Ouvre le choix du jeu, ou la modale de connexion si l'action l'exige. */
+  const startAction = (a: ActionType) => {
+    if ((a === 'online' || a === 'friend') && !user) {
+      setPendingAuthAction(a)
+      return
+    }
+    setAction(a)
+  }
+
+  // Une fois connecté, reprend l'action en attente.
+  useEffect(() => {
+    if (user && pendingAuthAction) {
+      setAction(pendingAuthAction)
+      setPendingAuthAction(null)
+    }
+  }, [user, pendingAuthAction])
+
   const modalTitle: string = (() => {
     if (action === 'online')   return `⚡ ${t('playOnline')}`
     if (action === 'friend')   return `👥 ${t('playWithFriend')}`
@@ -378,6 +401,12 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
           onClose={() => setAction(null)}
         />
 
+        {/* Barrière de connexion (jeu en ligne / avec ami pour les invités) */}
+        <AuthGateModal
+          visible={pendingAuthAction !== null && !user}
+          onClose={() => setPendingAuthAction(null)}
+        />
+
         {/* Contenu scrollable */}
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
 
@@ -444,7 +473,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
             <View style={s.actionRow}>
               {!!user && <QuickBtn icon="🔥" label="Streak" hasBadge={!streakClaimed && streakPending !== null} onPress={() => setShowStreak(true)} />}
-              <TouchableOpacity style={[s.actionBtnOnline, s.actionBtnFlex]} onPress={() => setAction('online')} activeOpacity={0.75}>
+              <TouchableOpacity style={[s.actionBtnOnline, s.actionBtnFlex]} onPress={() => startAction('online')} activeOpacity={0.75}>
                 <Text style={s.actionBtnIcon}>⚡</Text>
                 <View style={s.actionBtnBody}>
                   <Text style={s.actionBtnLblDark}>{t('playOnline')}</Text>
@@ -455,7 +484,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
 
             <View style={s.actionRow}>
               {!!user && <QuickBtn icon="🎰" label="Roue" hasBadge={canSpin} onPress={() => setShowSpin(true)} />}
-              <TouchableOpacity style={[s.actionBtnFriend, s.actionBtnFlex]} onPress={() => setAction('friend')} activeOpacity={0.75}>
+              <TouchableOpacity style={[s.actionBtnFriend, s.actionBtnFlex]} onPress={() => startAction('friend')} activeOpacity={0.75}>
                 <Text style={s.actionBtnIcon}>👥</Text>
                 <View style={s.actionBtnBody}>
                   <Text style={s.actionBtnLbl}>{t('playWithFriend')}</Text>
