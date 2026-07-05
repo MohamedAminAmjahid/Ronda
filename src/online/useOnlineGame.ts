@@ -190,6 +190,7 @@ export function useOnlineGame() {
     // ── Extras online ──
     connectionStatus: snap.status,
     roomCode: snap.roomCode,
+    bet: snap.bet,
     opponentName: snap.server?.opponent.pseudo ?? null,
     opponentDisconnected: snap.opponentDisconnected,
     error: snap.error,

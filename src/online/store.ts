@@ -247,11 +247,12 @@ export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
 
-export function leave(): void {
+export function leave(refundBet = true): void {
   clearContinueTimer()
   clearActiveRoom() // départ volontaire → pas de reprise (l'adversaire gagne côté serveur)
   // Remboursement : on quitte le matchmaking AVANT le début de la partie → rendre la mise.
-  if ((snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
+  // refundBet=false quand on bascule sur un bot : la mise suit dans la partie bot.
+  if (refundBet && (snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
     addGold(snapshot.bet)
   }
   room?.leave()

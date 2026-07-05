@@ -11,7 +11,7 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
-import { recordResult } from '../profile/profile'
+import { recordResult, addGold } from '../profile/profile'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
@@ -200,8 +200,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const felt = tableColors(table)  // dégradé du tapis équipé
   // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
   // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
-  const { botName, botEmoji } = useLocalSearchParams<{ botName?: string; botEmoji?: string }>()
-  const oppLabel = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
+  const { botName, botEmoji, bet } = useLocalSearchParams<{ botName?: string; botEmoji?: string; bet?: string }>()
+  const oppLabel  = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
+  const stakeBet  = bet ? (parseInt(bet, 10) || 0) : 0  // >0 → partie misée (repli bot)
   const {
     state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
@@ -249,7 +250,11 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     if (!isGameOver) { djResultRecorded.current = false; return }
     if (!djResultRecorded.current) {
       djResultRecorded.current = true
-      recordResult(winner === DJ_HUMAN_ID, 'dijouj')
+      const won = winner === DJ_HUMAN_ID
+      recordResult(won, 'dijouj')
+      // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
+      // → la mise reste retirée (déjà déduite à l'écran de mise).
+      if (stakeBet > 0 && won) addGold(stakeBet * 2)
     }
     setShowLastCardMsg(true)
     const loop = Animated.loop(Animated.sequence([
@@ -490,7 +495,18 @@ function LocalGame({ onBack }: { onBack: () => void }) {
               <Text style={s.overlayTitle}>
                 {winner === DJ_HUMAN_ID ? t('djYouWin') : t('djYouLose')}
               </Text>
-              <TouchableOpacity style={s.restartBtn} onPress={restart} activeOpacity={0.8}>
+              {stakeBet > 0 && winner === DJ_HUMAN_ID && (
+                <Text style={s.overlayGold}>🪙 +{stakeBet}</Text>
+              )}
+              <TouchableOpacity
+                style={s.restartBtn}
+                onPress={() => {
+                  // Partie misée → « Rejouer » relance le matchmaking (nouvelle mise).
+                  if (stakeBet > 0) { router.replace(DJ_BET); return }
+                  restart()
+                }}
+                activeOpacity={0.8}
+              >
                 <Text style={s.restartTxt}>{t('djNewGame')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backFromOverlay}>
@@ -713,6 +729,10 @@ const s = StyleSheet.create({
   overlayEmoji: { fontSize: 56, lineHeight: 64 },
   overlayTitle: {
     fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 24, letterSpacing: 0.5, textAlign: 'center',
+  },
+  overlayGold: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 18, textAlign: 'center',
+    textShadowColor: 'rgba(201,162,39,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
   },
   restartBtn: {
     marginTop: 6, backgroundColor: C.acc, borderRadius: 14,

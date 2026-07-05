@@ -14,7 +14,7 @@ import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { router, type Href } from 'expo-router'
-import { recordResult } from '../profile/profile'
+import { recordResult, addGold } from '../profile/profile'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { useI18n } from '../i18n/useI18n'
@@ -523,9 +523,15 @@ interface GameScreenProps {
   opponentName?: string
   /** true = partie en ligne → quitter demande confirmation (l'adversaire gagne). */
   online?: boolean
+  /**
+   * Mise (or) quand la partie vient du matchmaking et bascule sur un bot.
+   * >0 → partie misée : victoire crédite le pot (2×mise), et « Rejouer » relance
+   * le matchmaking au lieu d'une partie locale.
+   */
+  stakeBet?: number
 }
 
-export function GameScreen({ onBack, useGame = useRondaGame, opponentName, online = false }: GameScreenProps) {
+export function GameScreen({ onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
   const { table } = useProfile()
@@ -549,7 +555,12 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
     if (view.isGameOver) {
       if (!resultRecorded.current) {
         resultRecorded.current = true
-        setWinReward(recordResult(view.state.players[HUMAN_ID].score >= 41))
+        const won = view.state.players[HUMAN_ID].score >= 41
+        const reward = recordResult(won)
+        // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
+        // → la mise reste retirée. En ligne, ce réglage est géré par le serveur.
+        if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
+        setWinReward(reward)
       }
     } else {
       resultRecorded.current = false
@@ -774,7 +785,11 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
       <GameOver
         scores={[human.score, bot.score]}
         goldReward={winReward}
-        onReplay={() => { setSelectedRitual(null); newGame() }}
+        onReplay={() => {
+          // Partie misée → « Rejouer » relance le matchmaking (nouvelle mise).
+          if (stakeBet > 0) { router.replace('/bet?game=ronda' as Href); return }
+          setSelectedRitual(null); newGame()
+        }}
         onWatchReplay={() => router.push('/replay' as Href)}
       />
     )

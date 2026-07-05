@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { Matchmaking } from './components/Matchmaking'
 import { useOnlineGame } from '../online/useOnlineGame'
+import { leave as leaveRondaRoom } from '../online/store'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
 import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
@@ -132,8 +133,9 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
         mode={mode}
         onCancel={() => game.newGame()}
         onBotFallback={(name, emoji) => {
-          game.newGame()
-          router.push(`/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` as Href)
+          const stake = game.bet ?? 0
+          leaveRondaRoom(false) // pas de remboursement : la mise suit dans la partie bot
+          router.push(`/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}&bet=${stake}` as Href)
         }}
       />
     )
