@@ -194,9 +194,11 @@ function wireRoom(r: Room): void {
   r.onError((_code, message) => set({ status: 'disconnected', error: message ?? 'Erreur serveur.' }))
 }
 
-async function connect(factory: () => Promise<Room>): Promise<void> {
+async function connect(factory: () => Promise<Room>, bet = 0): Promise<void> {
   reset()
-  set({ status: 'connecting', error: null })
+  // bet est passé APRÈS reset() (qui remet bet à 0) pour que le montant misé
+  // survive pendant le matchmaking → remboursable si on annule avant le début.
+  set({ status: 'connecting', error: null, bet })
   try {
     const r = await factory()
     wireRoom(r)
@@ -210,8 +212,7 @@ async function connect(factory: () => Promise<Room>): Promise<void> {
 // ── Actions exposées ─────────────────────────────────────────────────────────
 
 export function connectQuick(pseudo: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => joinOrCreate(pseudo, bet))
+  return connect(() => joinOrCreate(pseudo, bet), bet)
 }
 export function connectCreate(pseudo: string): Promise<void> {
   return connect(() => createPrivate(pseudo))
@@ -221,13 +222,11 @@ export function connectByCode(pseudo: string, code: string): Promise<void> {
 }
 /** Crée une room privée Ronda pour une partie entre amis (hôte). */
 export function connectFriendHost(pseudo: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => createPrivate(pseudo))
+  return connect(() => createPrivate(pseudo), bet)
 }
 /** Rejoint une room privée Ronda par code (invité). */
 export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => joinByCode(pseudo, code))
+  return connect(() => joinByCode(pseudo, code), bet)
 }
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */
@@ -251,6 +250,10 @@ export function send(type: string, payload?: unknown): void {
 export function leave(): void {
   clearContinueTimer()
   clearActiveRoom() // départ volontaire → pas de reprise (l'adversaire gagne côté serveur)
+  // Remboursement : on quitte le matchmaking AVANT le début de la partie → rendre la mise.
+  if ((snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
+    addGold(snapshot.bet)
+  }
   room?.leave()
   room = null
   reset()

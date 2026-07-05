@@ -164,7 +164,7 @@ function wireRoom(r: Room): void {
   )
 }
 
-async function connect(factory: () => Promise<Room>, isQuick = false): Promise<void> {
+async function connect(factory: () => Promise<Room>, isQuick = false, bet = 0): Promise<void> {
   // Ferme toute room encore ouverte AVANT d'en rejoindre une nouvelle. Sinon le
   // matchmaking peut nous apparier à notre propre room en attente encore ouverte
   // → « moi contre moi ». reset() ne fait que vider le snapshot, pas fermer la ws.
@@ -173,7 +173,8 @@ async function connect(factory: () => Promise<Room>, isQuick = false): Promise<v
     room = null
   }
   reset()
-  set({ status: 'connecting', error: null, isQuick })
+  // bet passé APRÈS reset() pour que la mise survive au matchmaking (remboursable si annulation).
+  set({ status: 'connecting', error: null, isQuick, bet })
   try {
     const r = await factory()
     wireRoom(r)
@@ -186,8 +187,7 @@ async function connect(factory: () => Promise<Room>, isQuick = false): Promise<v
 // ── Actions exposées ──────────────────────────────────────────────────────────
 
 export function connectDiJoujQuick(pseudo: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => joinDiJoujQuick(pseudo, bet), true)
+  return connect(() => joinDiJoujQuick(pseudo, bet), true, bet)
 }
 
 export function connectDiJoujPrivate(pseudo: string): Promise<void> {
@@ -195,13 +195,11 @@ export function connectDiJoujPrivate(pseudo: string): Promise<void> {
 }
 /** Crée une room privée Di Jouj pour une partie entre amis (hôte). */
 export function connectDiJoujFriendHost(pseudo: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => createDiJoujPrivate(pseudo))
+  return connect(() => createDiJoujPrivate(pseudo), false, bet)
 }
 /** Rejoint une room Di Jouj privée par code (invité). */
 export function connectDiJoujFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
-  set({ bet })
-  return connect(() => joinByCode(pseudo, code))
+  return connect(() => joinByCode(pseudo, code), false, bet)
 }
 
 /** Transfert d'une room déjà connectée (depuis le lobby). */
@@ -220,6 +218,10 @@ export function send(type: string, payload?: unknown): void {
 }
 
 export function leave(): void {
+  // Remboursement : on quitte le matchmaking AVANT le début de la partie → rendre la mise.
+  if ((snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
+    addGold(snapshot.bet)
+  }
   room?.leave()
   room = null
   reset()
