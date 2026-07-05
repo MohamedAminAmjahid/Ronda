@@ -15,6 +15,8 @@ import { recordResult, addGold } from '../profile/profile'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
+import { SoundToggle } from './components/SoundToggle'
+import { playCardSound, playWinSound, playLoseSound, playGoldSound } from '../hooks/useSoundEffects'
 
 const DJ_BET:   Href = '/bet?game=dijouj' as Href
 const DJ_LOBBY: Href = '/dijouj-lobby'   as Href
@@ -255,6 +257,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
       // → la mise reste retirée (déjà déduite à l'écran de mise).
       if (stakeBet > 0 && won) addGold(stakeBet * 2)
+      // Sons de fin de partie.
+      if (won) { playWinSound(); if (stakeBet > 0) playGoldSound() }
+      else playLoseSound()
     }
     setShowLastCardMsg(true)
     const loop = Animated.loop(Animated.sequence([
@@ -324,7 +329,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     // 7 d'oros = joker (choix de couleur), SAUF si c'est la dernière carte :
     // la poser gagne la partie → inutile de choisir la prochaine couleur.
     if (card.value === 7 && card.suit === 'oros' && human.hand.length > 1) { setPendingWild(card) }
-    else { playCard(card) }
+    else { playCardSound(); playCard(card) }
   }
 
   // ── Derived ──────────────────────────────────────────────────────────────────
@@ -351,7 +356,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <Text style={[s.title, isSmall && { fontSize: 15, letterSpacing: 3 }]}>DI JOUJ</Text>
-          <View style={s.headerSpacer} />
+          <View style={[s.headerSpacer, { alignItems: 'flex-end', justifyContent: 'center' }]}>
+            <SoundToggle />
+          </View>
         </View>
 
         {/* ── Top : adversaire (Bot) ────────────────────────────────────────── */}
@@ -464,7 +471,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
                     <TouchableOpacity
                       key={suit}
                       style={[s.suitBtn, { borderColor: SUIT_COLOR[suit], backgroundColor: SUIT_BG[suit] }]}
-                      onPress={() => { playCard(pendingWild!, suit); setPendingWild(null) }}
+                      onPress={() => { playCardSound(); playCard(pendingWild!, suit); setPendingWild(null) }}
                       activeOpacity={0.8}
                     >
                       <Icon />

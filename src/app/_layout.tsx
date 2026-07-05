@@ -9,6 +9,8 @@ import * as SplashScreen from 'expo-splash-screen'
 import { useFirebaseProfileSync } from '../firebase/sync'
 import { usePushRegistration } from '../push/push'
 import { usePresence } from '../presence/usePresence'
+import { useBackgroundMusic } from '../hooks/useBackgroundMusic'
+import { loadSoundPref } from '../hooks/soundPrefs'
 import { useI18n } from '../i18n/useI18n'
 import { BottomNav } from '../ui/BottomNav'
 import { TopBar } from '../ui/TopBar'
@@ -104,6 +106,10 @@ export default function RootLayout() {
   useFirebaseProfileSync()
   usePushRegistration()
   usePresence()
+  useBackgroundMusic()
+
+  // Charge la préférence son (musique + effets) au démarrage.
+  useEffect(() => { void loadSoundPref() }, [])
 
   // Direction RTL pour l'arabe : sur web via document.dir (effet immédiat),
   // sur mobile via I18nManager (appliqué au prochain rendu/recharge).

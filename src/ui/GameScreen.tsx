@@ -24,7 +24,9 @@ import { CoinFlipScreen } from './CoinFlipScreen'
 import { CardDrawScreen } from './CardDrawScreen'
 import { RpsScreen } from './RpsScreen'
 import { TERMS } from './terms'
-import { initSounds, playSound, setMuted, isMuted } from './sounds'
+import { initSounds, playSound } from './sounds'
+import { getSoundEnabled, subscribeSound, setSoundEnabled } from '../hooks/soundPrefs'
+import { playWinSound, playLoseSound, playGoldSound } from '../hooks/useSoundEffects'
 import { ESCALIER_SEQUENCE } from '../engine/capture'
 import type { Card, GameEvent } from '../engine/types'
 import type { RitualType } from './RitualPickerScreen'
@@ -561,6 +563,9 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
         // → la mise reste retirée. En ligne, ce réglage est géré par le serveur.
         if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
         setWinReward(reward)
+        // Sons de fin de partie.
+        if (won) { playWinSound(); if (reward > 0 || stakeBet > 0) playGoldSound() }
+        else playLoseSound()
       }
     } else {
       resultRecorded.current = false
@@ -575,13 +580,11 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   // ── Préchargement des sons (une fois) ─────────────────────────────────────
   useEffect(() => { void initSounds() }, [])
 
-  // Sourdine (état local pour re-render de l'icône ; persiste via le module sounds).
-  const [muted, setMutedState] = useState(isMuted())
-  const toggleMute = () => {
-    const next = !muted
-    setMuted(next)
-    setMutedState(next)
-  }
+  // Sourdine : préférence son unique et persistée (musique + effets + sons du jeu).
+  const [soundOn, setSoundOn] = useState(getSoundEnabled())
+  useEffect(() => subscribeSound(setSoundOn), [])
+  const muted = !soundOn
+  const toggleMute = () => { void setSoundEnabled(!soundOn) }
 
   // Délai avant l'écran de résultat de donne : on laisse 1,5 s pour voir la
   // dernière carte posée / l'animation de capture avant d'afficher DealEndScreen.
