@@ -28,11 +28,11 @@ export function createPrivate(pseudo: string): Promise<Room> {
 }
 
 /** Rejoint par code : résout code→roomId via HTTP puis joinById (tout type de room). */
-export async function joinByCode(pseudo: string, code: string): Promise<Room> {
+export async function joinByCode(pseudo: string, code: string, uid?: string): Promise<Room> {
   const res = await fetch(`${httpBase()}/room/${encodeURIComponent(code.trim().toUpperCase())}`)
   if (!res.ok) throw new Error('Code de partie introuvable.')
   const { roomId } = (await res.json()) as { roomId: string }
-  return getClient().joinById(roomId, { pseudo })
+  return getClient().joinById(roomId, { pseudo, uid })
 }
 
 /** Crée un lobby 2v2 (l'hôte reçoit un code à partager). */
@@ -41,13 +41,13 @@ export function createLobby2v2(pseudo: string): Promise<Room> {
 }
 
 /** Partie rapide Di Jouj (matchmaking public). */
-export function joinDiJoujQuick(pseudo: string, bet = 0): Promise<Room> {
-  return getClient().joinOrCreate('dijouj', { pseudo, bet })
+export function joinDiJoujQuick(pseudo: string, bet = 0, uid?: string): Promise<Room> {
+  return getClient().joinOrCreate('dijouj', { pseudo, bet, uid })
 }
 
 /** Partie privée Di Jouj (code à partager). */
-export function createDiJoujPrivate(pseudo: string): Promise<Room> {
-  return getClient().create('dijouj', { pseudo, private: true })
+export function createDiJoujPrivate(pseudo: string, uid?: string): Promise<Room> {
+  return getClient().create('dijouj', { pseudo, private: true, uid })
 }
 
 /** Crée un lobby Di Jouj (l'hôte choisit 2 ou 4 joueurs, code à partager). */

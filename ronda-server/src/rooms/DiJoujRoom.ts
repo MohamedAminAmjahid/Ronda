@@ -7,6 +7,7 @@ import { botPlay } from '../ai-dijouj/bot'
 import { generateCode, registerCode, unregisterCode } from './registry'
 import { addWageredGold } from '../db/queries'
 import { resolveAutoSkips } from './autoSkip'
+import { getPublicProfile, firebaseReady } from '../firebaseAdmin'
 
 // ── Schéma Colyseus (état PUBLIC) ─────────────────────────────────────────────
 
@@ -16,10 +17,15 @@ class TopCardSchema extends Schema {
 }
 
 class PlayerDjSchema extends Schema {
-  @type('string')  pseudo    = ''
-  @type('uint8')   seat      = 0
-  @type('boolean') connected = false
-  @type('uint8')   handCount = 0
+  @type('string')  pseudo      = ''
+  @type('uint8')   seat        = 0
+  @type('boolean') connected   = false
+  @type('uint8')   handCount   = 0
+  @type('string')  uid         = ''
+  @type('string')  avatarType  = 'initial'
+  @type('string')  avatarEmoji = ''
+  @type('string')  avatarImage = ''
+  @type('uint16')  level       = 1
 }
 
 class DiJoujState extends Schema {
@@ -52,10 +58,17 @@ export class DiJoujRoom extends Room<DiJoujState> {
   private engine!: GameState
   private sessionBySeat: [string | null, string | null] = [null, null]
   private pseudoBySeat:  [string, string]               = ['', '']
+  private uidBySeat:     [string, string]               = ['', '']
   private botSeat:       0 | 1 | null                   = null
   private reconnectSeconds = Number(process.env.RECONNECT_SECONDS ?? 60)
   private finished = false
   private bet = 0
+
+  // ── Anti-inactivité : auto-skip après 7 s, forfait après 3 auto-skips ────────
+  private static readonly TURN_SECONDS   = 7
+  private static readonly MAX_AUTO_SKIPS = 3
+  private turnTimer:     { clear: () => void } | null = null
+  private autoSkipCount: [number, number]             = [0, 0]
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -95,20 +108,33 @@ export class DiJoujRoom extends Room<DiJoujState> {
     })
   }
 
-  onJoin(client: Client, options: { pseudo: string }): void {
+  async onJoin(client: Client, options: { pseudo: string; uid?: string }): Promise<void> {
     if (this.state.phase !== 'WAITING') throw new Error('La partie a déjà commencé.')
 
     const seat = (this.sessionBySeat[0] === null ? 0 : 1) as 0 | 1
     const pseudo = (options?.pseudo ?? 'Joueur').slice(0, 24)
+    const uid = String(options?.uid ?? '')
+
+    // Profil public (avatar + niveau) depuis Firestore Admin. Best-effort :
+    // valeurs par défaut si non connecté / credentials absents.
+    const prof = uid && firebaseReady()
+      ? await getPublicProfile(uid)
+      : { username: pseudo, avatarType: 'initial', avatarEmoji: '', avatarImage: '', level: 1 }
 
     this.sessionBySeat[seat] = client.sessionId
     this.pseudoBySeat[seat]  = pseudo
+    this.uidBySeat[seat]     = uid
 
     const ps = new PlayerDjSchema()
-    ps.pseudo    = pseudo
-    ps.seat      = seat
-    ps.connected = true
-    ps.handCount = 0
+    ps.pseudo      = pseudo
+    ps.seat        = seat
+    ps.connected   = true
+    ps.handCount   = 0
+    ps.uid         = uid
+    ps.avatarType  = prof.avatarType
+    ps.avatarEmoji = prof.avatarEmoji
+    ps.avatarImage = prof.avatarImage
+    ps.level       = prof.level
     this.state.players.set(client.sessionId, ps)
 
     if (this.botSeat !== null && seat === 0) {
@@ -122,6 +148,9 @@ export class DiJoujRoom extends Room<DiJoujState> {
   async onLeave(client: Client, consented: boolean): Promise<void> {
     const seat = this.seatOf(client.sessionId)
     if (seat === null) return
+
+    // Suspend le minuteur d'inactivité : la reconnexion est gérée à part.
+    this.clearTurnTimer()
 
     const ps = this.state.players.get(client.sessionId)
     if (ps) ps.connected = false
@@ -146,6 +175,7 @@ export class DiJoujRoom extends Room<DiJoujState> {
       if (ps) ps.connected = true
       this.broadcast('opponent_reconnected', { seat })
       this.sendPrivateStateTo(client, seat)
+      this.armTurnTimer()
     } catch {
       this.state.phase = 'ABORTED'
       this.broadcast('game_over', { aborted: true, reason: 'opponent_left' })
@@ -154,6 +184,7 @@ export class DiJoujRoom extends Room<DiJoujState> {
   }
 
   onDispose(): void {
+    this.clearTurnTimer()
     if (this.state.code) unregisterCode(this.state.code)
   }
 
@@ -165,6 +196,7 @@ export class DiJoujRoom extends Room<DiJoujState> {
     this.syncPublic()
     this.sendPrivateStateToAll()
     this.scheduleBotIfNeeded()
+    this.armTurnTimer()
   }
 
   // ── Handlers de messages ──────────────────────────────────────────────────
@@ -181,6 +213,9 @@ export class DiJoujRoom extends Room<DiJoujState> {
       client.send('error', { message: 'Coup invalide.' })
       return
     }
+    // Le joueur a joué lui-même → réinitialise son compteur d'inactivité.
+    this.autoSkipCount[seat] = 0
+    this.clearTurnTimer()
     this.engine = next
     this.applyAutoSkips()
     this.afterEngineChange()
@@ -203,6 +238,8 @@ export class DiJoujRoom extends Room<DiJoujState> {
       client.send('error', { message: 'Ce n\'est pas ton tour.' })
       return
     }
+    this.autoSkipCount[seat] = 0
+    this.clearTurnTimer()
     this.engine = applyDraw(this.engine, seat, makeRng(Date.now()))
     this.afterEngineChange()
   }
@@ -215,11 +252,70 @@ export class DiJoujRoom extends Room<DiJoujState> {
     this.sendPrivateStateToAll()
 
     if (this.engine.isOver) {
+      this.clearTurnTimer()
       this.finishGame(this.engine.winnerId as 0 | 1)
       this.clock.setTimeout(() => this.disconnect(), 5000)
     } else {
       this.scheduleBotIfNeeded()
+      this.armTurnTimer()
     }
+  }
+
+  // ── Anti-inactivité ─────────────────────────────────────────────────────────
+
+  /** (Re)démarre le minuteur d'inactivité pour le joueur humain dont c'est le tour. */
+  private armTurnTimer(): void {
+    this.clearTurnTimer()
+    if (this.state.phase !== 'PLAYING' || this.engine.isOver) return
+
+    const seat = this.engine.currentPlayerId as 0 | 1
+    if (this.botSeat === seat) return                       // le bot est géré à part
+    if (this.sessionBySeat[seat] === null) return           // siège vide
+    // Joueur déconnecté : la logique de reconnexion (onLeave) s'en charge.
+    if (this.getPlayerSchemaForSeat(seat)?.connected === false) return
+
+    this.turnTimer = this.clock.setTimeout(
+      () => this.onTurnTimeout(seat),
+      DiJoujRoom.TURN_SECONDS * 1000,
+    )
+  }
+
+  private clearTurnTimer(): void {
+    if (this.turnTimer) { this.turnTimer.clear(); this.turnTimer = null }
+  }
+
+  /** Le joueur n'a pas joué à temps : on joue à sa place, puis forfait après 3 fois. */
+  private onTurnTimeout(seat: 0 | 1): void {
+    if (this.state.phase !== 'PLAYING' || this.engine.isOver) return
+    if (this.engine.currentPlayerId !== seat) return
+
+    // Joue à la place du joueur inactif via l'heuristique du bot (coup légal garanti).
+    const action = botPlay(this.engine, seat)
+    let next: GameState
+    if (action.type === 'draw') {
+      next = applyDraw(this.engine, seat, makeRng(Date.now()))
+    } else {
+      next = applyPlayCard(this.engine, seat, action.card, action.chosenSuit)
+      if (next === this.engine) next = applyDraw(this.engine, seat, makeRng(Date.now()))
+    }
+    this.engine = next
+    this.autoSkipCount[seat]++
+    this.broadcast('auto_skip', { playerId: seat, pseudo: this.pseudoBySeat[seat] })
+
+    // 3 auto-skips consécutifs → forfait : le joueur inactif perd.
+    if (this.autoSkipCount[seat] >= DiJoujRoom.MAX_AUTO_SKIPS) {
+      const winner = (1 - seat) as 0 | 1
+      this.clearTurnTimer()
+      this.state.phase = 'GAME_OVER'
+      this.broadcast('forfeit', { loserUid: this.uidBySeat[seat] })
+      this.syncPublic()
+      this.finishGame(winner)
+      this.clock.setTimeout(() => this.disconnect(), 2000)
+      return
+    }
+
+    this.applyAutoSkips()
+    this.afterEngineChange()
   }
 
   // ── Bot ────────────────────────────────────────────────────────────────────
@@ -253,6 +349,7 @@ export class DiJoujRoom extends Room<DiJoujState> {
   private finishGame(winnerSeat?: 0 | 1): void {
     if (this.finished) return
     this.finished = true
+    this.clearTurnTimer()
 
     if (this.state.phase !== 'GAME_OVER') this.state.phase = 'GAME_OVER'
     this.syncPublic()
@@ -324,11 +421,16 @@ export class DiJoujRoom extends Room<DiJoujState> {
       pendingEffect: e.pendingEffect,
       you:           { hand: me.hand },
       opponents: [{
-        pseudo:    this.pseudoBySeat[opp],
-        handCount: e.players[opp].hand.length,
-        seat:      opp,
-        connected: oppPs?.connected ?? true,
-        isBot:     this.botSeat === opp,
+        pseudo:      this.pseudoBySeat[opp],
+        handCount:   e.players[opp].hand.length,
+        seat:        opp,
+        connected:   oppPs?.connected ?? true,
+        isBot:       this.botSeat === opp,
+        uid:         oppPs?.uid ?? '',
+        avatarType:  oppPs?.avatarType ?? 'initial',
+        avatarEmoji: oppPs?.avatarEmoji ?? '',
+        avatarImage: oppPs?.avatarImage ?? '',
+        level:       oppPs?.level ?? 1,
       }],
       isOver:   e.isOver,
       winnerId: e.winnerId,

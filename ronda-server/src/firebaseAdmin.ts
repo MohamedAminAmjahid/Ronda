@@ -47,3 +47,38 @@ export async function getUsername(uid: string): Promise<string> {
     return 'Joueur'
   }
 }
+
+/** Profil public d'un joueur (avatar + niveau) pour l'affichage en partie. */
+export interface PublicProfile {
+  username:    string
+  avatarType:  string
+  avatarEmoji: string
+  avatarImage: string
+  level:       number
+}
+
+/**
+ * Lit le profil public d'un utilisateur depuis Firestore (avatar + niveau).
+ * Renvoie des valeurs par défaut si credentials absents / uid introuvable —
+ * ne lève jamais.
+ */
+export async function getPublicProfile(uid: string): Promise<PublicProfile> {
+  const fallback: PublicProfile = {
+    username: 'Joueur', avatarType: 'initial', avatarEmoji: '', avatarImage: '', level: 1,
+  }
+  if (!ready || !uid) return fallback
+  try {
+    const snap = await adminDb().collection('users').doc(uid).get()
+    const d = snap.data()
+    if (!d) return fallback
+    return {
+      username:    (d.username    as string) || fallback.username,
+      avatarType:  (d.avatarType  as string) || 'initial',
+      avatarEmoji: (d.avatarEmoji as string) || '',
+      avatarImage: (d.avatarImage as string) || '',
+      level:       typeof d.level === 'number' ? (d.level as number) : 1,
+    }
+  } catch {
+    return fallback
+  }
+}

@@ -8,8 +8,13 @@ import { LinearGradient } from 'expo-linear-gradient'
 import { router, type Href } from 'expo-router'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
+import { xpRequired } from '../profile/profile'
+import { useAuth } from '../firebase/auth'
+import { sendFriendRequest } from '../firebase/firestore'
+import { AvatarDisplay } from './ProfileScreen'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
+import { leave as leaveDjRoom } from '../online/storeDiJouj'
 import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
@@ -88,7 +93,9 @@ export function DiJoujOnlineScreen() {
   const handGap   = isSmall ? 3 : 8
 
   const { t }        = useI18n()
-  const { username } = useProfile()
+  const { username, avatarType, avatarEmoji, avatarImage, level, xp } = useProfile()
+  const { user }     = useAuth()
+  const myUid        = user?.uid ?? ''
   const offline      = useIsOffline()
 
   const {
@@ -96,8 +103,11 @@ export function DiJoujOnlineScreen() {
     playCard, draw, isGameOver, winner, restart,
     connectionStatus, roomCode, isQuick, bet, opponents, opponentDisconnected,
     gameOver, error, connectQuick, connectPrivate,
-    chatMessages, sendChatMsg, autoSkip, playerForfeited,
+    chatMessages, sendChatMsg, autoSkip, playerForfeited, forfeit,
   } = useOnlineDiJouj()
+
+  // Ajout d'ami vers l'adversaire (partie rapide) — feedback local.
+  const [friendSent, setFriendSent] = useState(false)
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
 
@@ -195,9 +205,10 @@ export function DiJoujOnlineScreen() {
     if (mmElapsed >= BOT_WAIT_SECS) {
       botCalledRef.current = true
       const { name, emoji } = pickBot()
-      restart()  // quitte la room en ligne
+      const stake = bet ?? 0
+      leaveDjRoom(false)  // quitte SANS rembourser : la mise suit dans la partie bot
       router.push(
-        `/dijouj?train=1&botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` as Href,
+        `/dijouj?train=1&botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}&bet=${stake}` as Href,
       )
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -224,6 +235,28 @@ export function DiJoujOnlineScreen() {
     if (connectionStatus === 'playing') { setConfirmLeave(true); return }
     restart(); router.back()
   }, [connectionStatus, restart])
+
+  // Adversaire (haut) : profil + ajout d'ami. Uniquement si humain identifié.
+  const canInteractOpp = !!opp0 && !opp0.isBot && !!opp0.uid && !!myUid && opp0.uid !== myUid
+
+  const handleViewOppProfile = useCallback(() => {
+    if (!opp0?.uid) return
+    router.push(`/friend-profile?uid=${opp0.uid}&name=${encodeURIComponent(opp0.pseudo)}` as Href)
+  }, [opp0?.uid, opp0?.pseudo])
+
+  const handleAddOppFriend = useCallback(() => {
+    if (!myUid || !opp0?.uid || friendSent) return
+    setFriendSent(true)
+    sendFriendRequest(myUid, opp0.uid).catch(() => setFriendSent(false))
+  }, [myUid, opp0?.uid, friendSent])
+
+  // Forfait pour inactivité : message de fin dédié (victoire / élimination).
+  // On identifie le perdant par uid si disponible, sinon par le vainqueur
+  // (winner === 0 = moi) — robuste même sans compte connecté.
+  const forfeitLostByMe = forfeit
+    ? (forfeit.loserUid ? forfeit.loserUid === myUid : winner !== 0)
+    : false
+  const forfeitText = forfeit ? (forfeitLostByMe ? t('forfeitLose') : t('forfeitWin')) : null
 
   // ── Dérivés status ────────────────────────────────────────────────────────
 
@@ -407,12 +440,38 @@ export function DiJoujOnlineScreen() {
           <View style={s.headerSpacer} />
         </View>
 
-        {/* ── Top : opponent 0 (toujours centré en haut) ─────────────────────── */}
+        {/* ── Top : opponent 0 (profil + cartes) ─────────────────────────────── */}
         <Animated.View style={[s.topZone, { opacity: oppOpacity }]}>
+          <View style={s.oppProfileRow}>
+            <AvatarDisplay
+              type={(opp0?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+              initial={(opp0?.pseudo?.[0] ?? '?').toUpperCase()}
+              emoji={opp0?.avatarEmoji ?? ''}
+              image={opp0?.avatarImage ?? ''}
+              size={40}
+              level={opp0?.level}
+            />
+            <View style={s.oppProfileMeta}>
+              <Text style={s.oppTopName} numberOfLines={1}>{opp0?.pseudo ?? 'Adversaire'}</Text>
+              {canInteractOpp && (
+                <View style={s.oppBtnRow}>
+                  <TouchableOpacity style={s.oppBtn} onPress={handleViewOppProfile} activeOpacity={0.75}>
+                    <Text style={s.oppBtnTxt}>👤 {t('viewProfile')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[s.oppBtn, friendSent && s.oppBtnDone]}
+                    onPress={handleAddOppFriend}
+                    disabled={friendSent}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={s.oppBtnTxt}>{friendSent ? '✓' : `➕ ${t('addFriend')}`}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
           <CardBackRow count={state.players[1]?.hand.length ?? 0} />
-          <Text style={s.oppTopLabel}>
-            {opp0?.pseudo ?? 'Adversaire'} — {state.players[1]?.hand.length ?? 0}
-          </Text>
+          <Text style={s.oppTopLabel}>{state.players[1]?.hand.length ?? 0} 🂠</Text>
         </Animated.View>
 
         {/* ── Bannière effet ────────────────────────────────────────────────── */}
@@ -499,6 +558,20 @@ export function DiJoujOnlineScreen() {
           <Text style={s.statusTxt}>{statusText}</Text>
         </View>
 
+        {/* ── Moi (profil joueur connecté) ──────────────────────────────────── */}
+        <View style={s.playerBar}>
+          <AvatarDisplay
+            type={(avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+            initial={(username?.[0] ?? '?').toUpperCase()}
+            emoji={avatarEmoji ?? ''}
+            image={avatarImage ?? ''}
+            size={34}
+            level={level}
+            xp={xp} xpMax={xpRequired(level ?? 1)}
+          />
+          <Text style={s.playerName} numberOfLines={1}>{username || 'Joueur'}</Text>
+        </View>
+
         {/* ── Ma main ───────────────────────────────────────────────────────── */}
         <View style={s.handZone}>
           <ScrollView
@@ -572,7 +645,7 @@ export function DiJoujOnlineScreen() {
             <View style={s.overlayBox}>
               <Text style={s.overlayEmoji}>{winner === 0 ? '🏆' : '😔'}</Text>
               <Text style={s.overlayTitle}>
-                {winner === 0 ? t('djYouWin') : t('djYouLose')}
+                {forfeitText ?? (winner === 0 ? t('djYouWin') : t('djYouLose'))}
               </Text>
               {gameOver?.winnerPseudo && winner !== 0 && (
                 <Text style={s.overlaySub}>{gameOver.winnerPseudo}</Text>
@@ -657,6 +730,24 @@ const s = StyleSheet.create({
     gap: 6,
   },
   oppTopLabel: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, letterSpacing: 0.5 },
+  oppProfileRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '92%' },
+  oppProfileMeta: { flexShrink: 1, gap: 4 },
+  oppTopName:     { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.3 },
+  oppBtnRow:      { flexDirection: 'row', gap: 8 },
+  oppBtn: {
+    backgroundColor: 'rgba(244,236,216,0.10)', borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+  },
+  oppBtnDone:  { backgroundColor: 'rgba(39,174,96,0.20)', borderColor: 'rgba(39,174,96,0.45)' },
+  oppBtnTxt:   { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 11 },
+
+  // Barre profil joueur (bas)
+  playerBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingBottom: 2,
+  },
+  playerName: { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 13, letterSpacing: 0.3, flexShrink: 1 },
 
   // Banner
   banner: {

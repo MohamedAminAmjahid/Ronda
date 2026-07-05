@@ -2,6 +2,12 @@ import type { Room } from 'colyseus.js'
 import type { Suit, Value, PendingEffect } from '../engine-dijouj/types'
 import { joinDiJoujQuick, createDiJoujPrivate, joinByCode } from './client'
 import { addGold } from '../profile/profile'
+import { auth } from '../firebase/auth'
+
+/** uid Firebase courant (vide si non connecté) — transmis au serveur pour le profil. */
+function currentUid(): string {
+  return auth.currentUser?.uid ?? ''
+}
 
 // ── Types des messages serveur ────────────────────────────────────────────────
 
@@ -11,11 +17,16 @@ export interface DjServerCard {
 }
 
 export interface DjOpponent {
-  pseudo:    string
-  handCount: number
-  seat:      number
-  connected: boolean
-  isBot:     boolean
+  pseudo:      string
+  handCount:   number
+  seat:        number
+  connected:   boolean
+  isBot:       boolean
+  uid:         string
+  avatarType:  string
+  avatarEmoji: string
+  avatarImage: string
+  level:       number
 }
 
 export interface DjServerState {
@@ -62,6 +73,8 @@ export interface DjSnapshot {
   chatMessages:         ChatMessage[]
   autoSkip:             { playerId: number; pseudo: string } | null
   playerForfeited:      { seat: number; pseudo: string } | null
+  /** Forfait pour inactivité : uid du perdant (déclenché serveur après 3 auto-skips). */
+  forfeit:              { loserUid: string } | null
 }
 
 // ── Store singleton ────────────────────────────────────────────────────────────
@@ -81,6 +94,7 @@ let snapshot: DjSnapshot = {
   chatMessages:         [],
   autoSkip:             null,
   playerForfeited:      null,
+  forfeit:              null,
 }
 
 const listeners = new Set<() => void>()
@@ -151,6 +165,9 @@ function wireRoom(r: Room): void {
     set({ playerForfeited: p })
     setTimeout(() => set({ playerForfeited: null }), 2000)
   })
+  // Forfait pour inactivité : la partie se termine (game_over suit). On garde
+  // le flag jusqu'au reset pour afficher le bon message de fin.
+  r.onMessage('forfeit', (p: { loserUid: string }) => set({ forfeit: p }))
 
   r.onLeave(() => {
     if (snapshot.status !== 'playing' || snapshot.server?.phase !== 'GAME_OVER') {
@@ -187,19 +204,19 @@ async function connect(factory: () => Promise<Room>, isQuick = false, bet = 0): 
 // ── Actions exposées ──────────────────────────────────────────────────────────
 
 export function connectDiJoujQuick(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => joinDiJoujQuick(pseudo, bet), true, bet)
+  return connect(() => joinDiJoujQuick(pseudo, bet, currentUid()), true, bet)
 }
 
 export function connectDiJoujPrivate(pseudo: string): Promise<void> {
-  return connect(() => createDiJoujPrivate(pseudo))
+  return connect(() => createDiJoujPrivate(pseudo, currentUid()))
 }
 /** Crée une room privée Di Jouj pour une partie entre amis (hôte). */
 export function connectDiJoujFriendHost(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => createDiJoujPrivate(pseudo), false, bet)
+  return connect(() => createDiJoujPrivate(pseudo, currentUid()), false, bet)
 }
 /** Rejoint une room Di Jouj privée par code (invité). */
 export function connectDiJoujFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
-  return connect(() => joinByCode(pseudo, code), false, bet)
+  return connect(() => joinByCode(pseudo, code, currentUid()), false, bet)
 }
 
 /** Transfert d'une room déjà connectée (depuis le lobby). */
@@ -217,9 +234,10 @@ export function send(type: string, payload?: unknown): void {
   room?.send(type, payload)
 }
 
-export function leave(): void {
+export function leave(refundBet = true): void {
   // Remboursement : on quitte le matchmaking AVANT le début de la partie → rendre la mise.
-  if ((snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
+  // refundBet=false quand on bascule sur un bot : la mise suit dans la partie bot.
+  if (refundBet && (snapshot.status === 'waiting' || snapshot.status === 'connecting') && snapshot.bet > 0) {
     addGold(snapshot.bet)
   }
   room?.leave()
@@ -241,6 +259,7 @@ export function reset(): void {
     chatMessages:         [],
     autoSkip:             null,
     playerForfeited:      null,
+    forfeit:              null,
   })
 }
 
