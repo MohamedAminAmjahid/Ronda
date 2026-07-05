@@ -22,11 +22,27 @@ self.addEventListener('activate', (event) => {
 // Chemins API (serveur Railway) → network-first.
 const API_PREFIXES = ['/gold', '/notify', '/room', '/leaderboard', '/league', '/stats', '/games', '/health']
 
+// Domaines externes à ignorer complètement (ni cache, ni interception) : le SW
+// les laisse au navigateur pour éviter les erreurs CORS en console (pubs, Firebase, API).
+const SKIP_DOMAINS = [
+  'pagead2.googlesyndication.com',
+  'googleads.g.doubleclick.net',
+  'www.googletagservices.com',
+  'firebase.googleapis.com',
+  'firestore.googleapis.com',
+  'identitytoolkit.googleapis.com',
+  'rondatm.up.railway.app',
+]
+
 self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url)
+  if (SKIP_DOMAINS.some((d) => url.hostname.includes(d))) {
+    return // laisse le navigateur gérer normalement
+  }
+
   const req = event.request
   if (req.method !== 'GET') return
 
-  const url = new URL(req.url)
   const sameOrigin = url.origin === self.location.origin
   const isApi = !sameOrigin || API_PREFIXES.some((p) => url.pathname.startsWith(p))
 
