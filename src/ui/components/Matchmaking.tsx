@@ -12,25 +12,31 @@ interface Props {
   label: string
   /** Chrono écoulé formaté (ex. « 0:12 ») — optionnel. */
   timeLabel?: string
-  /** Emoji au centre de l'anneau. */
-  icon?: string
 }
 
+// Avatars qui défilent au centre → impression de « scanner » des joueurs.
+const AVATARS = ['🧑🏻', '👩🏽', '🧔🏽', '👨🏽', '👩🏻', '🧑🏽', '👩🏽‍🦱', '🧑🏿', '👨🏻', '👩🏾']
+
 /**
- * Animation de matchmaking : anneau rotatif + titre pulsé + points animés +
- * barre indéterminée + chrono. Volontairement générique — ne mentionne jamais
- * qu'un bot puisse rejoindre : le joueur croit chercher un adversaire humain.
+ * Animation de matchmaking : anneau rotatif + avatars défilants + titre pulsé +
+ * points animés + barre indéterminée + chrono. Volontairement générique — ne
+ * mentionne jamais qu'un bot puisse rejoindre : le joueur croit chercher un humain.
+ *
+ * NB : toutes les animations utilisent le driver JS (useNativeDriver: false) car
+ * sur le web (PWA) une boucle avec le driver natif s'arrête après un seul tour.
  */
-export function Matchmaking({ accent, track, textColor, label, timeLabel, icon = '🎴' }: Props) {
+export function Matchmaking({ accent, track, textColor, label, timeLabel }: Props) {
   const spin  = useRef(new Animated.Value(0)).current
   const pulse = useRef(new Animated.Value(0.55)).current
   const fill  = useRef(new Animated.Value(0)).current
-  const [dots, setDots] = useState('')
+  const pop   = useRef(new Animated.Value(1)).current
+  const [dots, setDots]           = useState('')
+  const [avatarIdx, setAvatarIdx] = useState(0)
 
-  // Anneau qui tourne
+  // Anneau qui tourne en continu
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(spin, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(spin, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: false }),
     )
     loop.start()
     return () => loop.stop()
@@ -40,8 +46,8 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel, icon =
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1,    duration: 750, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.55, duration: 750, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 750, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0.55, duration: 750, useNativeDriver: false }),
       ]),
     )
     loop.start()
@@ -66,6 +72,18 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel, icon =
     return () => clearInterval(id)
   }, [])
 
+  // Défilement des avatars
+  useEffect(() => {
+    const id = setInterval(() => setAvatarIdx(i => (i + 1) % AVATARS.length), 600)
+    return () => clearInterval(id)
+  }, [])
+
+  // Petit « pop » à chaque changement d'avatar
+  useEffect(() => {
+    pop.setValue(0.5)
+    Animated.spring(pop, { toValue: 1, friction: 5, tension: 220, useNativeDriver: false }).start()
+  }, [avatarIdx, pop])
+
   const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
   const barW   = fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
 
@@ -78,7 +96,9 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel, icon =
             { borderTopColor: accent, borderRightColor: accent, transform: [{ rotate }] },
           ]}
         />
-        <Text style={st.ringIcon}>{icon}</Text>
+        <Animated.Text style={[st.ringIcon, { transform: [{ scale: pop }] }]}>
+          {AVATARS[avatarIdx]}
+        </Animated.Text>
       </View>
 
       <Animated.Text style={[st.label, { color: textColor, opacity: pulse }]}>
@@ -110,7 +130,7 @@ const st = StyleSheet.create({
     position: 'absolute', width: RING, height: RING, borderRadius: RING / 2,
     borderWidth: 3, borderColor: 'transparent',
   },
-  ringIcon: { fontSize: 30, lineHeight: 36 },
+  ringIcon: { fontSize: 34, lineHeight: 40 },
   label: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 18, textAlign: 'center', letterSpacing: 0.3,
   },
