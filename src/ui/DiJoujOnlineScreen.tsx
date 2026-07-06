@@ -15,7 +15,7 @@ import { PlayerProfileModal } from './PlayerProfileModal'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
 import { leave as leaveDjRoom, voiceTransport } from '../online/storeDiJouj'
-import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
+import { getBotWaitSecs, pickBot } from '../online/botFallback'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
@@ -189,6 +189,9 @@ export function DiJoujOnlineScreen() {
   // (sans code) bascule sur un bot après le délai — sans jamais le révéler.
   const [mmElapsed, setMmElapsed] = useState(0)
   const botCalledRef  = useRef(false)
+  // Délai aléatoire (25–70 s), figé pour toute la durée de cette recherche —
+  // empêche de deviner le repli bot en comptant les secondes.
+  const botWaitSecs = useRef(getBotWaitSecs()).current
   const isQuickWaiting = connectionStatus === 'waiting' && isQuick
 
   useEffect(() => {
@@ -199,7 +202,7 @@ export function DiJoujOnlineScreen() {
 
   useEffect(() => {
     if (!isQuickWaiting || botCalledRef.current) return
-    if (mmElapsed >= BOT_WAIT_SECS) {
+    if (mmElapsed >= botWaitSecs) {
       botCalledRef.current = true
       const { name, emoji } = pickBot()
       const stake = bet ?? 0

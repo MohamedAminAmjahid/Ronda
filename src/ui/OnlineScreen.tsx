@@ -9,7 +9,7 @@ import { useOnlineGame } from '../online/useOnlineGame'
 import { leave as leaveRondaRoom, voiceTransport } from '../online/store'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
-import { BOT_WAIT_SECS, pickBot } from '../online/botFallback'
+import { getBotWaitSecs, pickBot } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { VoiceButton } from '../voice/VoiceButton'
@@ -249,6 +249,9 @@ function WaitingScreen({
   const { t: tr } = useI18n()
   const pulse     = useRef(new Animated.Value(0.4)).current
   const calledRef = useRef(false)
+  // Délai aléatoire (25–70 s), figé pour toute la durée de cette recherche —
+  // empêche de deviner le repli bot en comptant les secondes.
+  const botWaitSecs = useRef(getBotWaitSecs()).current
   const [elapsed, setElapsed] = useState(0)
   const [copied, setCopied]   = useState(false)
 
@@ -276,7 +279,7 @@ function WaitingScreen({
   // Aucune indication à l'écran — le joueur croit avoir trouvé un adversaire.
   useEffect(() => {
     if (mode !== 'quick' || calledRef.current) return
-    if (elapsed >= BOT_WAIT_SECS && onBotFallback) {
+    if (elapsed >= botWaitSecs && onBotFallback) {
       calledRef.current = true
       const { name, emoji } = pickBot()
       onBotFallback(name, emoji)

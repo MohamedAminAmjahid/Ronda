@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ScrollView, Modal, Animated, useWindowDimensions,
+  ScrollView, Modal, Animated, Easing, useWindowDimensions,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -326,6 +326,25 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     botOpacity.setValue(1)
   }, [isHumanTurn, isGameOver])
 
+  // ── Compte à rebours du tour (7 s, miroir de la version en ligne) ────────────
+  // Barre + secondes animées : le joueur voit qu'il doit jouer avant expiration.
+  // Purement visuel hors-ligne (pas d'auto-skip serveur ici).
+  const TURN_SECS = 7
+  const [turnLeft, setTurnLeft] = useState(TURN_SECS)
+  const turnBar = useRef(new Animated.Value(1)).current
+  const isMyLiveTurn = isHumanTurn && !isGameOver
+
+  useEffect(() => {
+    if (!isMyLiveTurn) { turnBar.stopAnimation(); turnBar.setValue(1); setTurnLeft(TURN_SECS); return }
+    setTurnLeft(TURN_SECS)
+    turnBar.setValue(1)
+    Animated.timing(turnBar, {
+      toValue: 0, duration: TURN_SECS * 1000, easing: Easing.linear, useNativeDriver: false,
+    }).start()
+    const id = setInterval(() => setTurnLeft(s => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [isMyLiveTurn])
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleCardPress(card: Card) {
@@ -434,6 +453,26 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             <Text style={s.statusTxt}>{statusText}</Text>
           )}
         </View>
+
+        {/* ── Compte à rebours du tour (mon tour uniquement) ────────────────── */}
+        {isMyLiveTurn && (
+          <View style={s.turnTimer}>
+            <Text style={[s.turnTimerTxt, turnLeft <= 3 && s.turnTimerTxtUrgent]}>
+              ⏱ {t('yourTurn')} · {turnLeft}s
+            </Text>
+            <View style={s.turnTimerTrack}>
+              <Animated.View
+                style={[
+                  s.turnTimerFill,
+                  {
+                    width: turnBar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                    backgroundColor: turnLeft <= 3 ? C.red : C.brass,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        )}
 
         {/* ── Main ─────────────────────────────────────────────────────────── */}
         <View style={s.handZone}>
@@ -698,6 +737,18 @@ const s = StyleSheet.create({
   },
   turnArrowL: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 13 },
   turnArrowR: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 13 },
+
+  // Compte à rebours du tour
+  turnTimer: { paddingHorizontal: 32, gap: 4, alignItems: 'center' },
+  turnTimerTxt: {
+    fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 12, letterSpacing: 0.4,
+  },
+  turnTimerTxtUrgent: { color: C.red },
+  turnTimerTrack: {
+    width: '100%', height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(244,236,216,0.12)', overflow: 'hidden',
+  },
+  turnTimerFill: { height: '100%', borderRadius: 3 },
 
   // Hand zone
   handZone: { flex: 3, justifyContent: 'center', overflow: 'visible' },

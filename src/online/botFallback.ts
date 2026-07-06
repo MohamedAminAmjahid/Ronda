@@ -5,8 +5,14 @@
 // prénom/emoji crédible : côté UI, cela ressemble à un adversaire humain trouvé
 // par le matchmaking. Utilisé par la Ronda ST et par Di Jouj.
 
-/** Délai (secondes) avant de basculer sur un bot si aucun humain n'est trouvé. */
-export const BOT_WAIT_SECS = 60
+/**
+ * Délai aléatoire (25–70 s) avant de basculer sur un bot si aucun humain n'est
+ * trouvé. Aléatoire (et non fixe) pour qu'un joueur ne puisse pas deviner, en
+ * comptant les secondes, que l'adversaire est un bot de secours.
+ */
+export function getBotWaitSecs(): number {
+  return Math.floor(Math.random() * (70 - 25 + 1)) + 25
+}
 
 // Séparés par genre pour que l'emoji corresponde au prénom (arabe/marocain,
 // français, anglais confondus).
