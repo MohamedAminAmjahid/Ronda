@@ -1,23 +1,47 @@
-import { getStorage, ref, uploadString, getDownloadURL, deleteObject } from 'firebase/storage'
+import { getFirestore, doc, updateDoc } from 'firebase/firestore'
+import { Platform } from 'react-native'
 import { firebaseApp } from './config'
 
-const storage = getStorage(firebaseApp)
+// Avatar stocké en base64 compressé DANS Firestore (users/{uid}.avatarImage).
+// Pas de Firebase Storage (payant). L'image est réduite (≈100×100, qualité 0.5)
+// pour rester légère (~5–10 Ko) — compatible avec la limite de 1 Mo par document.
 
-/**
- * Upload la photo de profil (base64 JPEG brut, sans préfixe data:) dans
- * Firebase Storage à `avatars/{uid}.jpg` et renvoie l'URL HTTPS publique.
- */
-export async function uploadAvatar(uid: string, base64: string): Promise<string> {
-  const avatarRef = ref(storage, `avatars/${uid}.jpg`)
-  await uploadString(avatarRef, base64, 'base64', { contentType: 'image/jpeg' })
-  return await getDownloadURL(avatarRef)
+const db = getFirestore(firebaseApp)
+const IS_WEB = Platform.OS === 'web'
+
+/** Réduit une image (data URI) à `max`×`max` px en JPEG via un canvas (web only). */
+async function compressWeb(dataUri: string, max = 100, quality = 0.5): Promise<string> {
+  if (!IS_WEB || typeof document === 'undefined') return dataUri
+  return new Promise<string>((resolve) => {
+    try {
+      const img = new Image()
+      img.onload = () => {
+        const scale = Math.min(1, max / Math.max(img.width, img.height))
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) { resolve(dataUri); return }
+        ctx.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/jpeg', quality))
+      }
+      img.onerror = () => resolve(dataUri)
+      img.src = dataUri
+    } catch {
+      resolve(dataUri)
+    }
+  })
 }
 
-/** Supprime l'avatar Storage (best-effort — ignore si absent). */
-export async function deleteAvatar(uid: string): Promise<void> {
-  try {
-    await deleteObject(ref(storage, `avatars/${uid}.jpg`))
-  } catch {
-    // fichier absent ou déjà supprimé
-  }
+/**
+ * Compresse la photo (base64 brut de l'image picker) et la stocke directement
+ * dans Firestore — pas de Storage. Renvoie la data URI compressée à afficher.
+ */
+export async function uploadAvatar(uid: string, base64: string): Promise<string> {
+  const raw = base64.startsWith('data:') ? base64 : `data:image/jpeg;base64,${base64}`
+  const dataUri = await compressWeb(raw, 100, 0.5)
+  await updateDoc(doc(db, 'users', uid), { avatarImage: dataUri })
+  return dataUri
 }
