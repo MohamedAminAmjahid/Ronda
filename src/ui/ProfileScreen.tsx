@@ -13,6 +13,7 @@ import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { useI18n } from '../i18n/useI18n'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
+import { uploadAvatar } from '../firebase/storage'
 import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
   incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
@@ -315,6 +316,22 @@ export function ProfileScreen() {
 
   // ── Photo picker ──────────────────────────────────────────────────────────
 
+  // Applique une photo choisie : upload dans Firebase Storage (URL persistante,
+  // légère, partagée entre appareils). Repli local (data URI) si invité/échec.
+  const applyPickedPhoto = async (asset: { base64?: string | null; uri: string }) => {
+    if (user?.uid && asset.base64) {
+      try {
+        const url = await uploadAvatar(user.uid, asset.base64)
+        setAvatarImage(url)
+      } catch {
+        setAvatarImage(`data:image/jpeg;base64,${asset.base64}`)
+      }
+    } else {
+      setAvatarImage(asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri)
+    }
+    setAvatarModal(false)
+  }
+
   const pickPhoto = async () => {
     setPhotoLoading(true)
     try {
@@ -331,12 +348,7 @@ export function ProfileScreen() {
         base64: true,
       })
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0]
-        const uri   = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri
-        setAvatarImage(uri)
-        setAvatarModal(false)
+        await applyPickedPhoto(result.assets[0])
       }
     } finally { setPhotoLoading(false) }
   }
@@ -353,12 +365,7 @@ export function ProfileScreen() {
         base64: true,
       })
       if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0]
-        const uri   = asset.base64
-          ? `data:image/jpeg;base64,${asset.base64}`
-          : asset.uri
-        setAvatarImage(uri)
-        setAvatarModal(false)
+        await applyPickedPhoto(result.assets[0])
       }
     } finally { setPhotoLoading(false) }
   }

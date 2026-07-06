@@ -4,7 +4,7 @@ import { useAuth } from './auth'
 import { createOrUpdateUser, registerPendingReferral } from './firestore'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
-  setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal,
+  setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
@@ -31,6 +31,7 @@ export function useFirebaseProfileSync(): void {
         const {
           username, gold, usernameChanges, goldHistoryPublic, statsPublic,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
+          avatarType, avatarEmoji, avatarImage,
           xp, level,
         } = await createOrUpdateUser(user, {
           username: p.username,
@@ -49,6 +50,9 @@ export function useFirebaseProfileSync(): void {
           ownedBacks: p.ownedBacks,
           avatarFrame: p.avatarFrame,
           ownedFrames: p.ownedFrames,
+          avatarType: p.avatarType,
+          avatarEmoji: p.avatarEmoji,
+          avatarImage: p.avatarImage,
           xp: p.xp,
           level: p.level,
         })
@@ -63,6 +67,7 @@ export function useFirebaseProfileSync(): void {
           setGoldHistoryPublicLocal(goldHistoryPublic)
           setStatsPublicLocal(statsPublic)
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
+          setAvatarLocal(avatarType, avatarEmoji, avatarImage)
           setXpLevelLocal(xp, level)
         }
 

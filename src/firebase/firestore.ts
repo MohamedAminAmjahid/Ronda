@@ -105,6 +105,9 @@ export interface LocalProfileSeed {
   ownedBacks: string[]
   avatarFrame: string
   ownedFrames: string[]
+  avatarType?: string
+  avatarEmoji?: string
+  avatarImage?: string
   xp?: number
   level?: number
 }
@@ -149,6 +152,7 @@ export async function createOrUpdateUser(
   username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
   avatarFrame: string; ownedFrames: string[]; statsPublic: boolean
+  avatarType: string; avatarEmoji: string; avatarImage: string
   xp: number; level: number
 }> {
   const ref = userRef(user.uid)
@@ -182,6 +186,9 @@ export async function createOrUpdateUser(
       ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame,
       ownedFrames: local.ownedFrames,
+      avatarType:  local.avatarType  ?? 'initial',
+      avatarEmoji: local.avatarEmoji ?? '',
+      avatarImage: local.avatarImage ?? '',
       referralUsed: false,
       referredBy: null,
       referralCount: 0,
@@ -198,6 +205,9 @@ export async function createOrUpdateUser(
       cardBack: local.cardBack, ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame, ownedFrames: local.ownedFrames,
       statsPublic: true,
+      avatarType:  local.avatarType  ?? 'initial',
+      avatarEmoji: local.avatarEmoji ?? '',
+      avatarImage: local.avatarImage ?? '',
       xp: local.xp ?? 0, level: local.level ?? 1,
     }
   }
@@ -225,6 +235,9 @@ export async function createOrUpdateUser(
     avatarFrame: (data.avatarFrame as string) ?? local.avatarFrame,
     ownedFrames: (data.ownedFrames as string[]) ?? local.ownedFrames,
     statsPublic: typeof data.statsPublic === 'boolean' ? (data.statsPublic as boolean) : true,
+    avatarType:  (data.avatarType  as string) ?? 'initial',
+    avatarEmoji: (data.avatarEmoji as string) ?? '',
+    avatarImage: (data.avatarImage as string) ?? '',
     xp:    typeof data.xp === 'number' ? (data.xp as number) : 0,
     level: typeof data.level === 'number' ? (data.level as number) : 1,
   }

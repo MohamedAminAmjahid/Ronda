@@ -515,6 +515,15 @@ export function setCosmeticsLocal(c: {
   emit()
 }
 
+/** Applique l'avatar depuis Firebase au login (local uniquement, sans ré-écriture). */
+export function setAvatarLocal(type: string, emoji: string, image: string): void {
+  const t: Profile['avatarType'] = type === 'emoji' || type === 'image' ? type : 'initial'
+  if (t === profile.avatarType && emoji === profile.avatarEmoji && image === profile.avatarImage) return
+  profile = { ...profile, avatarType: t, avatarEmoji: emoji, avatarImage: image }
+  void persist()
+  emit()
+}
+
 /** Synchronise usernameChanges depuis Firebase (login sur nouvel appareil). Local uniquement. */
 export function setUsernameChanges(count: number): void {
   if (count === profile.usernameChanges) return
