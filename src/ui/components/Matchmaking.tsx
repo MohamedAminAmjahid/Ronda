@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native'
+import { View, Text, Image, StyleSheet, Animated, Easing } from 'react-native'
+import { FEMALE_AVATARS, MALE_AVATARS } from '../../online/botFallback'
 
 interface Props {
   /** Couleur d'accent (anneau, barre, timer). */
@@ -14,8 +15,8 @@ interface Props {
   timeLabel?: string
 }
 
-// Avatars qui défilent au centre → impression de « scanner » des joueurs.
-const AVATARS = ['🧑🏻', '👩🏽', '🧔🏽', '👨🏽', '👩🏻', '🧑🏽', '👩🏽‍🦱', '🧑🏿', '👨🏻', '👩🏾']
+// Photos qui défilent au centre → impression de « scanner » des joueurs réels.
+const ALL_AVATARS = [...FEMALE_AVATARS, ...MALE_AVATARS]
 
 /**
  * Animation de matchmaking : anneau rotatif + avatars défilants + titre pulsé +
@@ -32,6 +33,7 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel }: Prop
   const pop   = useRef(new Animated.Value(1)).current
   const [dots, setDots]           = useState('')
   const [avatarIdx, setAvatarIdx] = useState(0)
+  const [imgError, setImgError]   = useState(false)
 
   // Anneau qui tourne en continu
   useEffect(() => {
@@ -72,9 +74,12 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel }: Prop
     return () => clearInterval(id)
   }, [])
 
-  // Défilement des avatars
+  // Défilement des avatars (photos réelles)
   useEffect(() => {
-    const id = setInterval(() => setAvatarIdx(i => (i + 1) % AVATARS.length), 600)
+    const id = setInterval(() => {
+      setImgError(false)
+      setAvatarIdx(i => (i + 1) % ALL_AVATARS.length)
+    }, 600)
     return () => clearInterval(id)
   }, [])
 
@@ -96,9 +101,18 @@ export function Matchmaking({ accent, track, textColor, label, timeLabel }: Prop
             { borderTopColor: accent, borderRightColor: accent, transform: [{ rotate }] },
           ]}
         />
-        <Animated.Text style={[st.ringIcon, { transform: [{ scale: pop }] }]}>
-          {AVATARS[avatarIdx]}
-        </Animated.Text>
+        <Animated.View style={{ transform: [{ scale: pop }] }}>
+          {imgError ? (
+            <Text style={st.ringFallback}>👤</Text>
+          ) : (
+            <Image
+              source={{ uri: ALL_AVATARS[avatarIdx % ALL_AVATARS.length] }}
+              style={st.ringImg}
+              resizeMode="cover"
+              onError={() => setImgError(true)}
+            />
+          )}
+        </Animated.View>
       </View>
 
       <Animated.Text style={[st.label, { color: textColor, opacity: pulse }]}>
@@ -130,7 +144,17 @@ const st = StyleSheet.create({
     position: 'absolute', width: RING, height: RING, borderRadius: RING / 2,
     borderWidth: 3, borderColor: 'transparent',
   },
-  ringIcon: { fontSize: 34, lineHeight: 40 },
+  ringImg: {
+    width: 60, height: 60, borderRadius: 30,
+    borderWidth: 2, borderColor: '#C9A227',
+  },
+  ringFallback: {
+    width: 60, height: 60, borderRadius: 30,
+    borderWidth: 2, borderColor: '#C9A227',
+    alignItems: 'center', justifyContent: 'center',
+    fontSize: 30, lineHeight: 60, textAlign: 'center',
+    backgroundColor: 'rgba(244,236,216,0.08)',
+  },
   label: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 18, textAlign: 'center', letterSpacing: 0.3,
   },
