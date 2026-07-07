@@ -271,7 +271,11 @@ export function DiJoujOnlineScreen() {
   const forfeitLostByMe = forfeit
     ? (forfeit.loserUid ? forfeit.loserUid === myUid : winner !== 0)
     : false
-  const forfeitText = forfeit ? (forfeitLostByMe ? t('forfeitLose') : t('forfeitWin')) : null
+  const forfeitText = forfeit
+    ? (forfeitLostByMe
+        ? (bet > 0 ? t('forfeitEliminatedStake').replace('{n}', String(bet)) : t('forfeitLose'))
+        : t('forfeitWin'))
+    : null
 
   // ── Dérivés status ────────────────────────────────────────────────────────
 

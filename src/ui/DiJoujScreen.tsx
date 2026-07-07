@@ -449,7 +449,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
         {/* Header */}
         <View style={s.header}>
-          <TouchableOpacity onPress={onBack} activeOpacity={0.7} style={s.backBtn}>
+          <TouchableOpacity onPress={handleBack} activeOpacity={0.7} style={s.backBtn}>
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <Text style={[s.title, isSmall && { fontSize: 15, letterSpacing: 3 }]}>DI JOUJ</Text>
@@ -655,7 +655,33 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           <View style={s.overlay}>
             <View style={s.overlayBox}>
               <Text style={s.overlayEmoji}>⏱️</Text>
-              <Text style={s.overlayTitle}>{t('djForfeitInactivity')}</Text>
+              <Text style={s.overlayTitle}>
+                {stakeBet > 0
+                  ? t('djForfeitStake').replace('{n}', String(stakeBet))
+                  : t('djForfeitInactivity')}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Confirmation forfait volontaire (partie misée en cours) */}
+        {confirmQuit && (
+          <View style={s.overlay}>
+            <View style={s.overlayBox}>
+              <Text style={s.overlayEmoji}>⚠️</Text>
+              <Text style={s.overlayTitle}>
+                {t('forfeitStakeConfirm').replace('{n}', String(stakeBet))}
+              </Text>
+              <TouchableOpacity style={s.restartBtn} onPress={() => setConfirmQuit(false)} activeOpacity={0.8}>
+                <Text style={s.restartTxt}>{t('stay')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.backFromOverlay}
+                onPress={() => { recordResult(false, 'dijouj'); router.replace('/' as Href) }}
+                activeOpacity={0.7}
+              >
+                <Text style={s.backFromOverlayTxt}>{t('leave')}</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
