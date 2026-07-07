@@ -17,11 +17,14 @@ interface Props extends XpGain {
   textColor?: string
 }
 
+const BONE_OFF = 'rgba(244,236,216,0.55)'
+
 /**
- * Affiche « ⭐ +X XP » (apparition en spring) + une barre XP animée qui se remplit
- * de l'ancienne valeur vers la nouvelle. En cas de montée de niveau : la barre va
- * jusqu'à 100 %, repart de 0, puis atteint le nouveau pourcentage, et un message
- * « 🎉 Niveau X atteint ! » s'affiche en vert.
+ * Fin de partie : « ⭐ +X XP » (apparition en spring) + une barre de progression
+ * bornée par « Niveau X » (gauche) et « Niveau X+1 » (droite), avec le total
+ * « newXp / xpMax XP » sous la barre. La barre se remplit de l'ancienne valeur
+ * vers la nouvelle ; en cas de montée de niveau elle atteint 100 %, repart de 0
+ * jusqu'au nouveau pourcentage, et « Niveau X → Niveau X+1 🎉 » s'affiche en vert.
  *
  * Driver JS (useNativeDriver: false) : fiable sur le web (PWA).
  */
@@ -30,8 +33,9 @@ export function XpGainBar({
   accent = '#C9A227', textColor = '#C9A227',
 }: Props) {
   const leveledUp = newLevel > oldLevel
+  const xpMax  = xpRequired(newLevel)
   const oldPct = Math.max(0, Math.min(1, oldXp / xpRequired(oldLevel)))
-  const newPct = Math.max(0, Math.min(1, newXp / xpRequired(newLevel)))
+  const newPct = Math.max(0, Math.min(1, newXp / xpMax))
 
   const scale = useRef(new Animated.Value(0)).current
   const fill  = useRef(new Animated.Value(oldPct)).current
@@ -59,27 +63,49 @@ export function XpGainBar({
         ⭐ +{xpGained} XP
       </Animated.Text>
 
-      <View style={st.track}>
-        <Animated.View style={[st.fill, { backgroundColor: accent, width }]} />
-      </View>
-
       {leveledUp && (
-        <Text style={st.levelUp}>🎉 Niveau {newLevel} atteint !</Text>
+        <Text style={st.levelUp}>Niveau {oldLevel} → Niveau {newLevel} 🎉</Text>
       )}
+
+      <View style={st.barBlock}>
+        <View style={st.levelRow}>
+          <Text style={[st.levelLabel, { color: accent }]}>Niveau {newLevel}</Text>
+          <Text style={st.levelLabelNext}>Niveau {newLevel + 1}</Text>
+        </View>
+
+        <View style={st.track}>
+          <Animated.View style={[st.fill, { backgroundColor: accent, width }]} />
+        </View>
+
+        <Text style={st.belowTxt}>{newXp} / {xpMax} XP</Text>
+      </View>
     </View>
   )
 }
 
 const st = StyleSheet.create({
-  wrap:  { alignItems: 'center', gap: 8, alignSelf: 'stretch' },
-  xpTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, letterSpacing: 0.3 },
-  track: {
-    width: 200, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
+  wrap: {
+    alignItems: 'center', gap: 10, alignSelf: 'stretch',
+    backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 16,
+    paddingVertical: 16, paddingHorizontal: 18,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)',
   },
-  fill:  { height: '100%', borderRadius: 4 },
+  xpTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, letterSpacing: 0.3 },
   levelUp: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: '#27AE60', textAlign: 'center',
     textShadowColor: 'rgba(39,174,96,0.5)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 8,
+  },
+  barBlock: { width: 240, gap: 6 },
+  levelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  levelLabel:     { fontFamily: 'Cairo_600SemiBold', fontSize: 11, letterSpacing: 0.3 },
+  levelLabelNext: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: BONE_OFF, letterSpacing: 0.3 },
+  track: {
+    width: '100%', height: 10, borderRadius: 5,
+    backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden',
+  },
+  fill:  { height: '100%', borderRadius: 5 },
+  belowTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11, color: BONE_OFF,
+    textAlign: 'center', letterSpacing: 0.3,
   },
 })
