@@ -1,17 +1,12 @@
 import { ScrollViewStyleReset } from 'expo-router/html'
 import { type PropsWithChildren } from 'react'
 
-// Document HTML racine (web uniquement). Injecte le manifeste PWA, la couleur de
-// thème et enregistre le service worker au chargement.
-const SW_REGISTER = `
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function () {
-    navigator.serviceWorker.register('/sw.js').catch(function (e) {
-      console.warn('[sw] enregistrement échoué', e)
-    })
-  })
-}
-`
+// Document HTML racine (web uniquement). Injecte le manifeste PWA et la couleur
+// de thème. Le service worker de cache PWA (/sw.js) n'est PLUS enregistré : il
+// causait des versions périmées (Ctrl+Shift+R nécessaire à chaque déploiement).
+// Le /sw.js restant est un « kill switch » qui se désinstalle tout seul chez les
+// utilisateurs qui l'avaient déjà. Seul firebase-messaging-sw.js (push FCM) reste
+// enregistré, via src/push/push.ts.
 
 export default function Root({ children }: PropsWithChildren) {
   return (
@@ -30,7 +25,6 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-title" content="Lwar9a" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <ScrollViewStyleReset />
-        <script dangerouslySetInnerHTML={{ __html: SW_REGISTER }} />
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6001850530671722" crossOrigin="anonymous" />
       </head>
       <body>{children}</body>
