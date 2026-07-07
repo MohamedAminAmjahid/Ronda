@@ -158,9 +158,17 @@ export function getUserLeague(username: string): League {
  */
 export function addWageredGold(username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda'): void {
   const db = getDbOrNull()
-  if (!db || amount <= 0) return
+  if (!db) {
+    // Persistance désactivée (better-sqlite3 indisponible au démarrage, voir
+    // le log "[db] …" dans initDatabase) → no-op silencieux sans ce log,
+    // ce qui ressemble exactement à "le classement ne se met jamais à jour".
+    console.log('[leaderboard] addWageredGold: SKIP (persistance désactivée)', { username, amount, game })
+    return
+  }
+  if (amount <= 0) return
   const week = currentWeekStart()
   const league = getUserLeague(username)
+  console.log('[leaderboard] addWageredGold:', { username, week, game, amount, league })
   db.prepare(`
     INSERT INTO weekly_scores (username, week_start, game, gold_wagered, league)
     VALUES (@username, @week, @game, @amount, @league)
@@ -215,6 +223,21 @@ export function getWeeklyStats(username: string): WeeklyStats {
   const rondaGold  = rows.find(r => r.game === 'ronda')?.gold ?? 0
   const dijoujGold = rows.find(r => r.game === 'dijouj')?.gold ?? 0
   return { rondaGold, dijoujGold, totalGold: rondaGold + dijoujGold }
+}
+
+/**
+ * Contenu brut de weekly_scores (diagnostic — voir GET /debug/weekly-scores,
+ * protégé par x-admin-key). Permet d'inspecter la table sans accès shell à
+ * Railway. `db: null` distingue explicitement "persistance désactivée" de
+ * "table vide".
+ */
+export function debugWeeklyScores(): { db: boolean; rows: WeeklyScoreRecord[] } {
+  const db = getDbOrNull()
+  if (!db) return { db: false, rows: [] }
+  const rows = db.prepare(
+    'SELECT username, week_start, game, gold_wagered, league FROM weekly_scores ORDER BY week_start DESC, username ASC',
+  ).all() as WeeklyScoreRecord[]
+  return { db: true, rows }
 }
 
 /**

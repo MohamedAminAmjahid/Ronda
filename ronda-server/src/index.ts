@@ -7,6 +7,7 @@ import { initDatabase } from './db/database'
 import {
   getStats, getLeaderboard, getRecentGames,
   getWeeklyLeaderboard, getWeeklyStats, getUserLeague, processWeeklyReset,
+  debugWeeklyScores,
 } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
@@ -93,7 +94,9 @@ app.get('/room/:code/type', (req, res) => {
 // Classement de la semaine courante pour une ligue.
 app.get('/leaderboard/weekly', (req, res) => {
   const league = typeof req.query.league === 'string' ? req.query.league : 'Bronze'
-  return res.json(getWeeklyLeaderboard(league))
+  const result = getWeeklyLeaderboard(league)
+  console.log('[leaderboard] GET /leaderboard/weekly:', { league, entries: result.length })
+  return res.json(result)
 })
 
 // Détail par jeu pour un joueur cette semaine.
@@ -112,6 +115,16 @@ app.post('/league/reset', (req, res) => {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
   return res.json({ rewards: processWeeklyReset() })
+})
+
+// Diagnostic (admin uniquement) : contenu brut de weekly_scores, pour inspecter
+// la table sans accès shell à Railway. { db: false } = persistance désactivée
+// (better-sqlite3 indisponible) — distingue ce cas de "table vide".
+app.get('/debug/weekly-scores', (req, res) => {
+  if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Non autorisé.' })
+  }
+  return res.json(debugWeeklyScores())
 })
 
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────

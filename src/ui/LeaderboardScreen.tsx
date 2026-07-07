@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
@@ -58,6 +59,15 @@ export function LeaderboardScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [countdown, setCountdown] = useState(msToNextMondayUTC())
+  // Incrémenté à chaque focus de l'écran → force un refetch même si `selected`
+  // n'a pas changé (ex. retour sur l'onglet Classement après une partie).
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  useFocusEffect(
+    useCallback(() => {
+      setRefreshKey(k => k + 1)
+    }, []),
+  )
 
   // Compte à rebours jusqu'au reset.
   useEffect(() => {
@@ -65,7 +75,7 @@ export function LeaderboardScreen({ onBack }: Props) {
     return () => clearInterval(id)
   }, [])
 
-  // Ligue du joueur (et sélection initiale) au montage.
+  // Ligue du joueur (et sélection initiale) au montage + à chaque focus.
   useEffect(() => {
     if (!username) return
     let cancelled = false
@@ -82,9 +92,10 @@ export function LeaderboardScreen({ onBack }: Props) {
       }
     })()
     return () => { cancelled = true }
-  }, [username])
+  }, [username, refreshKey])
 
-  // Classement de la ligue sélectionnée.
+  // Classement de la ligue sélectionnée — refetch au changement de ligue OU
+  // au retour au focus sur cet écran (refreshKey).
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -101,7 +112,7 @@ export function LeaderboardScreen({ onBack }: Props) {
       }
     })()
     return () => { cancelled = true }
-  }, [selected])
+  }, [selected, refreshKey])
 
   // Rang du joueur dans sa propre ligue (pour l'encart).
   const myRank = myEntries.findIndex((e) => e.username === username)
