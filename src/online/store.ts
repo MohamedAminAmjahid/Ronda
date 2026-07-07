@@ -197,13 +197,14 @@ function wireRoom(r: Room): void {
   r.onError((_code, message) => set({ status: 'disconnected', error: message ?? 'Erreur serveur.' }))
 }
 
-async function connect(factory: () => Promise<Room>, bet = 0): Promise<void> {
+async function connect(factory: () => Promise<Room>, bet = 0, label = 'quick'): Promise<void> {
   reset()
   // bet est passé APRÈS reset() (qui remet bet à 0) pour que le montant misé
   // survive pendant le matchmaking → remboursable si on annule avant le début.
   set({ status: 'connecting', error: null, bet })
   try {
     const r = await factory()
+    console.log('[matchmaking] mode:', label, 'roomId:', r.roomId)
     wireRoom(r)
     // En attente du 2e joueur jusqu'au 1er game_state en phase PLAYING.
     set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
@@ -217,21 +218,21 @@ async function connect(factory: () => Promise<Room>, bet = 0): Promise<void> {
 // ── Actions exposées ─────────────────────────────────────────────────────────
 
 export function connectQuick(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => joinOrCreate(pseudo, bet), bet)
+  return connect(() => joinOrCreate(pseudo, bet), bet, 'quick')
 }
 export function connectCreate(pseudo: string): Promise<void> {
-  return connect(() => createPrivate(pseudo))
+  return connect(() => createPrivate(pseudo), 0, 'friend-host')
 }
 export function connectByCode(pseudo: string, code: string): Promise<void> {
-  return connect(() => joinByCode(pseudo, code))
+  return connect(() => joinByCode(pseudo, code), 0, 'friend-guest')
 }
 /** Crée une room privée Ronda pour une partie entre amis (hôte). */
 export function connectFriendHost(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => createPrivate(pseudo), bet)
+  return connect(() => createPrivate(pseudo), bet, 'friend-host')
 }
 /** Rejoint une room privée Ronda par code (invité). */
 export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
-  return connect(() => joinByCode(pseudo, code), bet)
+  return connect(() => joinByCode(pseudo, code), bet, 'friend-guest')
 }
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */

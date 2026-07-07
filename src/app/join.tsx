@@ -53,7 +53,11 @@ export default function JoinRoute() {
             `/lobby2v2?code=${encodeURIComponent(code)}&pseudo=${encodeURIComponent(profile.username)}` as Href,
           )
         } else {
-          router.replace(`/online?code=${encodeURIComponent(code)}` as Href)
+          // mode=friend est requis : sans lui, online.tsx retombe sur mode='quick'
+          // par défaut → l'invité voit l'écran de matchmaking rapide (avec repli
+          // bot après 25-70s) au lieu de l'écran d'attente ami, alors qu'il est
+          // bel et bien connecté à la room privée de son ami via le code.
+          router.replace(`/online?code=${encodeURIComponent(code)}&mode=friend` as Href)
         }
       } catch {
         if (!cancelled) setError('Code introuvable')
