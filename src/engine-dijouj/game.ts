@@ -43,9 +43,13 @@ function drawCards(
  * Règles de jeu :
  * - Pendant un draw2 en attente : seul un autre 2 peut être joué (empilement).
  * - Pendant un skip en attente  : seul un As peut être joué (empilement).
- * - Sinon : même couleur OU même valeur que le sommet de la défausse.
- * - Le 7 de Oros suit la même règle (même couleur/valeur) ; sa spécialité est
- *   uniquement de choisir la prochaine couleur après avoir été posé.
+ * - Si une couleur a été imposée par un 7 de Oros (chosenSuit défini) : seule
+ *   cette couleur est jouable, SAUF un nouveau 7 de Oros qui peut la changer
+ *   à nouveau (joker). La règle « même valeur que le sommet » ne s'applique
+ *   plus ici — sinon n'importe quel 7 (7_bastos, 7_espadas…) contournerait la
+ *   couleur choisie simplement parce que le sommet affiche un 7.
+ * - Sinon (pas de couleur imposée) : même couleur OU même valeur que le
+ *   sommet de la défausse.
  */
 export function isPlayable(
   card:          Card,
@@ -56,8 +60,11 @@ export function isPlayable(
   if (pendingEffect?.type === 'draw2') return card.value === 2
   if (pendingEffect?.type === 'skip')  return card.value === 1
 
-  const effectiveSuit = chosenSuit ?? topCard.suit
-  return card.suit === effectiveSuit || card.value === topCard.value
+  const isWildSeven = card.value === 7 && card.suit === 'oros'
+
+  if (chosenSuit) return card.suit === chosenSuit || isWildSeven
+
+  return card.suit === topCard.suit || card.value === topCard.value
 }
 
 /**

@@ -148,18 +148,29 @@ describe('isPlayable', () => {
     expect(isPlayable(c('oros', 7), c('bastos', 7), null, null)).toBe(true)
   })
 
-  it('7 de Oros NON jouable si ni même couleur ni même valeur', () => {
-    expect(isPlayable(c('oros', 7), c('bastos', 12), null,    null)).toBe(false)
-    expect(isPlayable(c('oros', 7), c('espadas', 2), 'copas', null)).toBe(false)
+  it('7 de Oros NON jouable si ni même couleur ni même valeur (sans couleur imposée)', () => {
+    expect(isPlayable(c('oros', 7), c('bastos', 12), null, null)).toBe(false)
   })
 
   it('7 de Oros jouable si chosenSuit === oros', () => {
     expect(isPlayable(c('oros', 7), c('copas', 3), 'oros', null)).toBe(true)
   })
 
+  it('7 de Oros reste jouable (joker) même si chosenSuit est une autre couleur', () => {
+    expect(isPlayable(c('oros', 7), c('espadas', 2), 'copas', null)).toBe(true)
+  })
+
   it('chosenSuit remplace la couleur du sommet', () => {
     expect(isPlayable(c('copas', 3), top, 'copas', null)).toBe(true)
     expect(isPlayable(c('copas', 3), top, 'espadas', null)).toBe(false)
+  })
+
+  it('BUG : une couleur imposée doit être respectée — un 7 d\'une autre couleur ne doit PAS contourner chosenSuit via la règle « même valeur »', () => {
+    // Sommet = 7 oros, chosenSuit = espadas. Un 7 bastos ne matche ni la
+    // couleur imposée ni n'est le joker (7 oros) → doit être refusé, même si
+    // sa valeur (7) est identique à celle du sommet.
+    expect(isPlayable(c('bastos', 7), c('oros', 7), 'espadas', null)).toBe(false)
+    expect(isPlayable(c('espadas', 7), c('oros', 7), 'espadas', null)).toBe(true)
   })
 
   it('pendant draw2 → seul un 2 peut contrer', () => {
@@ -333,6 +344,34 @@ describe('applyPlayCard — 7 de Oros', () => {
     expect(applyPlayCard(s, 1, c('bastos', 3))).toBe(s)
   })
 
+  it('BUG : un 7 d\'une autre couleur (ex: 7 bastos) ne contourne plus la couleur choisie', () => {
+    const s = makeState({
+      botHand:       [c('bastos', 7)],
+      discardTop:    c('oros', 7),
+      currentPlayer: 1,
+      chosenSuit:    'copas',
+    })
+    // Avant le correctif, isPlayable laissait passer 7 bastos via la règle
+    // « même valeur (7) que le sommet ». Doit désormais être refusé.
+    expect(applyPlayCard(s, 1, c('bastos', 7))).toBe(s)
+  })
+
+  it('après avoir posé le 7 oros et choisi espadas, seules les espadas (et un nouveau 7 oros) sont jouables', () => {
+    const s = makeState({ humanHand: [c('oros', 7), c('oros', 6)], discardTop: c('oros', 5) })
+    const r = applyPlayCard(s, 0, c('oros', 7), 'espadas')
+    expect(r.chosenSuit).toBe('espadas')
+    const top = r.discardPile.at(-1)!  // = oros 7
+
+    // Espadas → jouable.
+    expect(isPlayable(c('espadas', 3), top, r.chosenSuit, r.pendingEffect)).toBe(true)
+    // Nouveau 7 oros → toujours jouable (joker, peut re-choisir la couleur).
+    expect(isPlayable(c('oros', 7), top, r.chosenSuit, r.pendingEffect)).toBe(true)
+    // Un 7 d'une autre couleur (même valeur que le sommet) → refusé.
+    expect(isPlayable(c('bastos', 7), top, r.chosenSuit, r.pendingEffect)).toBe(false)
+    // N'importe quelle autre couleur → refusée.
+    expect(isPlayable(c('copas', 4), top, r.chosenSuit, r.pendingEffect)).toBe(false)
+  })
+
   it('7 de Oros jouable sur même valeur 7 même si chosenSuit est différente', () => {
     const s = makeState({
       botHand:       [c('oros', 7), c('espadas', 6)],
@@ -495,5 +534,30 @@ describe('bot', () => {
     const a = botPlay(s, 1)
     expect(a.type).toBe('play')
     if (a.type === 'play') expect(a.card.value).toBe(1)
+  })
+
+  it('BUG : après un 7 oros → espadas, le bot ne joue PAS un 7 d\'une autre couleur (pioche à la place)', () => {
+    const s = makeState({
+      botHand:       [c('bastos', 7), c('copas', 4)],
+      discardTop:    c('oros', 7),
+      currentPlayer: 1,
+      chosenSuit:    'espadas',
+    })
+    const a = botPlay(s, 1)
+    // Ni 7 bastos (mauvaise couleur, pas le joker oros) ni copas 4 ne respectent
+    // la couleur imposée → aucune carte jouable → le bot pioche.
+    expect(a.type).toBe('draw')
+  })
+
+  it('après un 7 oros → espadas, le bot joue une carte espadas si disponible', () => {
+    const s = makeState({
+      botHand:       [c('bastos', 7), c('espadas', 4)],
+      discardTop:    c('oros', 7),
+      currentPlayer: 1,
+      chosenSuit:    'espadas',
+    })
+    const a = botPlay(s, 1)
+    expect(a.type).toBe('play')
+    if (a.type === 'play') expect(a.card).toEqual(c('espadas', 4))
   })
 })

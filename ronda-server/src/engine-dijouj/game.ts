@@ -37,9 +37,13 @@ export function isPlayable(
 ): boolean {
   if (pendingEffect?.type === 'draw2') return card.value === 2
   if (pendingEffect?.type === 'skip')  return card.value === 1
+  // Le 7 de Oros reste un joker jouable à tout moment.
   if (card.value === 7 && card.suit === 'oros') return true
-  const effectiveSuit = chosenSuit ?? topCard.suit
-  return card.suit === effectiveSuit || card.value === topCard.value
+  // Une couleur imposée par un 7 de Oros doit être respectée : la règle
+  // « même valeur que le sommet » ne s'applique plus ici, sinon n'importe
+  // quel 7 (7_bastos, 7_espadas…) contournerait la couleur choisie.
+  if (chosenSuit) return card.suit === chosenSuit
+  return card.suit === topCard.suit || card.value === topCard.value
 }
 
 export function applyPlayCard(
