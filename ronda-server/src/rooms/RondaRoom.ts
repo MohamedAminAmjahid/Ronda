@@ -130,12 +130,22 @@ export class RondaRoom extends Room<RondaState> {
     })
   }
 
-  onJoin(client: Client, options: { pseudo: string }): void {
+  onJoin(client: Client, options: { pseudo: string; bet?: number }): void {
     if (this.state.phase !== 'WAITING') {
       throw new Error('La partie a déjà commencé.')
     }
     const seat = (this.sessionBySeat[0] === null ? 0 : 1) as PlayerId
     const pseudo = (options?.pseudo ?? 'Joueur').slice(0, 24)
+
+    // La mise de la room vient uniquement du créateur (onCreate) — le second
+    // joueur qui matche via joinOrCreate n'a pas le choix de la mise. Un
+    // écart signale un mismatch de matchmaking (ex. quick-match sans filtre
+    // par mise), à surveiller si le classement hebdo semble sous-alimenté.
+    if (seat === 1 && options?.bet !== undefined && options.bet !== this.bet) {
+      console.warn('[RondaRoom] mise différente entre les deux joueurs :', {
+        roomBet: this.bet, joinerBet: options.bet, joiner: pseudo,
+      })
+    }
 
     this.sessionBySeat[seat] = client.sessionId
     this.pseudoBySeat[seat] = pseudo
@@ -327,8 +337,11 @@ export class RondaRoom extends Room<RondaState> {
     })
 
     // Partie avec mise → crédite l'or misé au vainqueur pour le classement hebdo.
+    // bet = mise misée PAR JOUEUR (pas le pot total — goldWon ci-dessous reste
+    // this.bet * 2, c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
-      addWageredGold(winnerPseudo, this.bet * 2, 'ronda')
+      console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'ronda' })
+      addWageredGold(winnerPseudo, this.bet, 'ronda')
     }
 
     this.broadcast('game_over', {

@@ -113,12 +113,22 @@ export class DiJoujRoom extends Room<DiJoujState> {
     })
   }
 
-  async onJoin(client: Client, options: { pseudo: string; uid?: string }): Promise<void> {
+  async onJoin(client: Client, options: { pseudo: string; uid?: string; bet?: number }): Promise<void> {
     if (this.state.phase !== 'WAITING') throw new Error('La partie a déjà commencé.')
 
     const seat = (this.sessionBySeat[0] === null ? 0 : 1) as 0 | 1
     const pseudo = (options?.pseudo ?? 'Joueur').slice(0, 24)
     const uid = String(options?.uid ?? '')
+
+    // La mise de la room vient uniquement du créateur (onCreate) — le second
+    // joueur qui matche via joinOrCreate n'a pas le choix de la mise. Un
+    // écart signale un mismatch de matchmaking (ex. quick-match sans filtre
+    // par mise), à surveiller si le classement hebdo semble sous-alimenté.
+    if (seat === 1 && options?.bet !== undefined && options.bet !== this.bet) {
+      console.warn('[DiJoujRoom] mise différente entre les deux joueurs :', {
+        roomBet: this.bet, joinerBet: options.bet, joiner: pseudo,
+      })
+    }
 
     // Profil public (avatar + niveau) depuis Firestore Admin. Best-effort :
     // valeurs par défaut si non connecté / credentials absents.
@@ -362,8 +372,11 @@ export class DiJoujRoom extends Room<DiJoujState> {
 
     const winnerPseudo = winnerSeat !== undefined ? this.pseudoBySeat[winnerSeat] : null
     const goldWon = this.bet > 0 ? this.bet * 2 : 0
+    // bet = mise misée PAR JOUEUR (pas le pot total — goldWon reste this.bet * 2,
+    // c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
-      addWageredGold(winnerPseudo, goldWon, 'dijouj')
+      console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'dijouj' })
+      addWageredGold(winnerPseudo, this.bet, 'dijouj')
     }
 
     this.broadcast('game_over', {

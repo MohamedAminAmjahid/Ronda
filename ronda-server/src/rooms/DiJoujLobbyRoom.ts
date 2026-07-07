@@ -255,8 +255,11 @@ export class DiJoujLobbyRoom extends Room<DiJoujLobbyState> {
 
     const winnerPseudo = winnerSeat !== undefined ? (this.pseudoBySeat[winnerSeat] ?? null) : null
     const goldWon = this.bet > 0 ? this.bet * this.pc : 0
+    // bet = mise misée PAR JOUEUR (pas le pot total — goldWon reste le pot
+    // complet, c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
-      addWageredGold(winnerPseudo, goldWon, 'dijouj')
+      console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'dijouj' })
+      addWageredGold(winnerPseudo, this.bet, 'dijouj')
     }
 
     this.broadcast('game_over', {
