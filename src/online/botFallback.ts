@@ -11,12 +11,25 @@ import { firebaseApp } from '../firebase/config'
 const db = () => getFirestore(firebaseApp)
 
 /**
- * Délai aléatoire (25–70 s) avant de basculer sur un bot si aucun humain n'est
+ * Délai aléatoire (15–70 s) avant de basculer sur un bot si aucun humain n'est
  * trouvé. Aléatoire (et non fixe) pour qu'un joueur ne puisse pas deviner, en
- * comptant les secondes, que l'adversaire est un bot de secours.
+ * comptant les secondes, que l'adversaire est un bot de secours. Distribution
+ * pondérée plutôt qu'uniforme : la plupart des recherches durent 20–40 s
+ * (typique), avec une minorité de cas rapides (15–20 s) ou longs (40–70 s)
+ * pour rester crédible.
  */
 export function getBotWaitSecs(): number {
-  return Math.floor(Math.random() * (70 - 25 + 1)) + 25
+  const r = Math.random()
+  if (r < 0.70) {
+    // 70 % → entre 20 et 40 secondes (cas typique)
+    return Math.floor(Math.random() * (40 - 20 + 1)) + 20
+  } else if (r < 0.85) {
+    // 15 % → entre 15 et 20 secondes (rapide)
+    return Math.floor(Math.random() * (20 - 15 + 1)) + 15
+  } else {
+    // 15 % → entre 40 et 70 secondes (long)
+    return Math.floor(Math.random() * (70 - 40 + 1)) + 40
+  }
 }
 
 // ── Noms ──────────────────────────────────────────────────────────────────────
