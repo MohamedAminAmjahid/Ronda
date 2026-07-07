@@ -10,6 +10,7 @@ import { Svg, Circle, Path, G } from 'react-native-svg'
 import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
+import { AvatarDisplay } from './ProfileScreen'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -206,6 +207,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const { botName, botEmoji, bet } = useLocalSearchParams<{ botName?: string; botEmoji?: string; bet?: string }>()
   const oppLabel  = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
   const stakeBet  = bet ? (parseInt(bet, 10) || 0) : 0  // >0 → partie misée (repli bot)
+  // Niveau crédible pour le bot déguisé — figé pour toute la partie (pas de re-tirage au re-render).
+  const fakeBotLevel = useRef(Math.floor(Math.random() * 15) + 1).current
   const {
     state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
@@ -425,10 +428,30 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           </View>
         </View>
 
-        {/* ── Top : adversaire (Bot) ────────────────────────────────────────── */}
+        {/* ── Top : adversaire (Bot déguisé en joueur, ou Bot d'entraînement) ── */}
         <Animated.View style={[s.topZone, { opacity: botOpacity }]}>
-          <CardBackRow count={bot.hand.length} />
-          <Text style={s.oppLabel}>{oppLabel} — {bot.hand.length}</Text>
+          {botName ? (
+            <>
+              <View style={s.oppProfileRow}>
+                <AvatarDisplay
+                  type="emoji"
+                  initial={botName[0]?.toUpperCase() ?? '?'}
+                  emoji={botEmoji ?? '🙂'}
+                  image=""
+                  size={40}
+                  level={fakeBotLevel}
+                />
+                <Text style={s.oppTopName} numberOfLines={1}>{botName}</Text>
+              </View>
+              <CardBackRow count={bot.hand.length} />
+              <Text style={s.oppTopLabel}>{bot.hand.length} 🂠</Text>
+            </>
+          ) : (
+            <>
+              <CardBackRow count={bot.hand.length} />
+              <Text style={s.oppLabel}>{oppLabel} — {bot.hand.length}</Text>
+            </>
+          )}
         </Animated.View>
 
         {/* ── Bannière effet ────────────────────────────────────────────────── */}
@@ -732,6 +755,9 @@ const s = StyleSheet.create({
   oppLabel: {
     fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, letterSpacing: 0.5,
   },
+  oppProfileRow: { flexDirection: 'row', alignItems: 'center', gap: 10, maxWidth: '92%' },
+  oppTopName:    { fontFamily: 'Cairo_600SemiBold', color: C.bone, fontSize: 14, letterSpacing: 0.3, flexShrink: 1 },
+  oppTopLabel:   { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 11, letterSpacing: 0.5 },
 
   // Banner
   banner: {
