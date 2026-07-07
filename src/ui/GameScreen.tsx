@@ -14,6 +14,7 @@ import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { AvatarDisplay } from './ProfileScreen'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar } from '../online/botFallback'
 import { router, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
@@ -551,11 +552,14 @@ interface GameScreenProps {
   /** Avatar/genre du bot de repli matchmaking (absents en entraînement normal). */
   botAvatarIdx?: number
   botFemale?: boolean
+  /** uid fantôme Firestore du bot (voir getOrCreateBotProfile) et son prénom brut. */
+  botUid?: string
+  rawBotName?: string
 }
 
 export function GameScreen({
   onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0,
-  botAvatarIdx, botFemale,
+  botAvatarIdx, botFemale, botUid, rawBotName,
 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
@@ -569,6 +573,7 @@ export function GameScreen({
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Niveau crédible pour le bot déguisé — figé pour toute la partie.
   const fakeBotLevel = useRef(Math.floor(Math.random() * 16) + 3).current
+  const [showBotProfile, setShowBotProfile] = useState(false)
   const hasBotAvatar = botAvatarIdx !== undefined && botFemale !== undefined
 
   // Récompense de fin de partie : on enregistre le résultat une seule fois quand
@@ -895,14 +900,16 @@ export function GameScreen({
           </View>
           <View style={{ alignItems: 'flex-end', gap: 3 }}>
             {hasBotAvatar && (
-              <AvatarDisplay
-                type="image"
-                initial={(opponentName ?? 'B')[0]?.toUpperCase() ?? '?'}
-                emoji=""
-                image={getBotAvatar(botAvatarIdx!, botFemale!)}
-                size={28}
-                level={fakeBotLevel}
-              />
+              <TouchableOpacity onPress={() => setShowBotProfile(true)} activeOpacity={0.7}>
+                <AvatarDisplay
+                  type="image"
+                  initial={(opponentName ?? 'B')[0]?.toUpperCase() ?? '?'}
+                  emoji=""
+                  image={getBotAvatar(botAvatarIdx!, botFemale!)}
+                  size={28}
+                  level={fakeBotLevel}
+                />
+              </TouchableOpacity>
             )}
             <View style={styles.sbNameRow}>
               {state.dealer === BOT_ID && <DealerToken />}
@@ -920,6 +927,14 @@ export function GameScreen({
           <Text style={styles.muteIcon}>{muted ? '🔇' : '🔊'}</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Profil de l'adversaire (tap sur l'avatar du bot déguisé) */}
+      <PlayerProfileModal
+        visible={showBotProfile}
+        uid={botUid}
+        name={rawBotName}
+        onClose={() => setShowBotProfile(false)}
+      />
 
       {/* Confirmation de départ (mode en ligne uniquement) */}
       <Modal visible={confirmQuit} transparent animationType="fade" onRequestClose={() => setConfirmQuit(false)}>

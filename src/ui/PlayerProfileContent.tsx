@@ -215,7 +215,20 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
           >
             <Text style={s.actionBtnTxt}>{t('messageBtn')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.actionBtnPrimary} onPress={() => setShowInvite(true)} activeOpacity={0.85}>
+          <TouchableOpacity
+            style={s.actionBtnPrimary}
+            onPress={() => {
+              // Bot : pas de vraie invitation possible → relance directement
+              // une partie (matchmaking), sans jamais révéler que c'est un bot.
+              if (profile.isBot) {
+                onNavigateAway?.()
+                router.push('/bet?game=ronda' as never)
+                return
+              }
+              setShowInvite(true)
+            }}
+            activeOpacity={0.85}
+          >
             <Text style={s.actionBtnPrimaryTxt}>🎮 {t('inviteToPlay')}</Text>
           </TouchableOpacity>
         </View>

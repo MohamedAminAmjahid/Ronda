@@ -11,6 +11,7 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { AvatarDisplay } from './ProfileScreen'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar } from '../online/botFallback'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
@@ -223,6 +224,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   }
   // Niveau crédible pour le bot déguisé — figé pour toute la partie (pas de re-tirage au re-render).
   const fakeBotLevel = useRef(Math.floor(Math.random() * 16) + 3).current
+  // uid fantôme Firestore du bot (voir getOrCreateBotProfile) — permet d'ouvrir
+  // son profil comme celui d'un vrai joueur, sans jamais révéler que c'est un bot.
+  const botUidStr = botName ? `bot_${botName.toLowerCase()}` : undefined
+  const [showBotProfile, setShowBotProfile] = useState(false)
   const {
     state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
@@ -447,25 +452,27 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           {botName ? (
             <>
               <View style={s.oppProfileRow}>
-                {hasBotAvatar ? (
-                  <AvatarDisplay
-                    type="image"
-                    initial={botName[0]?.toUpperCase() ?? '?'}
-                    emoji={botEmoji ?? '🙂'}
-                    image={getBotAvatar(botIdx, botIsF)}
-                    size={40}
-                    level={fakeBotLevel}
-                  />
-                ) : (
-                  <AvatarDisplay
-                    type="emoji"
-                    initial={botName[0]?.toUpperCase() ?? '?'}
-                    emoji={botEmoji ?? '🙂'}
-                    image=""
-                    size={40}
-                    level={fakeBotLevel}
-                  />
-                )}
+                <TouchableOpacity onPress={() => setShowBotProfile(true)} activeOpacity={0.7}>
+                  {hasBotAvatar ? (
+                    <AvatarDisplay
+                      type="image"
+                      initial={botName[0]?.toUpperCase() ?? '?'}
+                      emoji={botEmoji ?? '🙂'}
+                      image={getBotAvatar(botIdx, botIsF)}
+                      size={40}
+                      level={fakeBotLevel}
+                    />
+                  ) : (
+                    <AvatarDisplay
+                      type="emoji"
+                      initial={botName[0]?.toUpperCase() ?? '?'}
+                      emoji={botEmoji ?? '🙂'}
+                      image=""
+                      size={40}
+                      level={fakeBotLevel}
+                    />
+                  )}
+                </TouchableOpacity>
                 <Text style={s.oppTopName} numberOfLines={1}>{botName}</Text>
               </View>
               <CardBackRow count={bot.hand.length} />
@@ -595,6 +602,14 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             })}
           </ScrollView>
         </View>
+
+        {/* ── Profil de l'adversaire (tap sur l'avatar) ─────────────────────── */}
+        <PlayerProfileModal
+          visible={showBotProfile}
+          uid={botUidStr}
+          name={botName}
+          onClose={() => setShowBotProfile(false)}
+        />
 
         {/* ── Modal couleur ─────────────────────────────────────────────────── */}
         <Modal visible={pendingWild !== null} transparent animationType="fade">

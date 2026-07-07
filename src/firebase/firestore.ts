@@ -42,6 +42,8 @@ export interface UserDoc {
   referralCount: number
   xp: number
   level: number
+  /** true = profil fantôme d'un bot de repli matchmaking (voir botFallback.ts). */
+  isBot: boolean
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -331,6 +333,7 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     referralCount: (data.referralCount as number) ?? 0,
     xp:    (data.xp as number) ?? 0,
     level: (data.level as number) ?? 1,
+    isBot: (data.isBot as boolean) ?? false,
   }
 }
 

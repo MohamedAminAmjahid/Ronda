@@ -198,7 +198,9 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
     const rondaWon     = Math.round(rondaPlayed  * winRate)
     const dijoujWon    = Math.round(dijoujPlayed * winRate)
     const gold         = randInt(500, 3000)
-    const avatarImage  = female ? `bot_f${idx}` : `bot_m${idx}`
+    // URL statique réelle (voir FEMALE_AVATARS/MALE_AVATARS) — s'affiche
+    // normalement via AvatarDisplay type="image", comme un vrai joueur.
+    const avatarImage  = getBotAvatar(idx, female)
 
     await setDoc(ref, {
       username:      name,
