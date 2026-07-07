@@ -11,6 +11,7 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { AvatarDisplay } from './ProfileScreen'
+import { getBotAvatar } from '../online/botFallback'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -204,11 +205,18 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const felt = tableColors(table)  // dégradé du tapis équipé
   // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
   // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
-  const { botName, botEmoji, bet } = useLocalSearchParams<{ botName?: string; botEmoji?: string; bet?: string }>()
+  const { botName, botEmoji, botAvatarIdx, botFemale, bet } = useLocalSearchParams<{
+    botName?: string; botEmoji?: string; botAvatarIdx?: string; botFemale?: string; bet?: string
+  }>()
   const oppLabel  = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
   const stakeBet  = bet ? (parseInt(bet, 10) || 0) : 0  // >0 → partie misée (repli bot)
+  // Avatar/genre transmis par le repli matchmaking (mêmes params que le lien
+  // de navigation) — absents en entraînement normal (bouton "Bot" classique).
+  const hasBotAvatar = botAvatarIdx !== undefined && botFemale !== undefined
+  const botIdx    = botAvatarIdx ? (parseInt(botAvatarIdx, 10) || 0) : 0
+  const botIsF    = botFemale === '1'
   // Niveau crédible pour le bot déguisé — figé pour toute la partie (pas de re-tirage au re-render).
-  const fakeBotLevel = useRef(Math.floor(Math.random() * 15) + 1).current
+  const fakeBotLevel = useRef(Math.floor(Math.random() * 16) + 3).current
   const {
     state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
@@ -433,14 +441,25 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           {botName ? (
             <>
               <View style={s.oppProfileRow}>
-                <AvatarDisplay
-                  type="emoji"
-                  initial={botName[0]?.toUpperCase() ?? '?'}
-                  emoji={botEmoji ?? '🙂'}
-                  image=""
-                  size={40}
-                  level={fakeBotLevel}
-                />
+                {hasBotAvatar ? (
+                  <AvatarDisplay
+                    type="image"
+                    initial={botName[0]?.toUpperCase() ?? '?'}
+                    emoji={botEmoji ?? '🙂'}
+                    image={getBotAvatar(botIdx, botIsF)}
+                    size={40}
+                    level={fakeBotLevel}
+                  />
+                ) : (
+                  <AvatarDisplay
+                    type="emoji"
+                    initial={botName[0]?.toUpperCase() ?? '?'}
+                    emoji={botEmoji ?? '🙂'}
+                    image=""
+                    size={40}
+                    level={fakeBotLevel}
+                  />
+                )}
                 <Text style={s.oppTopName} numberOfLines={1}>{botName}</Text>
               </View>
               <CardBackRow count={bot.hand.length} />

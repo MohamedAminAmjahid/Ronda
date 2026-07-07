@@ -9,7 +9,7 @@ import { useOnlineGame } from '../online/useOnlineGame'
 import { leave as leaveRondaRoom, voiceTransport } from '../online/store'
 import { useProfile } from '../profile/useProfile'
 import { roomTypeByCode } from '../online/client'
-import { getBotWaitSecs, pickBot } from '../online/botFallback'
+import { getBotWaitSecs, pickBot, getOrCreateBotProfile } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { VoiceButton } from '../voice/VoiceButton'
@@ -132,10 +132,14 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
         code={roomCode}
         mode={mode}
         onCancel={() => game.newGame()}
-        onBotFallback={(name, emoji) => {
+        onBotFallback={(name, emoji, avatarIdx, female) => {
           const stake = game.bet ?? 0
           leaveRondaRoom(false) // pas de remboursement : la mise suit dans la partie bot
-          router.push(`/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}&bet=${stake}` as Href)
+          void getOrCreateBotProfile(name, avatarIdx, female) // arrière-plan, sans bloquer la navigation
+          router.push(
+            `/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` +
+            `&botAvatarIdx=${avatarIdx}&botFemale=${female ? 1 : 0}&bet=${stake}` as Href,
+          )
         }}
       />
     )
@@ -244,7 +248,7 @@ function WaitingScreen({
   code: string | null
   mode?: 'quick' | 'friend'
   onCancel: () => void
-  onBotFallback?: (name: string, emoji: string) => void
+  onBotFallback?: (name: string, emoji: string, avatarIdx: number, female: boolean) => void
 }) {
   const { t: tr } = useI18n()
   const pulse     = useRef(new Animated.Value(0.4)).current
@@ -281,8 +285,8 @@ function WaitingScreen({
     if (mode !== 'quick' || calledRef.current) return
     if (elapsed >= botWaitSecs && onBotFallback) {
       calledRef.current = true
-      const { name, emoji } = pickBot()
-      onBotFallback(name, emoji)
+      const { name, emoji, avatarIdx, female } = pickBot()
+      onBotFallback(name, emoji, avatarIdx, female)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsed])

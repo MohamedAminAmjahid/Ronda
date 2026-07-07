@@ -15,7 +15,7 @@ import { PlayerProfileModal } from './PlayerProfileModal'
 import { useIsOffline } from '../net/useOnlineStatus'
 import { useOnlineDiJouj } from '../online/useOnlineDiJouj'
 import { leave as leaveDjRoom, voiceTransport } from '../online/storeDiJouj'
-import { getBotWaitSecs, pickBot } from '../online/botFallback'
+import { getBotWaitSecs, pickBot, getOrCreateBotProfile } from '../online/botFallback'
 import { isPlayable } from '../engine-dijouj/game'
 import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
@@ -204,11 +204,13 @@ export function DiJoujOnlineScreen() {
     if (!isQuickWaiting || botCalledRef.current) return
     if (mmElapsed >= botWaitSecs) {
       botCalledRef.current = true
-      const { name, emoji } = pickBot()
+      const { name, emoji, avatarIdx, female } = pickBot()
       const stake = bet ?? 0
       leaveDjRoom(false)  // quitte SANS rembourser : la mise suit dans la partie bot
+      void getOrCreateBotProfile(name, avatarIdx, female) // arrière-plan, sans bloquer la navigation
       router.push(
-        `/dijouj?train=1&botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}&bet=${stake}` as Href,
+        `/dijouj?train=1&botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` +
+        `&botAvatarIdx=${avatarIdx}&botFemale=${female ? 1 : 0}&bet=${stake}` as Href,
       )
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

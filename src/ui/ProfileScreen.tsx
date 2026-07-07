@@ -54,7 +54,8 @@ interface AvatarDisplayProps {
   type: 'initial' | 'emoji' | 'image'
   initial: string
   emoji: string
-  image: string
+  /** URI string (photo utilisateur) OU asset local require()'d (avatar de bot). */
+  image: string | number
   size?: number
   /** Cadre premium équipé (défaut : 'none'). */
   frame?: string
@@ -96,7 +97,7 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
   const inner = (type === 'image' && image) ? (
     <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
       <Image
-        source={{ uri: image }}
+        source={typeof image === 'number' ? image : { uri: image }}
         style={{ width: size, height: size, borderRadius: radius }}
         resizeMode="cover"
       />

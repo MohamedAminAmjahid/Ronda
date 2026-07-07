@@ -13,6 +13,8 @@ import ReAnimated, {
 import { useRondaGame, HUMAN_ID, BOT_ID } from '../game'
 import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
+import { AvatarDisplay } from './ProfileScreen'
+import { getBotAvatar } from '../online/botFallback'
 import { router, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -546,9 +548,15 @@ interface GameScreenProps {
    * le matchmaking au lieu d'une partie locale.
    */
   stakeBet?: number
+  /** Avatar/genre du bot de repli matchmaking (absents en entraînement normal). */
+  botAvatarIdx?: number
+  botFemale?: boolean
 }
 
-export function GameScreen({ onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0 }: GameScreenProps) {
+export function GameScreen({
+  onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0,
+  botAvatarIdx, botFemale,
+}: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
   const { table } = useProfile()
@@ -559,6 +567,9 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
   const [toastEvents, setToastEvents] = useState<readonly GameEvent[] | null>(null)
   const [confirmQuit, setConfirmQuit] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Niveau crédible pour le bot déguisé — figé pour toute la partie.
+  const fakeBotLevel = useRef(Math.floor(Math.random() * 16) + 3).current
+  const hasBotAvatar = botAvatarIdx !== undefined && botFemale !== undefined
 
   // Récompense de fin de partie : on enregistre le résultat une seule fois quand
   // la partie se termine (incrémente les stats + crédite l'or si victoire).
@@ -882,7 +893,17 @@ export function GameScreen({ onBack, useGame = useRondaGame, opponentName, onlin
             <Text style={styles.sbDash}>—</Text>
             <Text style={styles.sbTarget}>{t('target')}</Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={{ alignItems: 'flex-end', gap: 3 }}>
+            {hasBotAvatar && (
+              <AvatarDisplay
+                type="image"
+                initial={(opponentName ?? 'B')[0]?.toUpperCase() ?? '?'}
+                emoji=""
+                image={getBotAvatar(botAvatarIdx!, botFemale!)}
+                size={28}
+                level={fakeBotLevel}
+              />
+            )}
             <View style={styles.sbNameRow}>
               {state.dealer === BOT_ID && <DealerToken />}
               <Text style={styles.sbName}>{opponentName ?? t('bot')}</Text>
