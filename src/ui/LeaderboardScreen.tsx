@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
+import { searchUserByUsername } from '../firebase/firestore'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -63,6 +65,13 @@ export function LeaderboardScreen({ onBack }: Props) {
   // n'a pas changé (ex. retour sur l'onglet Classement après une partie).
   const [refreshKey, setRefreshKey] = useState(0)
 
+  // Profil cliquable : la table weekly_scores (SQLite) ne connaît que le
+  // username, pas l'uid Firebase → résolu à la demande (au tap), pas pour
+  // toute la liste au chargement (éviterait N lectures Firestore par focus).
+  const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [selectedUid, setSelectedUid] = useState<string | null>(null)
+  const [resolvingName, setResolvingName] = useState<string | null>(null)
+
   useFocusEffect(
     useCallback(() => {
       setRefreshKey(k => k + 1)
@@ -113,6 +122,19 @@ export function LeaderboardScreen({ onBack }: Props) {
     })()
     return () => { cancelled = true }
   }, [selected, refreshKey])
+
+  // Résout l'uid Firebase par username puis ouvre la modale profil. Pas de
+  // recherche pour soi-même (éviterait un « ajouter ami » vers son propre uid).
+  const openProfile = useCallback(async (targetUsername: string) => {
+    setResolvingName(targetUsername)
+    try {
+      const user = await searchUserByUsername(targetUsername)
+      setSelectedUid(user?.uid ?? null)
+      setSelectedName(targetUsername)
+    } finally {
+      setResolvingName(null)
+    }
+  }, [])
 
   // Rang du joueur dans sa propre ligue (pour l'encart).
   const myRank = myEntries.findIndex((e) => e.username === username)
@@ -168,8 +190,15 @@ export function LeaderboardScreen({ onBack }: Props) {
           ) : (
             entries.map((e, i) => {
               const me = e.username === username
+              const resolving = resolvingName === e.username
               return (
-                <View key={e.username} style={[s.row, me && s.rowMe]}>
+                <TouchableOpacity
+                  key={e.username}
+                  style={[s.row, me && s.rowMe]}
+                  activeOpacity={me ? 1 : 0.7}
+                  disabled={me || resolving}
+                  onPress={() => { void openProfile(e.username) }}
+                >
                   <Text style={s.rank}>{i < 3 ? MEDALS[i] : `${i + 1}`}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={[s.name, me && s.nameMe]} numberOfLines={1}>
@@ -185,7 +214,12 @@ export function LeaderboardScreen({ onBack }: Props) {
                     </View>
                   </View>
                   <Text style={s.wagered}>🪙 {e.totalGold}</Text>
-                </View>
+                  {!me && (
+                    resolving
+                      ? <ActivityIndicator color={C.brass} size="small" style={s.chevron} />
+                      : <Text style={s.chevron}>›</Text>
+                  )}
+                </TouchableOpacity>
               )
             })
           )}
@@ -202,6 +236,13 @@ export function LeaderboardScreen({ onBack }: Props) {
           <Text style={s.myCardProg}>{progression}</Text>
         </View>
       </View>
+
+      <PlayerProfileModal
+        visible={selectedName !== null}
+        uid={selectedUid ?? undefined}
+        name={selectedName ?? undefined}
+        onClose={() => { setSelectedUid(null); setSelectedName(null) }}
+      />
     </SafeAreaView>
   )
 }
@@ -244,6 +285,7 @@ const s = StyleSheet.create({
   gameBadgeRonda: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.55)' },
   gameBadgeDijouj: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.55)' },
   wagered: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
+  chevron: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.boneOff, marginLeft: 2, width: 14, textAlign: 'center' },
 
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 30, lineHeight: 20 },
 
