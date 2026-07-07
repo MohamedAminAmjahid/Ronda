@@ -326,13 +326,44 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     botOpacity.setValue(1)
   }, [isHumanTurn, isGameOver])
 
+  // ── Forfait pour inactivité (3 auto-skips consécutifs) ───────────────────────
+  const autoSkipCount = useRef(0)
+  const [forfeited, setForfeited] = useState(false)
+  const forfeitedRef = useRef(false)
+
+  function triggerForfeit() {
+    if (forfeitedRef.current) return
+    forfeitedRef.current = true
+    setForfeited(true)
+    recordResult(false, 'dijouj')
+    playLoseSound()
+    setTimeout(() => router.replace('/' as Href), 2000)
+  }
+
+  /** Joue à la place du joueur inactif (carte jouable aléatoire, sinon pioche). */
+  function autoPlayTurn() {
+    const playable = human.hand.filter(c => isPlayable(c, topCard, state.chosenSuit, state.pendingEffect))
+    if (playable.length > 0) {
+      const card = playable[Math.floor(Math.random() * playable.length)]
+      if (card.value === 7 && card.suit === 'oros') {
+        playCard(card, SUITS[Math.floor(Math.random() * SUITS.length)])
+      } else {
+        playCard(card)
+      }
+    } else {
+      draw()
+    }
+    autoSkipCount.current += 1
+    if (autoSkipCount.current >= 3) triggerForfeit()
+  }
+
   // ── Compte à rebours du tour (7 s, miroir de la version en ligne) ────────────
   // Barre + secondes animées : le joueur voit qu'il doit jouer avant expiration.
-  // Purement visuel hors-ligne (pas d'auto-skip serveur ici).
+  // À 0 → auto-play (autoPlayTurn) ; 3 auto-skips consécutifs → forfait.
   const TURN_SECS = 7
   const [turnLeft, setTurnLeft] = useState(TURN_SECS)
   const turnBar = useRef(new Animated.Value(1)).current
-  const isMyLiveTurn = isHumanTurn && !isGameOver
+  const isMyLiveTurn = isHumanTurn && !isGameOver && !forfeited
 
   useEffect(() => {
     if (!isMyLiveTurn) { turnBar.stopAnimation(); turnBar.setValue(1); setTurnLeft(TURN_SECS); return }
@@ -345,11 +376,20 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     return () => clearInterval(id)
   }, [isMyLiveTurn])
 
+  // Déclenche l'auto-play une seule fois quand le compte à rebours atteint 0.
+  useEffect(() => {
+    if (!isMyLiveTurn || turnLeft > 0) return
+    autoPlayTurn()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turnLeft, isMyLiveTurn])
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleCardPress(card: Card) {
     if (!isHumanTurn) return
     if (!playableSet.has(cardKey(card))) return
+    // Vrai clic humain → réinitialise le compteur d'inactivité.
+    autoSkipCount.current = 0
     // 7 d'oros = joker (choix de couleur), SAUF si c'est la dernière carte :
     // la poser gagne la partie → inutile de choisir la prochaine couleur.
     if (card.value === 7 && card.suit === 'oros' && human.hand.length > 1) { setPendingWild(card) }
@@ -405,7 +445,12 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             {/* Pioche */}
             <TouchableOpacity
               activeOpacity={isHumanTurn && !isDrawPause ? 0.75 : 1}
-              onPress={() => isHumanTurn && !isDrawPause && draw()}
+              onPress={() => {
+                if (!isHumanTurn || isDrawPause) return
+                // Vrai clic humain → réinitialise le compteur d'inactivité.
+                autoSkipCount.current = 0
+                draw()
+              }}
               style={[s.pileWrap, (!isHumanTurn || isDrawPause) && s.pileInactive]}
             >
               {state.drawPile.length > 0
@@ -530,6 +575,16 @@ function LocalGame({ onBack }: { onBack: () => void }) {
             </View>
           </View>
         </Modal>
+
+        {/* Forfait pour inactivité (3 auto-skips consécutifs) */}
+        {forfeited && (
+          <View style={s.overlay}>
+            <View style={s.overlayBox}>
+              <Text style={s.overlayEmoji}>⏱️</Text>
+              <Text style={s.overlayTitle}>{t('djForfeitInactivity')}</Text>
+            </View>
+          </View>
+        )}
 
         {/* "Dernière carte" */}
         {isGameOver && showLastCardMsg && (
