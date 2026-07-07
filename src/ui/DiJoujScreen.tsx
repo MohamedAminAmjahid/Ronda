@@ -215,6 +215,12 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const hasBotAvatar = botAvatarIdx !== undefined && botFemale !== undefined
   const botIdx    = botAvatarIdx ? (parseInt(botAvatarIdx, 10) || 0) : 0
   const botIsF    = botFemale === '1'
+  if (botName) {
+    console.log(
+      'botAvatarIdx:', botAvatarIdx, 'botFemale:', botFemale,
+      'hasBotAvatar:', hasBotAvatar, 'avatar:', getBotAvatar(botIdx, botIsF),
+    )
+  }
   // Niveau crédible pour le bot déguisé — figé pour toute la partie (pas de re-tirage au re-render).
   const fakeBotLevel = useRef(Math.floor(Math.random() * 16) + 3).current
   const {

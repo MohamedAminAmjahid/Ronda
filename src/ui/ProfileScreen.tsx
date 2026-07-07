@@ -94,7 +94,11 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
   const nearFull  = hasXp && (xp as number) >= (xpMax as number)
   const ringColor = nearFull ? '#27AE60' : '#C9A227'
 
-  const inner = (type === 'image' && image) ? (
+  // NB : image peut être un number (asset require()'d, ex. avatar de bot) — 0
+  // est une valeur légitime mais falsy en JS, donc `&& image` seul le rejette
+  // à tort. On vérifie explicitement l'absence plutôt que la « vérité ».
+  const hasImage = image !== '' && image !== undefined && image !== null
+  const inner = (type === 'image' && hasImage) ? (
     <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
       <Image
         source={typeof image === 'number' ? image : { uri: image }}
