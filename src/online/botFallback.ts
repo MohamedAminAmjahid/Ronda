@@ -54,93 +54,96 @@ const FEMALE_EMOJIS: string[] = ['👩🏻', '👩🏽', '👩🏾', '👩‍�
 const MALE_EMOJIS:   string[] = ['👨🏻', '👨🏽', '🧔🏽', '👦🏻', '👨🏾', '🧑🏻']
 
 // ── Avatars ───────────────────────────────────────────────────────────────────
-// require() statiques (Metro l'exige) — un par fichier de src/assets/bot-avatars/.
+// URLs statiques (PAS de require()) — les photos sont servies directement
+// depuis public/bot-avatars/{Women,Man}/ sans passer par le bundler Metro.
 // Index i ↔ FEMALE_NAMES[i] / MALE_NAMES[i].
 //
-// NB : les images vivent sous src/assets/ (et non le assets/ racine du projet)
-// pour éviter un bug de résolution web Metro/Expo qui doublait le préfixe
-// (/assets/assets/bot-avatars/... → 404) pour les fichiers situés directement
-// sous le dossier assets/ racine référencé par app.json.
+// NB : require() d'images est préfixé par Expo/Metro d'un « /assets/ »
+// supplémentaire sur le web, quel que soit l'emplacement du fichier dans le
+// projet (assets/ racine, src/assets/…) — ce qui cassait systématiquement
+// l'URL (404). Les fichiers statiques de public/ sont servis tels quels par
+// Vercel/Expo web, sans transformation ni préfixe : c'est la seule solution
+// fiable pour cette liste d'images choisies dynamiquement par index.
 
-export const FEMALE_AVATARS: number[] = [
-  require('../assets/bot-avatars/Women/1.jpeg'),
-  require('../assets/bot-avatars/Women/10.jpeg'),
-  require('../assets/bot-avatars/Women/11.jpeg'),
-  require('../assets/bot-avatars/Women/14.jpeg'),
-  require('../assets/bot-avatars/Women/15.jpeg'),
-  require('../assets/bot-avatars/Women/16.jpeg'),
-  require('../assets/bot-avatars/Women/17.jpeg'),
-  require('../assets/bot-avatars/Women/21.jpeg'),
-  require('../assets/bot-avatars/Women/23.jpeg'),
-  require('../assets/bot-avatars/Women/24.jpeg'),
-  require('../assets/bot-avatars/Women/25.jpeg'),
-  require('../assets/bot-avatars/Women/27.jpeg'),
-  require('../assets/bot-avatars/Women/28.jpeg'),
-  require('../assets/bot-avatars/Women/29.jpeg'),
-  require('../assets/bot-avatars/Women/3.jpeg'),
-  require('../assets/bot-avatars/Women/323.jpeg'),
-  require('../assets/bot-avatars/Women/33.jpeg'),
-  require('../assets/bot-avatars/Women/35.jpeg'),
-  require('../assets/bot-avatars/Women/37.jpeg'),
-  require('../assets/bot-avatars/Women/40.jpeg'),
-  require('../assets/bot-avatars/Women/41.jpeg'),
-  require('../assets/bot-avatars/Women/43.jpeg'),
-  require('../assets/bot-avatars/Women/48.jpeg'),
-  require('../assets/bot-avatars/Women/49.jpeg'),
-  require('../assets/bot-avatars/Women/5.jpeg'),
-  require('../assets/bot-avatars/Women/50.jpg'),
-  require('../assets/bot-avatars/Women/51.jpg'),
-  require('../assets/bot-avatars/Women/52.jpg'),
-  require('../assets/bot-avatars/Women/53.jpg'),
-  require('../assets/bot-avatars/Women/54.jpg'),
-  require('../assets/bot-avatars/Women/55.jpg'),
-  require('../assets/bot-avatars/Women/56.jpg'),
-  require('../assets/bot-avatars/Women/57.jpg'),
-  require('../assets/bot-avatars/Women/58.jpg'),
-  require('../assets/bot-avatars/Women/59.jpg'),
-  require('../assets/bot-avatars/Women/60.jpg'),
-  require('../assets/bot-avatars/Women/61.jpg'),
-  require('../assets/bot-avatars/Women/62.jpg'),
-  require('../assets/bot-avatars/Women/8.jpeg'),
-  require('../assets/bot-avatars/Women/9.jpeg'),
-  require('../assets/bot-avatars/Women/nature1.jpg'),
-  require('../assets/bot-avatars/Women/nature2.jpg'),
-  require('../assets/bot-avatars/Women/nature3.jpg'),
-  require('../assets/bot-avatars/Women/nature4.jpg'),
+export const FEMALE_AVATARS: string[] = [
+  '/bot-avatars/Women/1.jpeg',
+  '/bot-avatars/Women/10.jpeg',
+  '/bot-avatars/Women/11.jpeg',
+  '/bot-avatars/Women/14.jpeg',
+  '/bot-avatars/Women/15.jpeg',
+  '/bot-avatars/Women/16.jpeg',
+  '/bot-avatars/Women/17.jpeg',
+  '/bot-avatars/Women/21.jpeg',
+  '/bot-avatars/Women/23.jpeg',
+  '/bot-avatars/Women/24.jpeg',
+  '/bot-avatars/Women/25.jpeg',
+  '/bot-avatars/Women/27.jpeg',
+  '/bot-avatars/Women/28.jpeg',
+  '/bot-avatars/Women/29.jpeg',
+  '/bot-avatars/Women/3.jpeg',
+  '/bot-avatars/Women/323.jpeg',
+  '/bot-avatars/Women/33.jpeg',
+  '/bot-avatars/Women/35.jpeg',
+  '/bot-avatars/Women/37.jpeg',
+  '/bot-avatars/Women/40.jpeg',
+  '/bot-avatars/Women/41.jpeg',
+  '/bot-avatars/Women/43.jpeg',
+  '/bot-avatars/Women/48.jpeg',
+  '/bot-avatars/Women/49.jpeg',
+  '/bot-avatars/Women/5.jpeg',
+  '/bot-avatars/Women/50.jpg',
+  '/bot-avatars/Women/51.jpg',
+  '/bot-avatars/Women/52.jpg',
+  '/bot-avatars/Women/53.jpg',
+  '/bot-avatars/Women/54.jpg',
+  '/bot-avatars/Women/55.jpg',
+  '/bot-avatars/Women/56.jpg',
+  '/bot-avatars/Women/57.jpg',
+  '/bot-avatars/Women/58.jpg',
+  '/bot-avatars/Women/59.jpg',
+  '/bot-avatars/Women/60.jpg',
+  '/bot-avatars/Women/61.jpg',
+  '/bot-avatars/Women/62.jpg',
+  '/bot-avatars/Women/8.jpeg',
+  '/bot-avatars/Women/9.jpeg',
+  '/bot-avatars/Women/nature1.jpg',
+  '/bot-avatars/Women/nature2.jpg',
+  '/bot-avatars/Women/nature3.jpg',
+  '/bot-avatars/Women/nature4.jpg',
 ]
 
-export const MALE_AVATARS: number[] = [
-  require('../assets/bot-avatars/Man/100.jpg'),
-  require('../assets/bot-avatars/Man/101.jpg'),
-  require('../assets/bot-avatars/Man/102.jpg'),
-  require('../assets/bot-avatars/Man/12.jpeg'),
-  require('../assets/bot-avatars/Man/13.jpeg'),
-  require('../assets/bot-avatars/Man/18.jpeg'),
-  require('../assets/bot-avatars/Man/19.jpeg'),
-  require('../assets/bot-avatars/Man/2.jpeg'),
-  require('../assets/bot-avatars/Man/20.jpeg'),
-  require('../assets/bot-avatars/Man/22.jpeg'),
-  require('../assets/bot-avatars/Man/26.jpeg'),
-  require('../assets/bot-avatars/Man/30.jpeg'),
-  require('../assets/bot-avatars/Man/31.jpeg'),
-  require('../assets/bot-avatars/Man/34.jpeg'),
-  require('../assets/bot-avatars/Man/36.jpeg'),
-  require('../assets/bot-avatars/Man/38.jpeg'),
-  require('../assets/bot-avatars/Man/39.jpeg'),
-  require('../assets/bot-avatars/Man/4.jpeg'),
-  require('../assets/bot-avatars/Man/42.jpeg'),
-  require('../assets/bot-avatars/Man/44.jpeg'),
-  require('../assets/bot-avatars/Man/45.jpeg'),
-  require('../assets/bot-avatars/Man/46.jpeg'),
-  require('../assets/bot-avatars/Man/47.jpeg'),
-  require('../assets/bot-avatars/Man/6.jpeg'),
-  require('../assets/bot-avatars/Man/7.jpeg'),
+export const MALE_AVATARS: string[] = [
+  '/bot-avatars/Man/100.jpg',
+  '/bot-avatars/Man/101.jpg',
+  '/bot-avatars/Man/102.jpg',
+  '/bot-avatars/Man/12.jpeg',
+  '/bot-avatars/Man/13.jpeg',
+  '/bot-avatars/Man/18.jpeg',
+  '/bot-avatars/Man/19.jpeg',
+  '/bot-avatars/Man/2.jpeg',
+  '/bot-avatars/Man/20.jpeg',
+  '/bot-avatars/Man/22.jpeg',
+  '/bot-avatars/Man/26.jpeg',
+  '/bot-avatars/Man/30.jpeg',
+  '/bot-avatars/Man/31.jpeg',
+  '/bot-avatars/Man/34.jpeg',
+  '/bot-avatars/Man/36.jpeg',
+  '/bot-avatars/Man/38.jpeg',
+  '/bot-avatars/Man/39.jpeg',
+  '/bot-avatars/Man/4.jpeg',
+  '/bot-avatars/Man/42.jpeg',
+  '/bot-avatars/Man/44.jpeg',
+  '/bot-avatars/Man/45.jpeg',
+  '/bot-avatars/Man/46.jpeg',
+  '/bot-avatars/Man/47.jpeg',
+  '/bot-avatars/Man/6.jpeg',
+  '/bot-avatars/Man/7.jpeg',
 ]
 
-/** Avatar (asset local require()'d) du bot n°`idx` de ce genre. */
-export function getBotAvatar(idx: number, female: boolean): number {
+/** URL statique (fichier public/) de l'avatar du bot n°`idx` de ce genre. */
+export function getBotAvatar(idx: number, female: boolean): string {
   const list = female ? FEMALE_AVATARS : MALE_AVATARS
-  return list[idx] ?? list[0]
+  return list[idx] ?? list[0] ?? ''
 }
 
 function pick<T>(arr: T[], fallback: T): T {
