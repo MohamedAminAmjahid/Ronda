@@ -248,7 +248,7 @@ export function DiJoujOnlineScreen() {
   // ── Compte à rebours du tour (7 s) ──────────────────────────────────────────
   // Barre + secondes animées : le joueur voit qu'il doit jouer avant expiration.
   // Passé ce délai, le serveur joue à sa place (auto-skip) puis forfait après 3×.
-  const TURN_SECS = 7
+  const TURN_SECS = 15
   const [turnLeft, setTurnLeft] = useState(TURN_SECS)
   const turnBar = useRef(new Animated.Value(1)).current
   const isMyLiveTurn = isHumanTurn && connectionStatus === 'playing' && !isGameOver

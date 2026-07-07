@@ -382,7 +382,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   // ── Compte à rebours du tour (7 s, miroir de la version en ligne) ────────────
   // Barre + secondes animées : le joueur voit qu'il doit jouer avant expiration.
   // À 0 → auto-play (autoPlayTurn) ; 3 auto-skips consécutifs → forfait.
-  const TURN_SECS = 7
+  const TURN_SECS = 15
   const [turnLeft, setTurnLeft] = useState(TURN_SECS)
   const turnBar = useRef(new Animated.Value(1)).current
   const isMyLiveTurn = isHumanTurn && !isGameOver && !forfeited
