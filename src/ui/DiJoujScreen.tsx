@@ -13,6 +13,7 @@ import { tableColors } from '../cosmetics/catalog'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
+import { recordLeaderboardScore } from '../online/client'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -202,7 +203,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const handGap   = isSmall ? 3 : 8
 
   const { t } = useI18n()
-  const { table } = useProfile()
+  const { table, username } = useProfile()
   const felt = tableColors(table)  // dégradé du tapis équipé
   // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
   // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
@@ -287,6 +288,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
       // → la mise reste retirée (déjà déduite à l'écran de mise).
       if (stakeBet > 0 && won) addGold(stakeBet * 2)
+      // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
+      // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
+      if (won && stakeBet > 0 && botName) void recordLeaderboardScore(username, stakeBet, 'dijouj')
       const after = getProfile()
       setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
       // Sons de fin de partie.

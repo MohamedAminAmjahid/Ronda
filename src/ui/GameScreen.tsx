@@ -16,6 +16,7 @@ import { GoldBadge } from './components/GoldBadge'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
+import { recordLeaderboardScore } from '../online/client'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -563,7 +564,7 @@ export function GameScreen({
 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
-  const { table } = useProfile()
+  const { table, username } = useProfile()
   const felt = tableColors(table)[0]  // couleur de fond du tapis équipé
   // Partie venue du matchmaking en ligne (repli bot) → bonus XP online (+15),
   // exactement comme une vraie partie en ligne.
@@ -599,6 +600,9 @@ export function GameScreen({
         // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
         // → la mise reste retirée. En ligne, ce réglage est géré par le serveur.
         if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
+        // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
+        // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
+        if (won && stakeBet > 0 && rawBotName) void recordLeaderboardScore(username, stakeBet, 'ronda')
         setWinReward(goldReward)
         const after = getProfile()
         setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })

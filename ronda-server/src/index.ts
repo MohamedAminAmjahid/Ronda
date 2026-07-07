@@ -7,7 +7,7 @@ import { initDatabase } from './db/database'
 import {
   getStats, getLeaderboard, getRecentGames,
   getWeeklyLeaderboard, getWeeklyStats, getUserLeague, processWeeklyReset,
-  debugWeeklyScores,
+  debugWeeklyScores, addWageredGold,
 } from './db/queries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
@@ -102,6 +102,18 @@ app.get('/leaderboard/weekly', (req, res) => {
 // Détail par jeu pour un joueur cette semaine.
 app.get('/leaderboard/weekly/stats/:username', (req, res) => {
   return res.json(getWeeklyStats(req.params.username))
+})
+
+// Enregistre une mise gagnée au classement hebdo — utilisé pour les parties
+// vs bot (repli matchmaking, hors-ligne) qui ne passent par aucune Room et où
+// addWageredGold n'est donc jamais appelé côté Room.
+app.post('/leaderboard/record', (req, res) => {
+  const { username, amount, game } = req.body as { username?: string; amount?: number; game?: string }
+  if (!username || !amount || (game !== 'ronda' && game !== 'dijouj')) {
+    return res.status(400).json({ error: 'Paramètres manquants' })
+  }
+  addWageredGold(username, Number(amount), game)
+  return res.json({ ok: true })
 })
 
 // Ligue courante d'un joueur.

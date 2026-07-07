@@ -92,6 +92,26 @@ export async function fetchUserLeague(username: string): Promise<string> {
   return league
 }
 
+/**
+ * Enregistre une mise gagnée au classement hebdomadaire. À utiliser pour les
+ * parties vs bot (repli matchmaking, hors-ligne) : elles ne passent par aucune
+ * Room Colyseus, donc addWageredGold n'est jamais appelé côté serveur sans cet
+ * appel explicite. Best-effort — ne bloque jamais l'écran de fin de partie.
+ */
+export async function recordLeaderboardScore(
+  username: string, amount: number, game: 'ronda' | 'dijouj',
+): Promise<void> {
+  try {
+    await fetch(`${httpBase()}/leaderboard/record`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, amount, game }),
+    })
+  } catch (e) {
+    console.error('[client] recordLeaderboardScore:', e)
+  }
+}
+
 export type RoomType = 'ronda' | 'ronda2v2' | 'dijouj' | 'dijouj-lobby'
 
 /** Détecte le type de room associé à un code (pour router 1v1 vs lobby 2v2). */
