@@ -167,6 +167,7 @@ export async function createOrUpdateUser(
       finalUsername = `${local.username.slice(0, 13)}_${suffix}`
     }
     console.log('[firestore] createOrUpdateUser: NOUVEAU doc pour', user.uid, '→ username =', finalUsername)
+    console.log('[firestore] username retourné:', finalUsername)
     await setDoc(ref, {
       username: finalUsername,
       usernameLower: finalUsername.toLowerCase(),
@@ -213,9 +214,12 @@ export async function createOrUpdateUser(
   }
 
   // Document existant → on NE régénère JAMAIS le username : Firestore fait autorité.
+  // On ne relit QUE data.username ici — jamais local.username — pour ne jamais
+  // réintroduire un suffixe aléatoire une fois le document créé.
   const data = snap.data()
   const existingUsername = (data.username as string) || local.username
   console.log('[firestore] createOrUpdateUser: doc EXISTANT pour', user.uid, '→ username Firestore =', existingUsername)
+  console.log('[firestore] username retourné:', existingUsername)
   await updateDoc(ref, { lastSeen: serverTimestamp() })
   return {
     username: existingUsername,
