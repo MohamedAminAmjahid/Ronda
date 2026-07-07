@@ -79,19 +79,44 @@ function LevelUpGate() {
   return <LevelUpModal level={pending.level} goldBonus={pending.goldBonus} onClaim={() => { void claim() }} />
 }
 
+// Popup automatique du coffre : ne se propose qu'une fois par jour, MÊME s'il
+// est fermé sans être ouvert. Distinct de CHEST_KEY (useDailyChest.ts), qui
+// suit l'ouverture réelle — fermer sans ouvrir ne doit pas empêcher d'ouvrir
+// le coffre plus tard via le bouton rapide du menu, seulement le popup auto.
+const CHEST_DISMISSED_KEY = 'ronda_chest_dismissed_date'
+function todayUTC(): string { return new Date().toISOString().slice(0, 10) }
+
 function DailyChestGate() {
   const { user }              = useAuth()
   const { reward, openChest } = useDailyChest()
   // Snapshot figé au moment de l'affichage : survit à reward→null après ouverture,
   // sinon la modale se démonterait avant l'animation d'ouverture.
   const [shown, setShown] = useState<{ level: ChestLevel; gold: number } | null>(null)
+  // null = pas encore lu depuis AsyncStorage (bloque l'affichage pour éviter un
+  // flash) ; true = déjà fermé aujourd'hui ; false = jamais fermé aujourd'hui.
+  const [dismissedToday, setDismissedToday] = useState<boolean | null>(null)
 
-  // Délai 2 s pour ne pas empiler avec la modale de bonus journalier.
   useEffect(() => {
-    if (!user || !reward || shown) return
+    AsyncStorage.getItem(CHEST_DISMISSED_KEY)
+      .then((v) => setDismissedToday(v === todayUTC()))
+      .catch(() => setDismissedToday(false))
+  }, [])
+
+  // Délai 2 s pour ne pas empiler avec la modale de bonus journalier. Bug fixé :
+  // avant, la fermeture (sans ouvrir) ne persistait rien → cet effect se
+  // ré-armait à chaque re-render de la racine (ex. chaque navigation d'écran),
+  // faisant réapparaître le popup en boucle.
+  useEffect(() => {
+    if (!user || !reward || shown || dismissedToday !== false) return
     const t = setTimeout(() => setShown({ level: reward.level, gold: reward.gold }), 2000)
     return () => clearTimeout(t)
-  }, [user, reward, shown])
+  }, [user, reward, shown, dismissedToday])
+
+  const handleClose = () => {
+    setShown(null)
+    setDismissedToday(true)
+    void AsyncStorage.setItem(CHEST_DISMISSED_KEY, todayUTC()).catch(() => {})
+  }
 
   if (!shown) return null
   return (
@@ -99,7 +124,7 @@ function DailyChestGate() {
       level={shown.level}
       gold={shown.gold}
       onOpen={openChest}
-      onClose={() => setShown(null)}
+      onClose={handleClose}
     />
   )
 }
