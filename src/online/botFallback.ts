@@ -1,4 +1,4 @@
-import { getFirestore, doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp } from 'firebase/firestore'
 import { firebaseApp } from '../firebase/config'
 
 // Repli « bot de secours » pour le matchmaking rapide.
@@ -227,5 +227,31 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
   } catch (e) {
     // Best-effort : un profil fantôme manquant ne doit jamais bloquer le jeu.
     console.error('[botFallback] getOrCreateBotProfile:', e)
+  }
+}
+
+/**
+ * Met à jour les stats du bot dans Firestore quand il gagne une partie misée
+ * (le joueur perd) : +1 partie jouée (globale + par jeu), +1 victoire (globale
+ * + par jeu), et le gold misé lui revient. Utilise increment() pour éviter
+ * toute lecture préalable ; best-effort — ne bloque jamais le jeu.
+ */
+export async function updateBotStats(
+  name: string, game: 'ronda' | 'dijouj', stakeBet: number,
+): Promise<void> {
+  try {
+    const ref = doc(db(), 'users', botUid(name))
+    const playedField = game === 'ronda' ? 'rondaPlayed' : 'dijoujPlayed'
+    const wonField     = game === 'ronda' ? 'rondaWon'    : 'dijoujWon'
+    await updateDoc(ref, {
+      gamesPlayed: increment(1),
+      gamesWon:    increment(1),
+      [playedField]: increment(1),
+      [wonField]:    increment(1),
+      gold:        increment(Math.max(0, stakeBet)),
+      lastSeen:    serverTimestamp(),
+    })
+  } catch (e) {
+    console.error('[botFallback] updateBotStats:', e)
   }
 }

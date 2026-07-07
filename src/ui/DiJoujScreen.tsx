@@ -12,7 +12,7 @@ import { useProfile } from '../profile/useProfile'
 import { tableColors } from '../cosmetics/catalog'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
-import { getBotAvatar } from '../online/botFallback'
+import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -286,7 +286,11 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
       // Sons de fin de partie.
       if (won) { playWinSound(); if (stakeBet > 0) playGoldSound() }
-      else playLoseSound()
+      else {
+        playLoseSound()
+        // Le bot gagne la mise → met à jour son profil fantôme Firestore.
+        if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet)
+      }
     }
     setShowLastCardMsg(true)
     const loop = Animated.loop(Animated.sequence([
@@ -352,6 +356,13 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const autoSkipCount = useRef(0)
   const [forfeited, setForfeited] = useState(false)
   const forfeitedRef = useRef(false)
+  const [confirmQuit, setConfirmQuit] = useState(false)
+
+  // Retour : partie misée en cours → confirmation (quitter = perdre la mise).
+  const handleBack = () => {
+    if (stakeBet > 0 && !isGameOver && !forfeited) { setConfirmQuit(true); return }
+    onBack()
+  }
 
   function triggerForfeit() {
     if (forfeitedRef.current) return

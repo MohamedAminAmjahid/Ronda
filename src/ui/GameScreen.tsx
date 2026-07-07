@@ -15,7 +15,7 @@ import { CardFace, CardBack } from './components/Card'
 import { GoldBadge } from './components/GoldBadge'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
-import { getBotAvatar } from '../online/botFallback'
+import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { router, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -600,7 +600,11 @@ export function GameScreen({
         setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
         // Sons de fin de partie.
         if (won) { playWinSound(); if (goldReward > 0 || stakeBet > 0) playGoldSound() }
-        else playLoseSound()
+        else {
+          playLoseSound()
+          // Le bot gagne la mise → met à jour son profil fantôme Firestore.
+          if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet)
+        }
       }
     } else {
       resultRecorded.current = false
@@ -936,17 +940,28 @@ export function GameScreen({
         onClose={() => setShowBotProfile(false)}
       />
 
-      {/* Confirmation de départ (mode en ligne uniquement) */}
+      {/* Confirmation de départ. Partie misée → forfait = mise perdue + défaite. */}
       <Modal visible={confirmQuit} transparent animationType="fade" onRequestClose={() => setConfirmQuit(false)}>
         <View style={styles.quitBackdrop}>
           <View style={styles.quitCard}>
-            <Text style={styles.quitCardTitle}>{t('quitConfirm')}</Text>
+            <Text style={styles.quitCardTitle}>
+              {stakeBet > 0 ? t('forfeitStakeConfirm').replace('{n}', String(stakeBet)) : t('quitConfirm')}
+            </Text>
             {online && <Text style={styles.quitCardText}>{t('quitOnline')}</Text>}
             <View style={styles.quitActions}>
               <TouchableOpacity style={styles.quitStay} onPress={() => setConfirmQuit(false)}>
                 <Text style={styles.quitStayTxt}>{t('stay')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.quitLeave} onPress={() => { setConfirmQuit(false); onBack() }}>
+              <TouchableOpacity
+                style={styles.quitLeave}
+                onPress={() => {
+                  setConfirmQuit(false)
+                  // Forfait volontaire d'une partie misée : défaite enregistrée
+                  // (la mise, déjà déduite, reste perdue).
+                  if (stakeBet > 0) { recordResult(false); router.replace('/' as Href); return }
+                  onBack()
+                }}
+              >
                 <Text style={styles.quitLeaveTxt}>{t('leave')}</Text>
               </TouchableOpacity>
             </View>
