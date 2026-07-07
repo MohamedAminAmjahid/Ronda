@@ -2,18 +2,23 @@ import { useEffect, useState } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
 } from 'react-native'
-import { router } from 'expo-router'
+import { router, usePathname } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
 import { xpRequired } from '../profile/profile'
 import { GoldTransferForm } from './GoldTransferForm'
 import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
+import { useAuth } from '../firebase/auth'
 import {
-  getUserById, getGoldHistory, subscribeOnlineStatus,
+  getUserById, getGoldHistory, subscribeOnlineStatus, sendFriendRequest,
   type UserDoc, type FriendDoc, type GoldHistoryEntry, type PresenceInfo,
 } from '../firebase/firestore'
 import { PresenceDot, presenceLabel } from './PresenceDot'
 import { useI18n } from '../i18n/useI18n'
+
+// Écrans de partie : pendant une partie, « Inviter à jouer » n'a pas de sens
+// (on ne peut pas lancer une 2e partie) → remplacé par « Ajouter ami ».
+const IN_GAME = ['/game', '/dijouj', '/online', '/dijouj-online']
 
 const C = {
   table:   '#0E5C4A',
@@ -42,12 +47,16 @@ interface Props {
  */
 export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const { t } = useI18n()
+  const { user } = useAuth()
+  const pathname = usePathname()
+  const isInGame = IN_GAME.some(p => pathname.startsWith(p))
 
   const [profile, setProfile] = useState<UserDoc | null>(null)
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
   const [history, setHistory] = useState<GoldHistoryEntry[]>([])
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
+  const [friendState, setFriendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
 
   useEffect(() => {
     if (!uid) return
@@ -85,6 +94,17 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
 
   const displayName = profile?.username ?? (name ? decodeURIComponent(name) : '')
   const initial = displayName?.[0]?.toUpperCase() ?? '?'
+
+  const handleAddFriend = async () => {
+    if (!user || !profile || friendState === 'sending' || friendState === 'sent') return
+    setFriendState('sending')
+    try {
+      await sendFriendRequest(user.uid, profile.uid)
+      setFriendState('sent')
+    } catch {
+      setFriendState('error')
+    }
+  }
 
   const friendDoc: FriendDoc | null = profile
     ? {
@@ -215,22 +235,37 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
           >
             <Text style={s.actionBtnTxt}>{t('messageBtn')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={s.actionBtnPrimary}
-            onPress={() => {
-              // Bot : pas de vraie invitation possible → relance directement
-              // une partie (matchmaking), sans jamais révéler que c'est un bot.
-              if (profile.isBot) {
-                onNavigateAway?.()
-                router.push('/bet?game=ronda' as never)
-                return
-              }
-              setShowInvite(true)
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={s.actionBtnPrimaryTxt}>🎮 {t('inviteToPlay')}</Text>
-          </TouchableOpacity>
+          {isInGame ? (
+            // En pleine partie : « Inviter à jouer » n'a pas de sens (on ne
+            // peut pas en lancer une 2e) → remplacé par « Ajouter ami ».
+            <TouchableOpacity
+              style={s.actionBtnPrimary}
+              onPress={() => { void handleAddFriend() }}
+              disabled={friendState === 'sending' || friendState === 'sent'}
+              activeOpacity={0.85}
+            >
+              <Text style={s.actionBtnPrimaryTxt}>
+                {friendState === 'sent' ? '✓' : `➕ ${t('addFriend')}`}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={s.actionBtnPrimary}
+              onPress={() => {
+                // Bot : pas de vraie invitation possible → relance directement
+                // une partie (matchmaking), sans jamais révéler que c'est un bot.
+                if (profile.isBot) {
+                  onNavigateAway?.()
+                  router.push('/bet?game=ronda' as never)
+                  return
+                }
+                setShowInvite(true)
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={s.actionBtnPrimaryTxt}>🎮 {t('inviteToPlay')}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
       </ScrollView>
