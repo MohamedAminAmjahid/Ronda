@@ -206,11 +206,14 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const felt = tableColors(table)  // dégradé du tapis équipé
   // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
   // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
-  const { botName, botEmoji, botAvatarIdx, botFemale, bet } = useLocalSearchParams<{
-    botName?: string; botEmoji?: string; botAvatarIdx?: string; botFemale?: string; bet?: string
+  const { botName, botEmoji, botAvatarIdx, botFemale, bet, wasOnline } = useLocalSearchParams<{
+    botName?: string; botEmoji?: string; botAvatarIdx?: string; botFemale?: string; bet?: string; wasOnline?: string
   }>()
   const oppLabel  = botName ? `${botEmoji ?? ''} ${botName}`.trim() : 'Bot'
   const stakeBet  = bet ? (parseInt(bet, 10) || 0) : 0  // >0 → partie misée (repli bot)
+  // true → la partie vient du matchmaking en ligne (repli bot après délai) :
+  // traitée comme une vraie partie en ligne pour les stats (bonus XP online).
+  const isOnlineGame = wasOnline === '1'
   // Avatar/genre transmis par le repli matchmaking (mêmes params que le lien
   // de navigation) — absents en entraînement normal (bouton "Bot" classique).
   const hasBotAvatar = botAvatarIdx !== undefined && botFemale !== undefined
@@ -278,7 +281,9 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       djResultRecorded.current = true
       const won = winner === DJ_HUMAN_ID
       const before = getProfile()
-      const { xpGained } = recordResult(won, 'dijouj')
+      // Partie venue du matchmaking en ligne (repli bot) → bonus XP online (+15),
+      // exactement comme une vraie partie en ligne.
+      const { xpGained } = recordResult(won, 'dijouj', { online: isOnlineGame })
       // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
       // → la mise reste retirée (déjà déduite à l'écran de mise).
       if (stakeBet > 0 && won) addGold(stakeBet * 2)
@@ -289,7 +294,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       else {
         playLoseSound()
         // Le bot gagne la mise → met à jour son profil fantôme Firestore.
-        if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet)
+        if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
       }
     }
     setShowLastCardMsg(true)

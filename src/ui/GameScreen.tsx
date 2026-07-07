@@ -16,7 +16,7 @@ import { GoldBadge } from './components/GoldBadge'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
-import { router, type Href } from 'expo-router'
+import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
 import { useProfile } from '../profile/useProfile'
@@ -565,6 +565,10 @@ export function GameScreen({
   const { t } = useI18n()
   const { table } = useProfile()
   const felt = tableColors(table)[0]  // couleur de fond du tapis équipé
+  // Partie venue du matchmaking en ligne (repli bot) → bonus XP online (+15),
+  // exactement comme une vraie partie en ligne.
+  const { wasOnline } = useLocalSearchParams<{ wasOnline?: string }>()
+  const isOnlineGame = wasOnline === '1'
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)
@@ -591,7 +595,7 @@ export function GameScreen({
         resultRecorded.current = true
         const won = view.state.players[HUMAN_ID].score >= 41
         const before = getProfile()
-        const { goldReward, xpGained } = recordResult(won)
+        const { goldReward, xpGained } = recordResult(won, 'ronda', { online: isOnlineGame })
         // Partie misée (repli bot) : victoire crédite le pot (net = +mise). Défaite
         // → la mise reste retirée. En ligne, ce réglage est géré par le serveur.
         if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
@@ -603,7 +607,7 @@ export function GameScreen({
         else {
           playLoseSound()
           // Le bot gagne la mise → met à jour son profil fantôme Firestore.
-          if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet)
+          if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
         }
       }
     } else {

@@ -211,6 +211,7 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
       gold,
       gamesPlayed,
       gamesWon:      rondaWon + dijoujWon,
+      onlineGamesPlayed: 0,
       rondaPlayed,
       rondaWon,
       dijoujPlayed,
@@ -233,24 +234,30 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
 /**
  * Met à jour les stats du bot dans Firestore quand il gagne une partie misée
  * (le joueur perd) : +1 partie jouée (globale + par jeu), +1 victoire (globale
- * + par jeu), et le gold misé lui revient. Utilise increment() pour éviter
- * toute lecture préalable ; best-effort — ne bloque jamais le jeu.
+ * + par jeu), et le gold misé lui revient. Si la partie venait du matchmaking
+ * en ligne (repli bot), incrémente aussi onlineGamesPlayed — miroir du bonus
+ * XP online crédité au joueur humain via recordResult(..., { online: true }).
+ * Utilise increment() pour éviter toute lecture préalable (fonctionne même si
+ * le champ n'existe pas encore sur le document) ; best-effort — ne bloque
+ * jamais le jeu.
  */
 export async function updateBotStats(
-  name: string, game: 'ronda' | 'dijouj', stakeBet: number,
+  name: string, game: 'ronda' | 'dijouj', stakeBet: number, online = false,
 ): Promise<void> {
   try {
     const ref = doc(db(), 'users', botUid(name))
     const playedField = game === 'ronda' ? 'rondaPlayed' : 'dijoujPlayed'
     const wonField     = game === 'ronda' ? 'rondaWon'    : 'dijoujWon'
-    await updateDoc(ref, {
+    const patch: Record<string, ReturnType<typeof increment> | ReturnType<typeof serverTimestamp>> = {
       gamesPlayed: increment(1),
       gamesWon:    increment(1),
       [playedField]: increment(1),
       [wonField]:    increment(1),
       gold:        increment(Math.max(0, stakeBet)),
       lastSeen:    serverTimestamp(),
-    })
+    }
+    if (online) patch.onlineGamesPlayed = increment(1)
+    await updateDoc(ref, patch)
   } catch (e) {
     console.error('[botFallback] updateBotStats:', e)
   }

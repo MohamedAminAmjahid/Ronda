@@ -138,7 +138,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           void getOrCreateBotProfile(name, avatarIdx, female) // arrière-plan, sans bloquer la navigation
           router.push(
             `/game?botName=${encodeURIComponent(name)}&botEmoji=${encodeURIComponent(emoji)}` +
-            `&botAvatarIdx=${avatarIdx}&botFemale=${female ? 1 : 0}&bet=${stake}` as Href,
+            `&botAvatarIdx=${avatarIdx}&botFemale=${female ? 1 : 0}&bet=${stake}&wasOnline=1` as Href,
           )
         }}
       />
