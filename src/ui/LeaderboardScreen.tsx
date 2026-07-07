@@ -92,6 +92,7 @@ export function LeaderboardScreen({ onBack }: Props) {
     void (async () => {
       try {
         const data = await fetchWeeklyLeaderboard(selected)
+        console.log('[leaderboard] users chargés:', data.length)
         if (!cancelled) setEntries(data)
       } catch {
         if (!cancelled) setError(t('leaderboardError'))

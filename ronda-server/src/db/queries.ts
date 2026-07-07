@@ -169,23 +169,35 @@ export function addWageredGold(username: string, amount: number, game: 'ronda' |
   `).run({ username, week, game, amount, league })
 }
 
-/** Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue. */
+/**
+ * Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue.
+ *
+ * BUG corrigé : `weekly_scores.league` est figé au moment du PREMIER pari de
+ * la semaine pour un joueur (addWageredGold ne met à jour que gold_wagered
+ * sur conflit, jamais league). Si league_history.current_league change en
+ * cours de semaine (reset hebdo déclenché après que des joueurs ont déjà
+ * parié), un joueur promu/rétrogradé devient invisible du classement de sa
+ * ligue ACTUELLE : ses lignes weekly_scores restent taguées avec l'ancienne
+ * ligue, que plus personne n'interroge pour lui. On filtre donc désormais sur
+ * la ligue courante (league_history), pas sur le snapshot figé.
+ */
 export function getWeeklyLeaderboard(league: string): WeeklyEntry[] {
   const db = getDbOrNull()
   if (!db) return []
   const week = currentWeekStart()
   return db.prepare(`
     SELECT
-      username,
-      week_start,
-      SUM(gold_wagered)                                              AS totalGold,
-      SUM(CASE WHEN game = 'ronda'  THEN gold_wagered ELSE 0 END)   AS rondaGold,
-      SUM(CASE WHEN game = 'dijouj' THEN gold_wagered ELSE 0 END)   AS dijoujGold,
-      league
-    FROM weekly_scores
-    WHERE week_start = ? AND league = ?
-    GROUP BY username, week_start, league
-    ORDER BY totalGold DESC, username ASC
+      ws.username                                                       AS username,
+      ws.week_start                                                     AS week_start,
+      SUM(ws.gold_wagered)                                              AS totalGold,
+      SUM(CASE WHEN ws.game = 'ronda'  THEN ws.gold_wagered ELSE 0 END) AS rondaGold,
+      SUM(CASE WHEN ws.game = 'dijouj' THEN ws.gold_wagered ELSE 0 END) AS dijoujGold,
+      COALESCE(lh.current_league, 'Bronze')                             AS league
+    FROM weekly_scores ws
+    LEFT JOIN league_history lh ON lh.username = ws.username
+    WHERE ws.week_start = ? AND COALESCE(lh.current_league, 'Bronze') = ?
+    GROUP BY ws.username, ws.week_start
+    ORDER BY totalGold DESC, ws.username ASC
   `).all(week, league) as WeeklyEntry[]
 }
 
