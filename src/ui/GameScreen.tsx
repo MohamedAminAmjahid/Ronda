@@ -18,6 +18,8 @@ import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { recordLeaderboardScore } from '../online/client'
 import { invalidateLeaderboard } from '../online/leaderboardCache'
+import { useAuth } from '../firebase/auth'
+import { updateGameStatus } from '../firebase/firestore'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -566,11 +568,32 @@ export function GameScreen({
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
   const { table, username } = useProfile()
+  const { user } = useAuth()
+  const myUid = user?.uid ?? null
   const felt = tableColors(table)[0]  // couleur de fond du tapis équipé
   // Partie venue du matchmaking en ligne (repli bot) → bonus XP online (+15),
   // exactement comme une vraie partie en ligne.
   const { wasOnline } = useLocalSearchParams<{ wasOnline?: string }>()
   const isOnlineGame = wasOnline === '1'
+
+  // Statut « en jeu » visible par les amis (users/{uid}.gameStatus) — cet
+  // écran sert aussi les vraies parties en ligne (online=true, rendu depuis
+  // OnlineScreen, qui gère déjà son propre gameStatus 'playing_online'/
+  // 'playing_friend') : on ne s'en occupe ici QUE si c'est effectivement une
+  // partie vs bot (rawBotName présent), pour ne jamais écrire une valeur en
+  // conflit avec celle d'OnlineScreen.
+  useEffect(() => {
+    if (online || !myUid || !rawBotName) return
+    void updateGameStatus(myUid, 'playing_bot')
+    return () => { void updateGameStatus(myUid, null) }
+  }, [online, myUid, rawBotName])
+
+  // Effacé dès la fin de la partie (pas seulement au démontage) : la partie
+  // continue de s'afficher (écran de résultat) après isGameOver, l'ami ne
+  // devrait plus voir « en partie vs bot » à ce moment-là.
+  useEffect(() => {
+    if (view.isGameOver && myUid && !online && rawBotName) void updateGameStatus(myUid, null)
+  }, [view.isGameOver, myUid, online, rawBotName])
 
   // ── Tous les hooks AVANT tout return conditionnel ─────────────────────────
   const [selectedRitual, setSelectedRitual] = useState<RitualType | null>(null)

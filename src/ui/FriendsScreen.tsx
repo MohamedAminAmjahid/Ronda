@@ -41,6 +41,16 @@ export function FriendsScreen({ onBack }: Props) {
   const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('friends')
 
+  // Libellés du statut « en jeu » (users/{uid}.gameStatus) — affichés à la
+  // place du statut de présence générique quand l'ami est en train de faire
+  // quelque chose de plus précis qu'« en ligne ».
+  const STATUS_LABEL: Record<string, string> = {
+    matchmaking:    t('gameStatusMatchmaking'),
+    playing_online: t('gameStatusPlayingOnline'),
+    playing_bot:    t('gameStatusPlayingBot'),
+    playing_friend: t('gameStatusPlayingFriend'),
+  }
+
   const [friends, setFriends] = useState<FriendDoc[]>([])
   const [requests, setRequests] = useState<FriendDoc[]>([])
   const [loading, setLoading] = useState(false)
@@ -241,6 +251,7 @@ export function FriendsScreen({ onBack }: Props) {
                 const info = presence[f.uid]
                 const label = presenceLabel(info, t)
                 const online = info?.isOnline === true
+                const gameStatusText = info?.gameStatus ? STATUS_LABEL[info.gameStatus] : undefined
                 return (
                   <View key={f.uid} style={s.row}>
                     <TouchableOpacity
@@ -262,9 +273,11 @@ export function FriendsScreen({ onBack }: Props) {
                       </View>
                       <View style={s.nameCol}>
                         <Text style={s.rowName} numberOfLines={1}>{f.username}</Text>
-                        {label && (
+                        {gameStatusText ? (
+                          <Text style={s.gameStatusTxt} numberOfLines={1}>{gameStatusText}</Text>
+                        ) : label ? (
                           <Text style={[s.statusTxt, online && s.statusOnline]} numberOfLines={1}>{label}</Text>
-                        )}
+                        ) : null}
                       </View>
                     </TouchableOpacity>
                     <View style={s.rowActions}>
@@ -483,6 +496,7 @@ const s = StyleSheet.create({
   rowName: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
   statusTxt: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
   statusOnline: { color: C.green },
+  gameStatusTxt: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.brass, fontStyle: 'italic' },
   rowActions: { flexDirection: 'row', gap: 8 },
 
   btnSmall: { backgroundColor: C.brass, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 },

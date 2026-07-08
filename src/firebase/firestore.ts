@@ -1,5 +1,5 @@
 import {
-  getFirestore, doc, getDoc, getDocFromServer, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, doc, getDoc, getDocFromServer, setDoc, addDoc, updateDoc, deleteDoc, deleteField,
   collection, query, where, getDocs, limit, serverTimestamp,
   onSnapshot, increment, orderBy, documentId,
 } from 'firebase/firestore'
@@ -714,13 +714,39 @@ export async function getGoldHistory(uid: string): Promise<GoldHistoryEntry[]> {
 
 // ── Présence en ligne ──────────────────────────────────────────────────────
 
+/**
+ * NOTE VISIBILITÉ : stocké comme un champ ordinaire sur users/{uid}, dont la
+ * règle Firestore existante autorise déjà la lecture à tout utilisateur
+ * authentifié (nécessaire pour la recherche de pseudo, les profils publics,
+ * le classement…). Un champ ne peut pas être restreint à "mes amis
+ * seulement" sans que le DOCUMENT entier le soit — donc, avec les règles
+ * actuelles, gameStatus est en pratique visible par n'importe quel compte
+ * connecté, pas uniquement les amis. Le rendre réellement amis-seulement
+ * demanderait de le déplacer vers une sous-collection/doc séparé avec sa
+ * propre règle (ex. un get() vérifiant users/{lecteur}/friends/{uid}) — hors
+ * scope ici, non demandé explicitement au-delà du champ sur le doc existant.
+ */
+export type GameStatus =
+  | null
+  | 'matchmaking'      // recherche un adversaire
+  | 'playing_online'   // partie en ligne vs humain
+  | 'playing_bot'      // partie vs bot
+  | 'playing_friend'   // partie entre amis
+
 export interface PresenceInfo {
-  isOnline: boolean
-  lastSeen: Date | null
+  isOnline:    boolean
+  lastSeen:    Date | null
+  gameStatus?: GameStatus
 }
 
 function toDate(ts: unknown): Date | null {
   return (ts as { toDate?: () => Date } | null)?.toDate?.() ?? null
+}
+
+function toGameStatus(v: unknown): GameStatus {
+  return v === 'matchmaking' || v === 'playing_online' || v === 'playing_bot' || v === 'playing_friend'
+    ? v
+    : null
 }
 
 /** Met à jour le statut en ligne + lastSeen de l'utilisateur (best-effort). */
@@ -732,15 +758,25 @@ export async function setOnlineStatus(uid: string, online: boolean): Promise<voi
   }
 }
 
+/** Met à jour ce que fait le joueur en ce moment (matchmaking/en partie/…),
+ * ou l'efface (null → deleteField) quand il quitte l'écran/la partie. */
+export async function updateGameStatus(uid: string, status: GameStatus): Promise<void> {
+  try {
+    await updateDoc(userRef(uid), { gameStatus: status ?? deleteField() })
+  } catch {
+    // hors-ligne / règles — sans effet, jamais bloquant pour le jeu
+  }
+}
+
 /** Écoute en temps réel le statut d'un utilisateur. */
 export function subscribeOnlineStatus(uid: string, cb: (info: PresenceInfo) => void): () => void {
   return onSnapshot(
     userRef(uid),
     (snap) => {
       const d = snap.data() ?? {}
-      cb({ isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen) })
+      cb({ isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen), gameStatus: toGameStatus(d.gameStatus) })
     },
-    () => cb({ isOnline: false, lastSeen: null }),
+    () => cb({ isOnline: false, lastSeen: null, gameStatus: null }),
   )
 }
 
@@ -763,7 +799,11 @@ export function subscribeOnlineStatuses(
       (snap) => {
         snap.forEach((d) => {
           const data = d.data()
-          acc[d.id] = { isOnline: data.isOnline === true, lastSeen: toDate(data.lastSeen) }
+          acc[d.id] = {
+            isOnline: data.isOnline === true,
+            lastSeen: toDate(data.lastSeen),
+            gameStatus: toGameStatus(data.gameStatus),
+          }
         })
         cb({ ...acc })
       },
@@ -978,6 +1018,56 @@ export function markChatRead(chatId: string, myUid: string): Promise<void> {
   return updateDoc(doc(db, 'chats', chatId), {
     [`unread_${myUid}`]: 0,
   }).catch(() => {})
+}
+
+/** Aperçu d'une conversation pour l'écran Messages. */
+export interface ChatPreview {
+  chatId:       string
+  participants: string[]
+  lastMessage:  string
+  updatedAt:    Date | null
+  unreadCount:  number
+}
+
+/**
+ * Charge toutes les conversations d'un utilisateur (50 max), triées par date du
+ * dernier message décroissante. Champs réels du doc chat : lastText / lastAt /
+ * unread_{uid}. Repli sans orderBy (+ tri client) si l'index composite manque.
+ */
+export async function getUserChats(uid: string): Promise<ChatPreview[]> {
+  const toPreview = (d: { id: string; data: () => Record<string, unknown> }): ChatPreview => {
+    const data = d.data()
+    return {
+      chatId:       d.id,
+      participants: (data.participants as string[]) ?? [],
+      lastMessage:  (data.lastText as string) ?? '',
+      updatedAt:    (data.lastAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+      unreadCount:  (data[`unread_${uid}`] as number) ?? 0,
+    }
+  }
+  const base = collection(db, 'chats')
+  try {
+    const snap = await getDocs(query(
+      base,
+      where('participants', 'array-contains', uid),
+      orderBy('lastAt', 'desc'),
+      limit(50),
+    ))
+    return snap.docs.map(toPreview)
+  } catch {
+    // Index composite absent → requête simple + tri client-side.
+    const snap = await getDocs(query(base, where('participants', 'array-contains', uid), limit(50)))
+    return snap.docs
+      .map(toPreview)
+      .sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
+  }
+}
+
+/** Supprime une conversation : tous les messages puis le doc chat. */
+export async function deleteChat(chatId: string): Promise<void> {
+  const msgs = await getDocs(collection(db, 'chats', chatId, 'messages'))
+  await Promise.all(msgs.docs.map((d) => deleteDoc(d.ref)))
+  await deleteDoc(doc(db, 'chats', chatId))
 }
 
 /** Écoute le total de messages non-lus (tous amis confondus). */

@@ -15,6 +15,8 @@ import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { recordLeaderboardScore } from '../online/client'
 import { invalidateLeaderboard } from '../online/leaderboardCache'
+import { useAuth } from '../firebase/auth'
+import { updateGameStatus } from '../firebase/firestore'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -205,6 +207,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
   const { t } = useI18n()
   const { table, username } = useProfile()
+  const { user } = useAuth()
+  const myUid = user?.uid ?? null
   const felt = tableColors(table)  // dégradé du tapis équipé
   // Adversaire déguisé : quand la partie vient du repli « matchmaking », on
   // reçoit un prénom/emoji et on n'affiche jamais « Bot ».
@@ -237,6 +241,23 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     state, isHumanTurn, isAutoSkipping, isDrawPause,
     playCard, draw, isGameOver, winner, restart,
   } = useDiJoujGame()
+
+  // Statut « en jeu » visible par les amis (users/{uid}.gameStatus) — ce
+  // composant (LocalGame) est toujours une partie vs bot (DiJoujOnlineScreen,
+  // séparé, gère les vraies parties en ligne), donc pas besoin de garde
+  // « online » ici contrairement à GameScreen.tsx (Ronda), qui partage un
+  // seul composant entre les deux cas.
+  useEffect(() => {
+    if (!myUid || !botName) return
+    void updateGameStatus(myUid, 'playing_bot')
+    return () => { void updateGameStatus(myUid, null) }
+  }, [myUid, botName])
+
+  // Effacé dès la fin de la partie (pas seulement au démontage) : la partie
+  // continue de s'afficher (écran de résultat) après isGameOver.
+  useEffect(() => {
+    if (isGameOver && myUid && botName) void updateGameStatus(myUid, null)
+  }, [isGameOver, myUid, botName])
 
   const [pendingWild, setPendingWild] = useState<Card | null>(null)
 

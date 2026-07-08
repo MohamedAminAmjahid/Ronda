@@ -8,6 +8,8 @@ import { Matchmaking } from './components/Matchmaking'
 import { useOnlineGame } from '../online/useOnlineGame'
 import { leave as leaveRondaRoom, voiceTransport } from '../online/store'
 import { useProfile } from '../profile/useProfile'
+import { useAuth } from '../firebase/auth'
+import { updateGameStatus, type GameStatus } from '../firebase/firestore'
 import { roomTypeByCode } from '../online/client'
 import { getBotWaitSecs, pickBot, getOrCreateBotProfile } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
@@ -50,6 +52,8 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
   const { username } = useProfile()
+  const { user } = useAuth()
+  const myUid = user?.uid ?? null
   const { t: tr } = useI18n()
   const offline = useIsOffline()
 
@@ -63,6 +67,26 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
     return () => { game.newGame() } // newGame() = leave()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Statut « en jeu » visible par les amis (users/{uid}.gameStatus). Le bot
+  // de repli matchmaking ne passe jamais par l'état 'playing' de CET écran —
+  // dès que onBotFallback se déclenche, il navigue directement vers /game
+  // sans jamais rendre connectionStatus === 'playing' ici (voir WaitingScreen
+  // plus bas) — donc 'playing' à cet endroit signifie toujours un vrai
+  // adversaire (humain, ami ou matchmaking rapide).
+  useEffect(() => {
+    if (!myUid) return
+    let status: GameStatus = null
+    if (connectionStatus === 'waiting') status = 'matchmaking'
+    else if (connectionStatus === 'playing') status = mode === 'friend' ? 'playing_friend' : 'playing_online'
+    void updateGameStatus(myUid, status)
+  }, [myUid, connectionStatus, mode])
+
+  // Toujours effacer au démontage, même si l'effet ci-dessus n'a pas eu
+  // l'occasion de tourner une dernière fois (navigation brutale).
+  useEffect(() => {
+    return () => { if (myUid) void updateGameStatus(myUid, null) }
+  }, [myUid])
 
   // Détection auto du type de room dès que le code est complet (6 caractères).
   useEffect(() => {

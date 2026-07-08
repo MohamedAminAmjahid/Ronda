@@ -10,6 +10,7 @@ import { useI18n } from '../i18n/useI18n'
 import { useProfile } from '../profile/useProfile'
 import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
+import { updateGameStatus, type GameStatus } from '../firebase/firestore'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { useIsOffline } from '../net/useOnlineStatus'
@@ -115,6 +116,24 @@ export function DiJoujOnlineScreen() {
     return () => { restart() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Statut « en jeu » visible par les amis (users/{uid}.gameStatus). isQuick
+  // vient du store (pas d'un paramètre de route) donc distingue fiablement
+  // matchmaking rapide vs partie entre amis, contrairement à Ronda/
+  // OnlineScreen.tsx qui a eu un vrai bug de désynchronisation sur ce point.
+  useEffect(() => {
+    if (!myUid) return
+    let status: GameStatus = null
+    if (connectionStatus === 'waiting') status = 'matchmaking'
+    else if (connectionStatus === 'playing') status = isQuick ? 'playing_online' : 'playing_friend'
+    void updateGameStatus(myUid, status)
+  }, [myUid, connectionStatus, isQuick])
+
+  // Toujours effacer au démontage, même si l'effet ci-dessus n'a pas eu
+  // l'occasion de tourner une dernière fois (navigation brutale).
+  useEffect(() => {
+    return () => { if (myUid) void updateGameStatus(myUid, null) }
+  }, [myUid])
 
   const human   = state.players[0]
   const topCard = state.discardPile[state.discardPile.length - 1]
