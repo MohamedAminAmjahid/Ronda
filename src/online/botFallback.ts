@@ -222,6 +222,10 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
       avatarFrame: 'none',
       statsPublic: true,
       goldHistoryPublic: false,
+      // Un bot n'a jamais d'amis (pas de sous-collection friends) — écrit
+      // explicitement pour qu'il apparaisse bien à 0, pas absent, dans le
+      // classement « Plus sociable » (TrophiesScreen, orderBy('friendCount')).
+      friendCount: 0,
       createdAt: serverTimestamp(),
       lastSeen:  serverTimestamp(),
     })

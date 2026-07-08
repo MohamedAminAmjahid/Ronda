@@ -787,6 +787,23 @@ export async function removeFriend(myUid: string, friendUid: string): Promise<vo
   ])
 }
 
+/**
+ * Migration one-time : friendCount a été introduit après coup
+ * (acceptFriendRequest/removeFriend l'incrémentent déjà correctement pour
+ * tout NOUVEAU mouvement d'ami) — mais les amitiés acceptées AVANT son
+ * ajout n'ont jamais déclenché cet increment, donc leur compteur reste à 0
+ * malgré des amis bien réels. Recalcule friendCount depuis la sous-collection
+ * friends, source de vérité. Appelée une fois par utilisateur au login (voir
+ * useFirebaseProfileSync, gardé par la clé AsyncStorage
+ * ronda_friendcount_migrated).
+ */
+export async function migrateFriendCounts(uid: string): Promise<void> {
+  const snap = await getDocs(
+    query(collection(db, 'users', uid, 'friends'), where('status', '==', 'accepted')),
+  )
+  await updateDoc(userRef(uid), { friendCount: snap.size })
+}
+
 async function readFriends(ownerUid: string, status: FriendDoc['status']): Promise<FriendDoc[]> {
   const q = query(collection(db, 'users', ownerUid, 'friends'), where('status', '==', status))
   const res = await getDocs(q)

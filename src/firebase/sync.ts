@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from './auth'
-import { createOrUpdateUser, registerPendingReferral } from './firestore'
+import { createOrUpdateUser, registerPendingReferral, migrateFriendCounts } from './firestore'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
   setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
+const FRIENDCOUNT_MIGRATED_KEY = 'ronda_friendcount_migrated'
 
 /**
  * Synchronise username, gold et usernameChanges local ↔ Firebase à la connexion :
@@ -77,6 +78,17 @@ export function useFirebaseProfileSync(): void {
           const code = await AsyncStorage.getItem(REFERRAL_CODE_KEY)
           if (code) void registerPendingReferral(code, user.uid, username || getProfile().username)
         } catch { /* stockage indisponible */ }
+
+        // Migration one-time friendCount (voir migrateFriendCounts) : les
+        // amitiés acceptées avant l'introduction du champ n'ont jamais
+        // incrémenté le compteur. Une seule fois par appareil.
+        try {
+          const migrated = await AsyncStorage.getItem(FRIENDCOUNT_MIGRATED_KEY)
+          if (!migrated) {
+            await migrateFriendCounts(user.uid)
+            await AsyncStorage.setItem(FRIENDCOUNT_MIGRATED_KEY, '1')
+          }
+        } catch { /* stockage indisponible ou hors-ligne — retentera au prochain login */ }
       } catch (err) {
         console.warn('[sync] hors-ligne ou règles Firestore :', err)
         // on garde le profil local
