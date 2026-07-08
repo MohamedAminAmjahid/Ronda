@@ -15,6 +15,7 @@ import {
   type ServerGameState,
   type ConnectionStatus,
   type ChatMessage,
+  type GameOverPayload,
 } from './store'
 
 const PLACEHOLDER: Card = { value: 1, suit: 'oros' }
@@ -109,6 +110,8 @@ export interface OnlineExtras {
   roomCode: string | null
   opponentDisconnected: boolean
   error: string | null
+  /** Détail de fin de partie (dont `reason` : 'opponent_forfeit' | 'inactivity_forfeit'…). */
+  gameOver: GameOverPayload | null
   connectQuick: (pseudo: string) => Promise<void>
   connectCreate: (pseudo: string) => Promise<void>
   connectByCode: (pseudo: string, code: string) => Promise<void>
@@ -193,6 +196,7 @@ export function useOnlineGame() {
     bet: snap.bet,
     opponentName: snap.server?.opponent.pseudo ?? null,
     opponentDisconnected: snap.opponentDisconnected,
+    gameOver: snap.gameOver,
     error: snap.error,
     chatMessages: snap.chatMessages as ChatMessage[],
     sendChatMsg: sendChat,

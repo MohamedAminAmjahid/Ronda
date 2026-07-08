@@ -86,6 +86,14 @@ export class RondaRoom extends Room<RondaState> {
   /** Mise de la partie (or). 0 = partie amicale sans enjeu de classement. */
   private bet = 0
 
+  // ── Anti-inactivité : auto-skip après 15 s, forfait après 3 auto-skips ──────
+  // (mirroir de DiJoujRoom.ts — seul TURN_SECONDS diffère : 15 s au lieu de 7 s,
+  // un tour de Ronda impliquant plus de choix qu'un tour de Di Jouj.)
+  private static readonly TURN_SECONDS   = 15
+  private static readonly MAX_AUTO_SKIPS = 3
+  private turnTimer:     { clear: () => void } | null = null
+  private autoSkipCount: [number, number]             = [0, 0]
+
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
   onCreate(options: { private?: boolean; bet?: number }): void {
@@ -169,6 +177,11 @@ export class RondaRoom extends Room<RondaState> {
   async onLeave(client: Client, consented: boolean): Promise<void> {
     const seat = this.seatOf(client.sessionId)
     if (seat === null) return
+
+    // Suspend le minuteur d'inactivité : la reconnexion est gérée à part
+    // (armTurnTimer() est réappelé explicitement en cas de reconnexion réussie).
+    this.clearTurnTimer()
+
     const ps = this.state.players.get(client.sessionId)
     if (ps) ps.connected = false
 
@@ -204,6 +217,7 @@ export class RondaRoom extends Room<RondaState> {
       if (ps) ps.connected = true
       this.broadcast('opponent_reconnected', { seat })
       this.sendPrivateStateTo(client, seat) // renvoie sa main
+      this.armTurnTimer()
     } catch {
       // Pas de reconnexion dans le délai → partie annulée (pas d'enregistrement DB).
       this.state.phase = 'ABORTED'
@@ -213,6 +227,7 @@ export class RondaRoom extends Room<RondaState> {
   }
 
   onDispose(): void {
+    this.clearTurnTimer()
     if (this.state.code) unregisterCode(this.state.code)
   }
 
@@ -225,6 +240,7 @@ export class RondaRoom extends Room<RondaState> {
     this.state.phase = 'PLAYING'
     this.syncPublic()
     this.sendPrivateStateToAll()
+    this.armTurnTimer()
   }
 
   // ── Handlers de messages ──────────────────────────────────────────────────
@@ -254,6 +270,13 @@ export class RondaRoom extends Room<RondaState> {
       return
     }
 
+    // Le joueur a agi lui-même (carte, déclaration OU contre) → réinitialise
+    // son compteur d'inactivité. Plus large que la seule paire play_card/
+    // declare demandée : un contre prouve tout autant que le joueur est actif,
+    // et le rater ici laisserait son compteur grimper malgré une vraie action.
+    this.autoSkipCount[seat] = 0
+    this.clearTurnTimer()
+
     this.afterEngineChange(prevPhase, prevSeq)
   }
 
@@ -279,8 +302,13 @@ export class RondaRoom extends Room<RondaState> {
       makeRng(Date.now()),
     )
     this.state.phase = 'PLAYING'
+    // Nouvelle donne → on repart avec un compteur d'inactivité propre : 3 skips
+    // consécutifs sur DEUX donnes différentes ne doivent pas forfaiter un joueur
+    // qui était juste un peu lent une fois il y a plusieurs minutes.
+    this.autoSkipCount = [0, 0]
     this.syncPublic()
     this.sendPrivateStateToAll()
+    this.armTurnTimer()
   }
 
   // ── Après chaque transition du moteur ──────────────────────────────────────
@@ -312,14 +340,86 @@ export class RondaRoom extends Room<RondaState> {
       this.state.phase = 'GAME_OVER'
       this.finishGame()
     }
+
+    // Rearme pour le prochain joueur si la partie continue normalement ;
+    // sinon (DEAL_END attend continue_deal, GAME_OVER a déjà tout nettoyé).
+    if (this.state.phase === 'PLAYING') this.armTurnTimer()
+    else this.clearTurnTimer()
+  }
+
+  // ── Anti-inactivité ─────────────────────────────────────────────────────────
+
+  /** (Re)démarre le minuteur d'inactivité pour le joueur dont c'est le tour. */
+  private armTurnTimer(): void {
+    this.clearTurnTimer()
+    if (this.state.phase !== 'PLAYING') return
+
+    const seat = this.engine.currentPlayer
+    const sessionId = this.sessionBySeat[seat]
+    if (sessionId === null) return                              // siège vide
+    // Joueur déconnecté : la logique de reconnexion (onLeave) s'en charge —
+    // armTurnTimer() est réappelé explicitement après une reconnexion réussie.
+    if (this.state.players.get(sessionId)?.connected === false) return
+
+    this.turnTimer = this.clock.setTimeout(
+      () => this.onTurnTimeout(seat),
+      RondaRoom.TURN_SECONDS * 1000,
+    )
+  }
+
+  private clearTurnTimer(): void {
+    if (this.turnTimer) { this.turnTimer.clear(); this.turnTimer = null }
+  }
+
+  /**
+   * Le joueur n'a pas joué à temps : on joue une carte au hasard à sa place
+   * (n'importe quelle carte de la main est un coup légal en Ronda — pas de
+   * contrainte de suite à respecter, contrairement à Di Jouj), puis on
+   * comptabilise l'auto-skip. Au 3e auto-skip consécutif → forfait, sauf si
+   * ce dernier coup vient justement de terminer la partie de lui-même (le
+   * résultat naturel prévaut sur le forfait).
+   */
+  private onTurnTimeout(seat: PlayerId): void {
+    if (this.state.phase !== 'PLAYING') return
+    if (this.engine.currentPlayer !== seat) return
+
+    const prevPhase = this.engine.phase
+    const prevSeq = this.engine.eventSeq
+
+    const hand = this.engine.players[seat].hand
+    const card = hand[Math.floor(Math.random() * hand.length)]
+    this.engine = applyAction(this.engine, { type: 'PLAY_CARD', playerId: seat, card }, makeRng(Date.now()))
+
+    this.autoSkipCount[seat]++
+    this.broadcast('auto_skip', {
+      seat, pseudo: this.pseudoBySeat[seat], count: this.autoSkipCount[seat],
+    })
+
+    if (this.autoSkipCount[seat] >= RondaRoom.MAX_AUTO_SKIPS && this.engine.phase !== 'GAME_OVER') {
+      const winnerSeat = (1 - seat) as PlayerId
+      this.clearTurnTimer()
+      this.engine.players[winnerSeat].score = Math.max(41, this.engine.players[winnerSeat].score)
+      this.engine.phase = 'GAME_OVER'
+      this.state.phase = 'GAME_OVER'
+      this.syncPublic()
+      this.sendPrivateStateToAll()
+      this.finishGame(winnerSeat, 'inactivity_forfeit')
+      this.clock.setTimeout(() => this.disconnect(), 800)
+      return
+    }
+
+    this.afterEngineChange(prevPhase, prevSeq)
   }
 
   /**
    * Termine la partie : enregistrement DB + diffusion `game_over`.
-   * `forcedWinner` force le vainqueur (cas forfait : départ volontaire d'un joueur),
-   * sinon le vainqueur est déduit des scores (≥ 41).
+   * `forcedWinner` force le vainqueur (forfait : départ volontaire ou
+   * inactivité), sinon le vainqueur est déduit des scores (≥ 41).
+   * `reason` distingue le motif du forfait pour l'affichage côté client
+   * ('opponent_forfeit' = l'adversaire a quitté, 'inactivity_forfeit' = 3
+   * auto-skips consécutifs) — sinon déduit de `forcedWinner` (rétro-compat).
    */
-  private finishGame(forcedWinner?: PlayerId): void {
+  private finishGame(forcedWinner?: PlayerId, reason?: string): void {
     if (this.recorded) return
     this.recorded = true
 
@@ -351,7 +451,7 @@ export class RondaRoom extends Room<RondaState> {
       winnerPseudo,
       scores,
       goldWon: winnerSeat !== null ? this.bet * 2 : 0,
-      reason: forcedWinner !== undefined ? 'opponent_forfeit' : undefined,
+      reason: reason ?? (forcedWinner !== undefined ? 'opponent_forfeit' : undefined),
       stats: {
         [this.pseudoBySeat[0]]: getStats(this.pseudoBySeat[0]),
         [this.pseudoBySeat[1]]: getStats(this.pseudoBySeat[1]),

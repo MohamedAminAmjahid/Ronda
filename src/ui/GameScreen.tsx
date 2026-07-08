@@ -184,6 +184,7 @@ export function GameOverScreen({
   onWatchReplay,
   onMenu,
   xpInfo,
+  subtitle,
 }: {
   won: boolean
   scoreText: string
@@ -196,6 +197,8 @@ export function GameOverScreen({
   onMenu?: () => void
   /** XP gagné cette partie (barre animée affichée si fourni). */
   xpInfo?: XpGain | null
+  /** Petit texte sous le score (ex. motif de forfait). Absent → rien affiché. */
+  subtitle?: string
 }) {
   const { t } = useI18n()
   const reduceMotion = useReducedMotion()
@@ -227,6 +230,9 @@ export function GameOverScreen({
         </ReAnimated.Text>
         <ReAnimated.View style={[{ alignItems: 'center', gap: 24 }, bodyStyle]}>
           <Text style={styles.gameOverScore}>{scoreText}</Text>
+          {subtitle && (
+            <Text style={styles.gameOverSubtitle}>{subtitle}</Text>
+          )}
           {goldReward > 0 && (
             <Text style={styles.gameOverReward}>🪙 +{goldReward}</Text>
           )}
@@ -250,7 +256,13 @@ export function GameOverScreen({
   )
 }
 
-function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay, onMenu, xpInfo }: { scores: [number, number]; onReplay: () => void; goldReward?: number; onWatchReplay?: () => void; onMenu?: () => void; xpInfo?: XpGain | null }) {
+function GameOver({
+  scores, onReplay, goldReward = 0, onWatchReplay, onMenu, xpInfo, forfeitReason,
+}: {
+  scores: [number, number]; onReplay: () => void; goldReward?: number
+  onWatchReplay?: () => void; onMenu?: () => void; xpInfo?: XpGain | null
+  forfeitReason?: string
+}) {
   const { t } = useI18n()
   return (
     <GameOverScreen
@@ -261,6 +273,7 @@ function GameOver({ scores, onReplay, goldReward = 0, onWatchReplay, onMenu, xpI
       onWatchReplay={onWatchReplay}
       onMenu={onMenu}
       xpInfo={xpInfo}
+      subtitle={forfeitReason === 'inactivity_forfeit' ? `⏱️ ${t('rondaForfeitInactivity')}` : undefined}
     />
   )
 }
@@ -559,11 +572,17 @@ interface GameScreenProps {
   /** uid fantôme Firestore du bot (voir getOrCreateBotProfile) et son prénom brut. */
   botUid?: string
   rawBotName?: string
+  /**
+   * Motif de fin de partie transmis par le serveur (mode online), ex.
+   * 'inactivity_forfeit' après 3 auto-skips consécutifs — affiché en plus du
+   * score habituel. undefined en solo (pas de forfait pour inactivité vs bot).
+   */
+  forfeitReason?: string
 }
 
 export function GameScreen({
   onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0,
-  botAvatarIdx, botFemale, botUid, rawBotName,
+  botAvatarIdx, botFemale, botUid, rawBotName, forfeitReason,
 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
@@ -893,6 +912,7 @@ export function GameScreen({
         scores={[human.score, bot.score]}
         goldReward={winReward}
         xpInfo={xpInfo}
+        forfeitReason={forfeitReason}
         onReplay={() => {
           // Partie misée → « Rejouer » relance le matchmaking (nouvelle mise).
           if (stakeBet > 0) { router.replace('/bet?game=ronda' as Href); return }
@@ -1815,6 +1835,12 @@ const styles = StyleSheet.create({
   gameOverScore: {
     fontFamily: 'Cairo_400Regular',
     fontSize: 18,
+    color: C.boneOff,
+  },
+  gameOverSubtitle: {
+    fontFamily: 'Cairo_400Regular',
+    fontSize: 13,
+    fontStyle: 'italic',
     color: C.boneOff,
   },
   gameOverReward: {
