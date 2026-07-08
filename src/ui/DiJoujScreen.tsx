@@ -665,6 +665,12 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           </ScrollView>
         </View>
 
+        {/* Repli bot (matchmaking en ligne) : ni micro ni chat possibles avec
+            un bot — message discret plutôt que des boutons inertes/masqués. */}
+        {isOnlineGame && botName && (
+          <Text style={s.botNoticeTxt}>🤖 {t('djBotNoChat')}</Text>
+        )}
+
         {/* ── Profil de l'adversaire (tap sur l'avatar) ─────────────────────── */}
         <PlayerProfileModal
           visible={showBotProfile}
@@ -804,6 +810,10 @@ const s = StyleSheet.create({
   },
   backBtn:      { paddingRight: 12, paddingVertical: 6 },
   backTxt:      { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
+  botNoticeTxt: {
+    fontFamily: 'Cairo_400Regular', fontSize: 11, fontStyle: 'italic',
+    color: 'rgba(201,162,39,0.55)', textAlign: 'center', marginTop: 6,
+  },
   title: {
     flex: 1, textAlign: 'center',
     fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 20, letterSpacing: 6,
