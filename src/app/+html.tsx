@@ -19,6 +19,12 @@ export default function Root({ children }: PropsWithChildren) {
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
         <meta name="theme-color" content="#0D0D1A" />
+        <title>Dar Lwar9a TM — Ronda & Di Jouj en ligne</title>
+        <meta name="description" content="Dar Lwar9a TM — Jouez à la Ronda et Di Jouj en ligne. Jeux de cartes marocains traditionnels." />
+        <meta name="keywords" content="ronda, di jouj, jeux cartes marocains, lwar9a, jeu carte maroc" />
+        <meta property="og:title" content="Dar Lwar9a TM" />
+        <meta property="og:description" content="Jouez à la Ronda et Di Jouj en ligne" />
+        <meta property="og:type" content="website" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/icon-192.svg" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

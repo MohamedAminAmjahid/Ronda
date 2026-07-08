@@ -525,6 +525,21 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
             </TouchableOpacity>
           </View>
 
+          {/* ── Liens légaux ─────────────────────────────────────── */}
+          <View style={s.legalRow}>
+            <TouchableOpacity onPress={() => router.push('/privacy' as Href)}>
+              <Text style={s.legalLink}>Confidentialité</Text>
+            </TouchableOpacity>
+            <Text style={s.legalDot}> · </Text>
+            <TouchableOpacity onPress={() => router.push('/terms' as Href)}>
+              <Text style={s.legalLink}>Conditions</Text>
+            </TouchableOpacity>
+            <Text style={s.legalDot}> · </Text>
+            <TouchableOpacity onPress={() => router.push('/about' as Href)}>
+              <Text style={s.legalLink}>À propos</Text>
+            </TouchableOpacity>
+          </View>
+
         </ScrollView>
       </View>
 
@@ -696,6 +711,9 @@ const s = StyleSheet.create({
   footer:    { alignItems: 'center', paddingTop: 4, gap: 4 },
   footerTxt: { fontSize: 10, color: 'rgba(244,236,216,0.14)', letterSpacing: 1, textTransform: 'uppercase' },
   author:    { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.28)', letterSpacing: 0.3, textDecorationLine: 'underline' },
+  legalRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', paddingTop: 10, paddingBottom: 4 },
+  legalLink: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.40)' },
+  legalDot:  { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.20)' },
 
   // Modal reconnexion
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(13,13,26,0.90)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
