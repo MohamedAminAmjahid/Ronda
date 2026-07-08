@@ -10,7 +10,7 @@ import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
 import { useAuth } from '../firebase/auth'
 import {
-  getUserById, getGoldHistory, subscribeOnlineStatus, sendFriendRequest,
+  getUserById, getGoldHistory, subscribeOnlineStatus, sendFriendRequest, getFriendStatus,
   type UserDoc, type FriendDoc, type GoldHistoryEntry, type PresenceInfo,
 } from '../firebase/firestore'
 import { PresenceDot, presenceLabel } from './PresenceDot'
@@ -57,12 +57,23 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const [history, setHistory] = useState<GoldHistoryEntry[]>([])
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
   const [friendState, setFriendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [friendStatus, setFriendStatus] = useState<FriendDoc['status'] | null>(null)
 
   useEffect(() => {
     if (!uid) return
     const unsub = subscribeOnlineStatus(uid, setPresence)
     return unsub
   }, [uid])
+
+  // Statut réel de l'amitié (moi → ce joueur) : conditionne « Inviter à jouer ».
+  useEffect(() => {
+    if (!user || !uid || uid === user.uid) { setFriendStatus(null); return }
+    let cancelled = false
+    void getFriendStatus(user.uid, uid)
+      .then((st) => { if (!cancelled) setFriendStatus(st) })
+      .catch(() => { if (!cancelled) setFriendStatus(null) })
+    return () => { cancelled = true }
+  }, [user, uid])
 
   useEffect(() => {
     if (!uid) { setLoading(false); return }
@@ -95,8 +106,10 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const displayName = profile?.username ?? (name ? decodeURIComponent(name) : '')
   const initial = displayName?.[0]?.toUpperCase() ?? '?'
 
+  const isFriend = friendStatus === 'accepted'
+
   const handleAddFriend = async () => {
-    if (!user || !profile || friendState === 'sending' || friendState === 'sent') return
+    if (!user || !profile || isFriend || friendState === 'sending' || friendState === 'sent') return
     setFriendState('sending')
     try {
       await sendFriendRequest(user.uid, profile.uid)
@@ -235,9 +248,10 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
           >
             <Text style={s.actionBtnTxt}>{t('messageBtn')}</Text>
           </TouchableOpacity>
-          {isInGame ? (
-            // En pleine partie : « Inviter à jouer » n'a pas de sens (on ne
-            // peut pas en lancer une 2e) → remplacé par « Ajouter ami ».
+          {isInGame || !isFriend ? (
+            // « Inviter à jouer » n'a de sens que si (a) on n'est pas déjà en
+            // partie (on ne peut pas en lancer une 2e) ET (b) on est déjà ami
+            // avec ce joueur (sinon → juste « Ajouter ami » d'abord).
             <TouchableOpacity
               style={s.actionBtnPrimary}
               onPress={() => { void handleAddFriend() }}

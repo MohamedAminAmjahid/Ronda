@@ -704,6 +704,15 @@ export function getPendingRequests(uid: string): Promise<FriendDoc[]> {
   return readFriends(uid, 'pending')
 }
 
+/** Statut de l'amitié de myUid vers targetUid (null si aucune relation). */
+export async function getFriendStatus(
+  myUid: string, targetUid: string,
+): Promise<FriendDoc['status'] | null> {
+  const snap = await getDoc(friendRef(myUid, targetUid))
+  if (!snap.exists()) return null
+  return (snap.data().status as FriendDoc['status']) ?? null
+}
+
 /** Écoute en temps réel le nombre de demandes en attente. */
 export function subscribePendingCount(
   myUid: string,

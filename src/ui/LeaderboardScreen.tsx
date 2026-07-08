@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
@@ -6,7 +6,15 @@ import { useProfile } from '../profile/useProfile'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
 import { searchUserByUsername } from '../firebase/firestore'
 import { PlayerProfileModal } from './PlayerProfileModal'
+import { AvatarDisplay } from './ProfileScreen'
 import { useI18n } from '../i18n/useI18n'
+
+interface CachedProfile {
+  uid:         string
+  avatarType:  string
+  avatarEmoji: string
+  avatarImage: string
+}
 
 const C = {
   table:   '#0E5C4A',
@@ -72,6 +80,12 @@ export function LeaderboardScreen({ onBack }: Props) {
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [resolvingName, setResolvingName] = useState<string | null>(null)
 
+  // Cache des profils (avatar + uid) par username — persiste tant que l'écran
+  // reste monté : un joueur déjà vu (même sur un autre onglet de ligue) n'est
+  // jamais rechargé. `null` = recherché mais introuvable (pas de retry).
+  const profileCache = useRef<Map<string, CachedProfile | null>>(new Map())
+  const [, bumpProfiles] = useState(0)
+
   useFocusEffect(
     useCallback(() => {
       setRefreshKey(k => k + 1)
@@ -123,9 +137,37 @@ export function LeaderboardScreen({ onBack }: Props) {
     return () => { cancelled = true }
   }, [selected, refreshKey])
 
-  // Résout l'uid Firebase par username puis ouvre la modale profil. Pas de
-  // recherche pour soi-même (éviterait un « ajouter ami » vers son propre uid).
+  // Précharge avatar + uid de chaque joueur visible (une seule fois par
+  // username, grâce au cache) pour afficher la photo de profil dans la liste.
+  useEffect(() => {
+    let cancelled = false
+    const toFetch = entries.filter((e) => !profileCache.current.has(e.username))
+    if (toFetch.length === 0) return
+    void Promise.all(
+      toFetch.map(async (e) => {
+        try {
+          const u = await searchUserByUsername(e.username)
+          profileCache.current.set(e.username, u
+            ? { uid: u.uid, avatarType: u.avatarType ?? 'initial', avatarEmoji: u.avatarEmoji ?? '', avatarImage: u.avatarImage ?? '' }
+            : null)
+        } catch {
+          profileCache.current.set(e.username, null)
+        }
+      }),
+    ).then(() => { if (!cancelled) bumpProfiles((n) => n + 1) })
+    return () => { cancelled = true }
+  }, [entries])
+
+  // Résout l'uid Firebase par username puis ouvre la modale profil (réutilise
+  // le cache avatar déjà chargé — pas de 2e lecture Firestore si disponible).
+  // Pas de recherche pour soi-même (éviterait un « ajouter ami » vers son propre uid).
   const openProfile = useCallback(async (targetUsername: string) => {
+    const cached = profileCache.current.get(targetUsername)
+    if (cached !== undefined) {
+      setSelectedUid(cached?.uid ?? null)
+      setSelectedName(targetUsername)
+      return
+    }
     setResolvingName(targetUsername)
     try {
       const user = await searchUserByUsername(targetUsername)
@@ -191,6 +233,7 @@ export function LeaderboardScreen({ onBack }: Props) {
             entries.map((e, i) => {
               const me = e.username === username
               const resolving = resolvingName === e.username
+              const avatar = profileCache.current.get(e.username)
               return (
                 <TouchableOpacity
                   key={e.username}
@@ -200,6 +243,17 @@ export function LeaderboardScreen({ onBack }: Props) {
                   onPress={() => { void openProfile(e.username) }}
                 >
                   <Text style={s.rank}>{i < 3 ? MEDALS[i] : `${i + 1}`}</Text>
+                  {avatar === undefined ? (
+                    <View style={s.avatarPlaceholder} />
+                  ) : (
+                    <AvatarDisplay
+                      type={(avatar?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                      initial={e.username[0]?.toUpperCase() ?? '?'}
+                      emoji={avatar?.avatarEmoji ?? ''}
+                      image={avatar?.avatarImage ?? ''}
+                      size={36}
+                    />
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={[s.name, me && s.nameMe]} numberOfLines={1}>
                       {e.username}{me ? ' ' + t('youParens') : ''}
@@ -279,6 +333,7 @@ const s = StyleSheet.create({
   },
   rowMe: { borderWidth: 1.5, borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.12)' },
   rank: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone, width: 30, textAlign: 'center' },
+  avatarPlaceholder: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(244,236,216,0.16)' },
   name: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone },
   nameMe: { fontFamily: 'Cairo_600SemiBold', color: C.brass },
   gameBadges: { flexDirection: 'row', gap: 8, marginTop: 1 },
