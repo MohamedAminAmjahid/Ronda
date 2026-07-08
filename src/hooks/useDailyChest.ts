@@ -7,11 +7,10 @@ const BONUS_KEY  = 'ronda_daily_bonus'   // même clé que useDailyBonus pour li
 
 export type ChestLevel = 'bronze' | 'silver' | 'gold' | 'diamond'
 
-interface ChestReward {
-  level:     ChestLevel
-  gold:      number
-  minGold:   number
-  maxGold:   number
+export interface ChestReward {
+  level:   ChestLevel
+  minGold: number
+  maxGold: number
 }
 
 function today(): string {
@@ -32,35 +31,70 @@ const RANGES: Record<ChestLevel, [number, number]> = {
   diamond: [500, 1000],
 }
 
+/** Tire un montant aléatoire dans la plage du niveau — appelé au clic sur
+ * « Ouvrir », jamais au montage (sinon le montant serait figé pour la journée). */
+function randReward(level: ChestLevel): number {
+  const [min, max] = RANGES[level]
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+// ── Store partagé ─────────────────────────────────────────────────────────────
+// _layout.tsx (popup auto), MenuScreen.tsx (bouton rapide) et GoldShopScreen.tsx
+// appellent tous useDailyChest() indépendamment. Avec un état local par
+// composant, chacun tirerait son propre montant aléatoire pour « le même »
+// coffre du jour — celui affiché dépendrait alors de l'écran ouvert en premier.
+// Un seul état de module, partagé et chargé une seule fois, élimine ce risque.
+let reward: ChestReward | null = null
+let loadPromise: Promise<void> | null = null
+const listeners = new Set<() => void>()
+function emit(): void { for (const l of listeners) l() }
+
+async function load(): Promise<void> {
+  try {
+    const [chestDate, bonusRaw] = await Promise.all([
+      AsyncStorage.getItem(CHEST_KEY),
+      AsyncStorage.getItem(BONUS_KEY),
+    ])
+    if (chestDate === today()) {
+      reward = null   // déjà ouvert aujourd'hui
+    } else {
+      const stored = bonusRaw ? (JSON.parse(bonusRaw) as { streak?: number }) : null
+      const streak = stored?.streak ?? 1
+      const level  = levelFromStreak(streak)
+      const [min, max] = RANGES[level]
+      reward = { level, minGold: min, maxGold: max }
+    }
+  } catch {
+    reward = null
+  } finally {
+    emit()
+  }
+}
+
 export function useDailyChest() {
-  const [reward, setReward] = useState<ChestReward | null>(null)
+  const [, forceRender] = useState(0)
 
   useEffect(() => {
-    void (async () => {
-      try {
-        const [chestDate, bonusRaw] = await Promise.all([
-          AsyncStorage.getItem(CHEST_KEY),
-          AsyncStorage.getItem(BONUS_KEY),
-        ])
-        if (chestDate === today()) return   // déjà ouvert aujourd'hui
-
-        const stored = bonusRaw ? (JSON.parse(bonusRaw) as { streak?: number }) : null
-        const streak = stored?.streak ?? 1
-        const level  = levelFromStreak(streak)
-        const [min, max] = RANGES[level]
-        const gold = Math.floor(Math.random() * (max - min + 1)) + min
-        setReward({ level, gold, minGold: min, maxGold: max })
-      } catch {
-        // sans effet
-      }
-    })()
+    if (!loadPromise) loadPromise = load()
+    const listener = () => forceRender((n) => n + 1)
+    listeners.add(listener)
+    return () => { listeners.delete(listener) }
   }, [])
 
-  const openChest = async () => {
-    if (!reward) return
-    addGold(reward.gold)
+  /**
+   * Tire le montant MAINTENANT (au clic), le crédite, marque le coffre comme
+   * ouvert pour la journée, et renvoie le montant réellement crédité — pour
+   * que l'appelant (DailyChestModal) affiche exactement ce qui a été ajouté
+   * via addGold(), jamais une valeur différente pré-calculée au montage.
+   */
+  const openChest = async (): Promise<number> => {
+    if (!reward) return 0
+    const gold = randReward(reward.level)
+    addGold(gold)
+    reward = null
     await AsyncStorage.setItem(CHEST_KEY, today()).catch(() => {})
-    setReward(null)
+    emit()
+    return gold
   }
 
   return { reward, openChest }

@@ -103,8 +103,10 @@ function ChestLidLayer({ level, size }: { level: ChestLevel; size: number }) {
 
 interface Props {
   level:     ChestLevel
-  gold:      number
-  onOpen:    () => Promise<void>
+  minGold:   number
+  maxGold:   number
+  /** Tire le montant, le crédite, et renvoie le montant réellement crédité. */
+  onOpen:    () => Promise<number>
   onClose:   () => void
   /** Appelé avec le montant au moment où l'utilisateur ferme après ouverture. */
   onOpened?: (gold: number) => void
@@ -112,11 +114,14 @@ interface Props {
 
 const CHEST_SIZE = 104
 
-export function DailyChestModal({ level, gold, onOpen, onClose, onOpened }: Props) {
+export function DailyChestModal({ level, minGold, maxGold, onOpen, onClose, onOpened }: Props) {
   const { t }   = useI18n()
   const meta    = LEVEL_META[level]
   // Snapshot figé : survit même si la source (reward) repasse à null après ouverture.
-  const [snap] = useState({ level, gold })
+  const [snap] = useState({ level, minGold, maxGold })
+  // Montant réellement crédité — connu seulement après le clic sur « Ouvrir »
+  // (onOpen le tire au moment de l'appel, jamais avant).
+  const [revealedGold, setRevealedGold] = useState<number | null>(null)
 
   const fadeAnim    = useRef(new Animated.Value(0)).current   // apparition carte
   const shakeAnim   = useRef(new Animated.Value(0)).current   // tremblement avant ouverture
@@ -165,13 +170,14 @@ export function DailyChestModal({ level, gold, onOpen, onClose, onOpened }: Prop
   }, [opened, lidAnim, glowAnim, coinsAnim, rewardScale])
 
   const handleClose = () => {
-    if (opened) onOpened?.(snap.gold)
+    if (opened && revealedGold !== null) onOpened?.(revealedGold)
     onClose()
   }
 
   const handleOpen = async () => {
     if (opened) return
-    await onOpen()
+    const gold = await onOpen()
+    setRevealedGold(gold)
     setOpened(true)
   }
 
@@ -255,10 +261,10 @@ export function DailyChestModal({ level, gold, onOpen, onClose, onOpened }: Prop
           {/* Récompense après ouverture / indice avant */}
           {opened ? (
             <Animated.View style={[s.rewardBox, { transform: [{ scale: rewardScale }] }]}>
-              <Text style={s.rewardTxt}>+{snap.gold} 🪙</Text>
+              <Text style={s.rewardTxt}>+{revealedGold ?? 0} 🪙</Text>
             </Animated.View>
           ) : (
-            <Text style={s.hintTxt}>{Math.floor(snap.gold * 0.7)}–{snap.gold} 🪙</Text>
+            <Text style={s.hintTxt}>{snap.minGold}–{snap.maxGold} 🪙</Text>
           )}
 
           <View style={s.btnRow}>

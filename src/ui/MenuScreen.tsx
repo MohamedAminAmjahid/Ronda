@@ -216,17 +216,19 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
   const [showSpin,      setShowSpin]      = useState(false)
   // Snapshot figé du coffre : survit à chest→null après ouverture (sinon la modale
   // se démonte avant l'animation d'ouverture).
-  const [chestSnap,     setChestSnap]     = useState<{ level: ChestLevel; gold: number } | null>(null)
+  const [chestSnap,     setChestSnap]     = useState<{ level: ChestLevel; minGold: number; maxGold: number } | null>(null)
   const [showLangModal, setShowLangModal] = useState(false)
   const [lastChestGold, setLastChestGold] = useState<number | null>(null)
   const [toastGold,     setToastGold]     = useState<number | null>(null)
   const toastAnim    = useRef(new Animated.Value(0)).current
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const handleOpenChest = async () => {
-    const g = chestSnap?.gold ?? chest?.gold
-    await openChest()
-    if (g != null) setLastChestGold(g)
+  // Le montant réel n'est connu qu'après le tirage (openChest, au clic) — pas
+  // avant, donc on ne peut plus le lire depuis chestSnap/chest ici.
+  const handleOpenChest = async (): Promise<number> => {
+    const g = await openChest()
+    if (g > 0) setLastChestGold(g)
+    return g
   }
 
   const showChestToast = (gold: number) => {
@@ -500,7 +502,7 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
                   label={chest ? 'Coffre' : lastChestGold !== null ? `+${lastChestGold}🪙` : 'Coffre'}
                   hasBadge={chest !== null}
                   disabled={chest === null}
-                  onPress={() => { if (chest) setChestSnap({ level: chest.level, gold: chest.gold }) }}
+                  onPress={() => { if (chest) setChestSnap({ level: chest.level, minGold: chest.minGold, maxGold: chest.maxGold }) }}
                 />
               )}
               <TouchableOpacity style={[s.actionBtnTraining, s.actionBtnFlex]} onPress={() => setAction('training')} activeOpacity={0.75}>
@@ -545,7 +547,8 @@ export function MenuScreen({ onLeaderboard, onRules, onCredits }: Props) {
       {chestSnap && (
         <DailyChestModal
           level={chestSnap.level}
-          gold={chestSnap.gold}
+          minGold={chestSnap.minGold}
+          maxGold={chestSnap.maxGold}
           onOpen={handleOpenChest}
           onClose={() => setChestSnap(null)}
           onOpened={showChestToast}

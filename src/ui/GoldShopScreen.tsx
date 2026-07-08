@@ -78,7 +78,7 @@ export function GoldShopScreen({ onBack }: Props) {
   const [showSpin, setShowSpin]     = useState(false)
   // Snapshot figé : survit à chest→null après ouverture (sinon la modale se démonte
   // avant l'animation d'ouverture).
-  const [chestSnap, setChestSnap]   = useState<{ level: ChestLevel; gold: number } | null>(null)
+  const [chestSnap, setChestSnap]   = useState<{ level: ChestLevel; minGold: number; maxGold: number } | null>(null)
   const [showStreak, setShowStreak] = useState(false)
 
   const [shareCount, setShareCount] = useState(0)
@@ -286,7 +286,7 @@ export function GoldShopScreen({ onBack }: Props) {
                 </Text>
                 <TouchableOpacity
                   style={[s.btnPrimary, !chest && s.btnDisabled]}
-                  onPress={() => chest && setChestSnap({ level: chest.level, gold: chest.gold })}
+                  onPress={() => chest && setChestSnap({ level: chest.level, minGold: chest.minGold, maxGold: chest.maxGold })}
                   disabled={!chest}
                 >
                   <Text style={[s.btnPrimaryTxt, !chest && s.btnDisabledTxt]}>
@@ -442,7 +442,8 @@ export function GoldShopScreen({ onBack }: Props) {
       {chestSnap && (
         <DailyChestModal
           level={chestSnap.level}
-          gold={chestSnap.gold}
+          minGold={chestSnap.minGold}
+          maxGold={chestSnap.maxGold}
           onOpen={openChest}
           onClose={() => setChestSnap(null)}
         />

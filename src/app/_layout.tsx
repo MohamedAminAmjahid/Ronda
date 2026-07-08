@@ -91,7 +91,7 @@ function DailyChestGate() {
   const { reward, openChest } = useDailyChest()
   // Snapshot figé au moment de l'affichage : survit à reward→null après ouverture,
   // sinon la modale se démonterait avant l'animation d'ouverture.
-  const [shown, setShown] = useState<{ level: ChestLevel; gold: number } | null>(null)
+  const [shown, setShown] = useState<{ level: ChestLevel; minGold: number; maxGold: number } | null>(null)
   // null = pas encore lu depuis AsyncStorage (bloque l'affichage pour éviter un
   // flash) ; true = déjà fermé aujourd'hui ; false = jamais fermé aujourd'hui.
   const [dismissedToday, setDismissedToday] = useState<boolean | null>(null)
@@ -108,7 +108,10 @@ function DailyChestGate() {
   // faisant réapparaître le popup en boucle.
   useEffect(() => {
     if (!user || !reward || shown || dismissedToday !== false) return
-    const t = setTimeout(() => setShown({ level: reward.level, gold: reward.gold }), 2000)
+    const t = setTimeout(
+      () => setShown({ level: reward.level, minGold: reward.minGold, maxGold: reward.maxGold }),
+      2000,
+    )
     return () => clearTimeout(t)
   }, [user, reward, shown, dismissedToday])
 
@@ -122,7 +125,8 @@ function DailyChestGate() {
   return (
     <DailyChestModal
       level={shown.level}
-      gold={shown.gold}
+      minGold={shown.minGold}
+      maxGold={shown.maxGold}
       onOpen={openChest}
       onClose={handleClose}
     />
