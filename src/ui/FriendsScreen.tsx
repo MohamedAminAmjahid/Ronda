@@ -249,6 +249,7 @@ export function FriendsScreen({ onBack }: Props) {
                 const unread = unreadCounts[f.uid] ?? 0
                 const initial = f.username?.[0]?.toUpperCase() ?? '?'
                 const info = presence[f.uid]
+                console.log('[friends] presence pour', f.username, ':', info?.isOnline, info?.gameStatus)
                 const label = presenceLabel(info, t)
                 const online = info?.isOnline === true
                 const gameStatusText = info?.gameStatus ? STATUS_LABEL[info.gameStatus] : undefined

@@ -60,6 +60,16 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const { t } = useI18n()
   const { user } = useAuth()
   const pathname = usePathname()
+
+  // Libellés du statut « en jeu » (users/{uid}.gameStatus) — affichés sous le
+  // statut de présence générique quand ce joueur fait quelque chose de plus
+  // précis qu'« en ligne » (mirror de FriendsScreen.tsx).
+  const STATUS_LABEL: Record<string, string> = {
+    matchmaking:    t('gameStatusMatchmaking'),
+    playing_online: t('gameStatusPlayingOnline'),
+    playing_bot:    t('gameStatusPlayingBot'),
+    playing_friend: t('gameStatusPlayingFriend'),
+  }
   const isInGame = IN_GAME.some(p => pathname.startsWith(p))
 
   const [profile, setProfile] = useState<UserDoc | null>(null)
@@ -206,6 +216,9 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
               </Text>
             )
           })()}
+          {presence?.gameStatus && (
+            <Text style={s.gameStatusTxt}>{STATUS_LABEL[presence.gameStatus]}</Text>
+          )}
         </View>
 
         {/* ── Stats ── */}
@@ -414,6 +427,7 @@ const s = StyleSheet.create({
   leagueBadge: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.brass, letterSpacing: 0.3 },
   presenceTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
   presenceOnline: { color: '#27AE60' },
+  gameStatusTxt: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.brass, fontStyle: 'italic' },
 
   skeletonAvatarLg: { width: 88, height: 88, borderRadius: 44, backgroundColor: 'rgba(244,236,216,0.16)' },
   skeletonLine:     { height: 10, borderRadius: 5, backgroundColor: 'rgba(244,236,216,0.16)' },
