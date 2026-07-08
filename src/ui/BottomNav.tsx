@@ -20,6 +20,7 @@ const TABS = [
   { icon: '📊', label: 'Classement', href: '/leaderboard'  },
   { icon: '🏆', label: 'Trophées',   href: '/trophies'     },
   { icon: '👥', label: 'Amis',       href: '/friends'      },
+  { icon: '💬', label: 'Messages',   href: '/messages'     },
   { icon: '🎯', label: 'Quêtes',     href: '/daily-quests' },
   { icon: '👤', label: 'Profil',     href: '/profile'      },
 ] as const
@@ -72,7 +73,7 @@ export function BottomNav() {
   const pathname  = usePathname()
   const insets    = useSafeAreaInsets()
   const { user }  = useAuth()
-  const { total } = useNotifBadges(user?.uid ?? null)
+  const { pending, unread } = useNotifBadges(user?.uid ?? null)
 
   // Badge Quêtes : nombre de récompenses accomplies mais pas encore réclamées
   // (missions + streak de connexion du jour).
@@ -98,10 +99,12 @@ export function BottomNav() {
           ? pathname === '/'
           : pathname.startsWith(tab.href)
         const badge = tab.href === '/friends'
-          ? total
-          : tab.href === '/daily-quests'
-            ? questBadge
-            : 0
+          ? pending
+          : tab.href === '/messages'
+            ? unread
+            : tab.href === '/daily-quests'
+              ? questBadge
+              : 0
         return <TabItem key={tab.href} tab={tab} active={active} badge={badge} />
       })}
     </View>
