@@ -10,6 +10,7 @@ import {
   subscribeOnlineStatus,
   type MessageDoc, type PresenceInfo,
 } from '../firebase/firestore'
+import { getCachedMessages, setCachedMessages } from '../online/messagesCache'
 import { useI18n } from '../i18n/useI18n'
 import { AvatarDisplay } from './ProfileScreen'
 import { xpRequired } from '../profile/profile'
@@ -38,8 +39,11 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
   const { t } = useI18n()
   const scrollRef = useRef<ScrollView>(null)
 
-  const [messages, setMessages] = useState<MessageDoc[]>([])
-  const [loading, setLoading] = useState(true)
+  const chatId = user ? getChatId(user.uid, friendUid) : ''
+
+  // Affichage instantané des messages en cache (skeleton seulement sans cache).
+  const [messages, setMessages] = useState<MessageDoc[]>(() => (chatId ? getCachedMessages(chatId) ?? [] : []))
+  const [loading, setLoading] = useState(() => !(chatId && getCachedMessages(chatId)))
   const [text, setText] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,8 +57,6 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
   const [friendXp,    setFriendXp]    = useState<number | undefined>(undefined)
 
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
-
-  const chatId = user ? getChatId(user.uid, friendUid) : ''
 
   useEffect(() => {
     void getUserById(friendUid).then(doc => {
@@ -73,8 +75,12 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
   useEffect(() => {
     if (!user || !chatId) return
     void markChatRead(chatId, user.uid)
+    // Affichage immédiat du cache s'il existe.
+    const cached = getCachedMessages(chatId)
+    if (cached) { setMessages(cached); setLoading(false) }
     const unsub = subscribeMessages(chatId, (msgs) => {
       setMessages(msgs)
+      setCachedMessages(chatId, msgs)   // flux temps réel → cache
       setLoading(false)
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 80)
     })

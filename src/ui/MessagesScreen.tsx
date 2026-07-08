@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
 import { useAuth } from '../firebase/auth'
-import { getUserChats, deleteChat, type ChatPreview } from '../firebase/firestore'
+import { deleteChat, type ChatPreview } from '../firebase/firestore'
 import { getCachedProfile, isProfileStale, refreshProfile, subscribeProfile } from '../online/profileCache'
+import {
+  getCachedConversations, isConversationsStale, refreshConversations,
+  invalidateConversations, subscribe as subscribeMessagesCache,
+} from '../online/messagesCache'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -40,41 +44,57 @@ export function MessagesScreen({ onBack }: Props) {
   const { t }    = useI18n()
   const { user } = useAuth()
 
-  const [chats, setChats]     = useState<ChatPreview[]>([])
-  const [loading, setLoading] = useState(true)
+  // Affichage instantané depuis le cache (skeleton seulement s'il n'y a rien).
+  const [chats, setChats]     = useState<ChatPreview[]>(() => getCachedConversations() ?? [])
+  const [loading, setLoading] = useState(() => getCachedConversations() === null)
   const [toDelete, setToDelete] = useState<ChatPreview | null>(null)
   const [, forceRender]       = useState(0)
 
-  // Charge les conversations.
+  // Précharge les profils des interlocuteurs d'une liste de conversations.
+  const warmProfiles = useCallback((list: ChatPreview[]) => {
+    if (!user) return
+    for (const c of list) {
+      const other = c.participants.find((p) => p !== user.uid)
+      if (other && isProfileStale(other)) void refreshProfile(other)
+    }
+  }, [user])
+
+  // Cache-first : affiche l'existant, refresh silencieux si périmé/absent.
   useEffect(() => {
     if (!user) { setLoading(false); return }
     let cancelled = false
-    setLoading(true)
-    void getUserChats(user.uid)
-      .then((list) => {
+    const cached = getCachedConversations()
+    if (cached) { setChats(cached); warmProfiles(cached) }
+    if (isConversationsStale()) {
+      if (!cached) setLoading(true)
+      void refreshConversations(user.uid).then(() => {
         if (cancelled) return
-        setChats(list)
-        // Préchauffe le profil de chaque interlocuteur.
-        for (const c of list) {
-          const other = c.participants.find((p) => p !== user.uid)
-          if (other && isProfileStale(other)) void refreshProfile(other)
-        }
+        const fresh = getCachedConversations()
+        if (fresh) { setChats(fresh); warmProfiles(fresh) }
+        setLoading(false)
       })
-      .catch(() => { if (!cancelled) setChats([]) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    }
     return () => { cancelled = true }
-  }, [user])
+  }, [user, warmProfiles])
 
-  // Re-render quand un profil du cache est mis à jour.
+  // Un refresh déclenché ailleurs (preload au login, invalidation) rafraîchit l'écran.
+  useEffect(() => subscribeMessagesCache(() => {
+    const data = getCachedConversations()
+    if (data) { setChats(data); warmProfiles(data) }
+  }), [warmProfiles])
+
+  // Re-render quand un profil du cache est mis à jour (avatar/pseudo).
   useEffect(() => subscribeProfile(() => forceRender((n) => n + 1)), [])
 
   const confirmDelete = useCallback(async () => {
-    if (!toDelete) return
+    if (!toDelete || !user) return
     const id = toDelete.chatId
     setToDelete(null)
     setChats((prev) => prev.filter((c) => c.chatId !== id))   // retrait optimiste
     await deleteChat(id).catch(() => {})
-  }, [toDelete])
+    invalidateConversations()                                  // cache périmé après suppression
+    void refreshConversations(user.uid)                        // repeuple avec la vérité serveur
+  }, [toDelete, user])
 
   const openChat = (c: ChatPreview) => {
     if (!user) return
@@ -96,7 +116,7 @@ export function MessagesScreen({ onBack }: Props) {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={C.brass} style={{ marginTop: 40 }} />
+          <View style={s.list}><MessageSkeletonRows count={6} /></View>
         ) : chats.length === 0 ? (
           <Text style={s.empty}>{t('messagesEmpty')}</Text>
         ) : (
@@ -166,9 +186,39 @@ export function MessagesScreen({ onBack }: Props) {
   )
 }
 
+// ── Skeleton (pulse) — uniquement au tout premier chargement (aucun cache). ──
+
+function MessageSkeletonRow() {
+  const pulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1,   duration: 650, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+    ]))
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+
+  return (
+    <Animated.View style={[s.row, { opacity: pulse }]}>
+      <View style={s.skeletonAvatar} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={s.skeletonLine} />
+        <View style={[s.skeletonLine, { width: '45%' }]} />
+      </View>
+    </Animated.View>
+  )
+}
+
+function MessageSkeletonRows({ count }: { count: number }) {
+  return <>{Array.from({ length: count }).map((_, i) => <MessageSkeletonRow key={i} />)}</>
+}
+
 const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 460, paddingHorizontal: 18 },
+  skeletonAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(244,236,216,0.12)' },
+  skeletonLine:   { height: 12, borderRadius: 6, backgroundColor: 'rgba(244,236,216,0.12)', width: '75%' },
 
   header:  { paddingTop: 16, paddingBottom: 8, alignItems: 'center', gap: 6 },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 6 },
