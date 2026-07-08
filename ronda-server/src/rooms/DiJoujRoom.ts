@@ -376,7 +376,8 @@ export class DiJoujRoom extends Room<DiJoujState> {
     // c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'dijouj' })
-      addWageredGold(winnerPseudo, this.bet, 'dijouj')
+      void addWageredGold(winnerPseudo, this.bet, 'dijouj').catch((e) =>
+        console.error('[leaderboard] addWageredGold error:', e))
     }
 
     this.broadcast('game_over', {

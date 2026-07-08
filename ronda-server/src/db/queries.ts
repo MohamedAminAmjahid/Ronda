@@ -1,4 +1,5 @@
 import { getDbOrNull } from './database'
+import { adminDb, firebaseReady, FieldValue } from '../firebaseAdmin'
 
 export interface GameRecord {
   id: string
@@ -153,106 +154,153 @@ export function getUserLeague(username: string): League {
 }
 
 /**
- * Incrémente l'or misé d'un joueur pour la semaine courante (crée la ligne si
- * absente, avec la ligue courante du joueur). No-op si persistance désactivée.
+ * Incrémente l'or misé d'un joueur pour la semaine courante, dans Firestore
+ * (SQLite sur Railway n'a pas de volume persistant → table vidée à chaque
+ * restart, voir historique). Un doc par (semaine, joueur, jeu) — pas un seul
+ * doc par (semaine, joueur) : sinon un doc partagé entre ronda et dijouj
+ * perdrait la répartition par jeu (un des deux champs `game`/`gold` écraserait
+ * l'autre), qui alimente rondaGold/dijoujGold affichés dans le classement.
+ * league reste lu depuis SQLite (league_history, inchangé).
  */
-export function addWageredGold(username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda'): void {
-  const db = getDbOrNull()
-  if (!db) {
-    // Persistance désactivée (better-sqlite3 indisponible au démarrage, voir
-    // le log "[db] …" dans initDatabase) → no-op silencieux sans ce log,
-    // ce qui ressemble exactement à "le classement ne se met jamais à jour".
-    console.log('[leaderboard] addWageredGold: SKIP (persistance désactivée)', { username, amount, game })
+export async function addWageredGold(
+  username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda',
+): Promise<void> {
+  if (!firebaseReady()) {
+    // Firestore Admin non initialisé (credentials absents) → no-op silencieux
+    // sans ce log, ce qui ressemble exactement à "le classement ne se met
+    // jamais à jour".
+    console.log('[leaderboard] addWageredGold: SKIP (Firestore Admin non initialisé)', { username, amount, game })
     return
   }
   if (amount <= 0) return
   const week = currentWeekStart()
   const league = getUserLeague(username)
   console.log('[leaderboard] addWageredGold:', { username, week, game, amount, league })
-  db.prepare(`
-    INSERT INTO weekly_scores (username, week_start, game, gold_wagered, league)
-    VALUES (@username, @week, @game, @amount, @league)
-    ON CONFLICT(username, week_start, game) DO UPDATE SET
-      gold_wagered = gold_wagered + @amount
-  `).run({ username, week, game, amount, league })
+  const docId = `${week}_${username}_${game}`
+  try {
+    // set({merge:true}) + increment() en un seul appel atomique — crée le doc
+    // s'il n'existe pas encore, sinon incrémente `gold` sans écraser le reste.
+    await adminDb().collection('weekly_scores').doc(docId).set({
+      username, week, game, league,
+      updatedAt: FieldValue.serverTimestamp(),
+      gold: FieldValue.increment(amount),
+    }, { merge: true })
+  } catch (e) {
+    console.error('[leaderboard] addWageredGold Firestore error:', e)
+  }
 }
 
+interface WeeklyScoreDoc { username: string; week: string; game: string; gold?: number; league: string }
+
 /**
- * Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue.
+ * Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue, depuis
+ * Firestore.
  *
- * BUG corrigé : `weekly_scores.league` est figé au moment du PREMIER pari de
- * la semaine pour un joueur (addWageredGold ne met à jour que gold_wagered
- * sur conflit, jamais league). Si league_history.current_league change en
- * cours de semaine (reset hebdo déclenché après que des joueurs ont déjà
- * parié), un joueur promu/rétrogradé devient invisible du classement de sa
- * ligue ACTUELLE : ses lignes weekly_scores restent taguées avec l'ancienne
- * ligue, que plus personne n'interroge pour lui. On filtre donc désormais sur
- * la ligue courante (league_history), pas sur le snapshot figé.
+ * On NE filtre PAS la requête Firestore sur le champ `league` du doc : ce
+ * champ est figé au moment du pari (addWageredGold ne le met à jour qu'à
+ * l'écriture), donc si league_history.current_league change en cours de
+ * semaine (reset hebdo après que des joueurs ont déjà parié), un joueur
+ * promu/rétrogradé deviendrait invisible du classement de sa ligue ACTUELLE.
+ * C'est le même bug que l'ancienne requête SQL corrigeait déjà via un JOIN
+ * sur league_history — on reproduit la même correction ici : on récupère tous
+ * les docs de la semaine, on agrège par joueur, puis on filtre sur la ligue
+ * COURANTE (getUserLeague, toujours en SQLite).
  */
-export function getWeeklyLeaderboard(league: string): WeeklyEntry[] {
-  const db = getDbOrNull()
-  if (!db) return []
+export async function getWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
+  if (!firebaseReady()) return []
   const week = currentWeekStart()
-  return db.prepare(`
-    SELECT
-      ws.username                                                       AS username,
-      ws.week_start                                                     AS week_start,
-      SUM(ws.gold_wagered)                                              AS totalGold,
-      SUM(CASE WHEN ws.game = 'ronda'  THEN ws.gold_wagered ELSE 0 END) AS rondaGold,
-      SUM(CASE WHEN ws.game = 'dijouj' THEN ws.gold_wagered ELSE 0 END) AS dijoujGold,
-      COALESCE(lh.current_league, 'Bronze')                             AS league
-    FROM weekly_scores ws
-    LEFT JOIN league_history lh ON lh.username = ws.username
-    WHERE ws.week_start = ? AND COALESCE(lh.current_league, 'Bronze') = ?
-    GROUP BY ws.username, ws.week_start
-    ORDER BY totalGold DESC, ws.username ASC
-  `).all(week, league) as WeeklyEntry[]
+  const snap = await adminDb().collection('weekly_scores').where('week', '==', week).get()
+
+  const totals = new Map<string, { rondaGold: number; dijoujGold: number }>()
+  for (const doc of snap.docs) {
+    const d = doc.data() as WeeklyScoreDoc
+    const acc = totals.get(d.username) ?? { rondaGold: 0, dijoujGold: 0 }
+    if (d.game === 'ronda') acc.rondaGold += d.gold ?? 0
+    else if (d.game === 'dijouj') acc.dijoujGold += d.gold ?? 0
+    totals.set(d.username, acc)
+  }
+
+  const entries: WeeklyEntry[] = []
+  for (const [username, g] of totals) {
+    if (getUserLeague(username) !== league) continue
+    entries.push({
+      username, week_start: week,
+      totalGold: g.rondaGold + g.dijoujGold,
+      rondaGold: g.rondaGold, dijoujGold: g.dijoujGold,
+      league,
+    })
+  }
+  entries.sort((a, b) => b.totalGold - a.totalGold || a.username.localeCompare(b.username))
+  return entries.slice(0, 50)
 }
 
 /** Détail par jeu pour un joueur cette semaine. */
-export function getWeeklyStats(username: string): WeeklyStats {
-  const db = getDbOrNull()
-  if (!db) return { rondaGold: 0, dijoujGold: 0, totalGold: 0 }
+export async function getWeeklyStats(username: string): Promise<WeeklyStats> {
+  if (!firebaseReady()) return { rondaGold: 0, dijoujGold: 0, totalGold: 0 }
   const week = currentWeekStart()
-  const rows = db.prepare(`
-    SELECT game, SUM(gold_wagered) AS gold
-    FROM weekly_scores
-    WHERE username = ? AND week_start = ?
-    GROUP BY game
-  `).all(username, week) as { game: string; gold: number }[]
-  const rondaGold  = rows.find(r => r.game === 'ronda')?.gold ?? 0
-  const dijoujGold = rows.find(r => r.game === 'dijouj')?.gold ?? 0
+  const snap = await adminDb().collection('weekly_scores')
+    .where('username', '==', username).where('week', '==', week).get()
+  let rondaGold = 0
+  let dijoujGold = 0
+  for (const doc of snap.docs) {
+    const d = doc.data() as WeeklyScoreDoc
+    if (d.game === 'ronda') rondaGold += d.gold ?? 0
+    else if (d.game === 'dijouj') dijoujGold += d.gold ?? 0
+  }
   return { rondaGold, dijoujGold, totalGold: rondaGold + dijoujGold }
 }
 
 /**
  * Contenu brut de weekly_scores (diagnostic — voir GET /debug/weekly-scores,
- * protégé par x-admin-key). Permet d'inspecter la table sans accès shell à
- * Railway. `db: null` distingue explicitement "persistance désactivée" de
- * "table vide".
+ * protégé par x-admin-key), depuis Firestore. `db: false` distingue
+ * explicitement "Firestore Admin non initialisé" de "collection vide".
  */
-export function debugWeeklyScores(): { db: boolean; rows: WeeklyScoreRecord[] } {
-  const db = getDbOrNull()
-  if (!db) return { db: false, rows: [] }
-  const rows = db.prepare(
-    'SELECT username, week_start, game, gold_wagered, league FROM weekly_scores ORDER BY week_start DESC, username ASC',
-  ).all() as WeeklyScoreRecord[]
+export async function debugWeeklyScores(): Promise<{ db: boolean; rows: WeeklyScoreRecord[] }> {
+  if (!firebaseReady()) return { db: false, rows: [] }
+  const snap = await adminDb().collection('weekly_scores').orderBy('week', 'desc').limit(500).get()
+  const rows: WeeklyScoreRecord[] = snap.docs.map((doc) => {
+    const d = doc.data() as WeeklyScoreDoc
+    return { username: d.username, week_start: d.week, game: d.game, gold_wagered: d.gold ?? 0, league: d.league }
+  })
   return { db: true, rows }
 }
 
 /**
  * Reset hebdomadaire : pour la dernière semaine ayant de l'activité, promeut le
  * top 3 et rétrograde le bottom 3 de chaque ligue (Bronze ne descend pas,
- * Légende ne monte pas), met à jour `league_history`, et retourne les
- * récompenses d'or à créditer au top 3 de chaque ligue.
+ * Légende ne monte pas), met à jour `league_history` (SQLite, inchangé), et
+ * retourne les récompenses d'or à créditer au top 3 de chaque ligue.
+ *
+ * Standings lus depuis Firestore (weekly_scores) — league_history reste en
+ * SQLite comme demandé. Ici on groupe volontairement par le champ `league` du
+ * DOC (figé au moment du pari), pas la ligue courante : le reset évalue
+ * chaque joueur dans la division où il a effectivement joué cette semaine —
+ * comportement identique à l'ancienne requête SQL (WHERE league = ?).
  */
-export function processWeeklyReset(): WeeklyReward[] {
+export async function processWeeklyReset(): Promise<WeeklyReward[]> {
+  if (!firebaseReady()) return []
   const db = getDbOrNull()
   if (!db) return []
 
-  const latest = db.prepare('SELECT MAX(week_start) AS w FROM weekly_scores').get() as { w: string | null }
-  const week = latest?.w
-  if (!week) return []
+  const latestSnap = await adminDb().collection('weekly_scores').orderBy('week', 'desc').limit(1).get()
+  if (latestSnap.empty) return []
+  const week = (latestSnap.docs[0].data() as WeeklyScoreDoc).week
+
+  // Lectures Firestore d'abord (en parallèle), écriture SQLite ensuite dans
+  // une seule transaction — pas d'await entre les lignes de la transaction.
+  const perLeagueStandings = await Promise.all(LEAGUES.map(async (league) => {
+    const snap = await adminDb().collection('weekly_scores')
+      .where('week', '==', week).where('league', '==', league).get()
+    const totals = new Map<string, number>()
+    for (const doc of snap.docs) {
+      const d = doc.data() as WeeklyScoreDoc
+      totals.set(d.username, (totals.get(d.username) ?? 0) + (d.gold ?? 0))
+    }
+    const standings = [...totals.entries()]
+      .map(([username, gold_wagered]) => ({ username, gold_wagered }))
+      .sort((a, b) => b.gold_wagered - a.gold_wagered || a.username.localeCompare(b.username))
+    return { league, standings }
+  }))
 
   const rewards: WeeklyReward[] = []
   const resetDate = currentWeekStart()
@@ -267,14 +315,7 @@ export function processWeeklyReset(): WeeklyReward[] {
   `)
 
   const apply = db.transaction(() => {
-    for (const league of LEAGUES) {
-      const standings = db.prepare(`
-        SELECT username, SUM(gold_wagered) AS gold_wagered FROM weekly_scores
-        WHERE week_start = ? AND league = ?
-        GROUP BY username
-        ORDER BY gold_wagered DESC, username ASC
-      `).all(week, league) as { username: string; gold_wagered: number }[]
-
+    for (const { league, standings } of perLeagueStandings) {
       const n = standings.length
       standings.forEach((row, idx) => {
         const rank = idx + 1

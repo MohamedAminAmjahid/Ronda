@@ -341,7 +341,8 @@ export class RondaRoom extends Room<RondaState> {
     // this.bet * 2, c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'ronda' })
-      addWageredGold(winnerPseudo, this.bet, 'ronda')
+      void addWageredGold(winnerPseudo, this.bet, 'ronda').catch((e) =>
+        console.error('[leaderboard] addWageredGold error:', e))
     }
 
     this.broadcast('game_over', {

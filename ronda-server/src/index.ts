@@ -92,27 +92,27 @@ app.get('/room/:code/type', (req, res) => {
 // ── Ligues & classement hebdomadaire ───────────────────────────────────────────
 
 // Classement de la semaine courante pour une ligue.
-app.get('/leaderboard/weekly', (req, res) => {
+app.get('/leaderboard/weekly', async (req, res) => {
   const league = typeof req.query.league === 'string' ? req.query.league : 'Bronze'
-  const result = getWeeklyLeaderboard(league)
+  const result = await getWeeklyLeaderboard(league)
   console.log('[leaderboard] GET /leaderboard/weekly:', { league, entries: result.length })
   return res.json(result)
 })
 
 // Détail par jeu pour un joueur cette semaine.
-app.get('/leaderboard/weekly/stats/:username', (req, res) => {
-  return res.json(getWeeklyStats(req.params.username))
+app.get('/leaderboard/weekly/stats/:username', async (req, res) => {
+  return res.json(await getWeeklyStats(req.params.username))
 })
 
 // Enregistre une mise gagnée au classement hebdo — utilisé pour les parties
 // vs bot (repli matchmaking, hors-ligne) qui ne passent par aucune Room et où
 // addWageredGold n'est donc jamais appelé côté Room.
-app.post('/leaderboard/record', (req, res) => {
+app.post('/leaderboard/record', async (req, res) => {
   const { username, amount, game } = req.body as { username?: string; amount?: number; game?: string }
   if (!username || !amount || (game !== 'ronda' && game !== 'dijouj')) {
     return res.status(400).json({ error: 'Paramètres manquants' })
   }
-  addWageredGold(username, Number(amount), game)
+  await addWageredGold(username, Number(amount), game)
   return res.json({ ok: true })
 })
 
@@ -122,21 +122,21 @@ app.get('/league/:username', (req, res) => {
 })
 
 // Reset hebdomadaire (admin uniquement) → promotions/rétrogradations + récompenses.
-app.post('/league/reset', (req, res) => {
+app.post('/league/reset', async (req, res) => {
   if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
-  return res.json({ rewards: processWeeklyReset() })
+  return res.json({ rewards: await processWeeklyReset() })
 })
 
 // Diagnostic (admin uniquement) : contenu brut de weekly_scores, pour inspecter
-// la table sans accès shell à Railway. { db: false } = persistance désactivée
-// (better-sqlite3 indisponible) — distingue ce cas de "table vide".
-app.get('/debug/weekly-scores', (req, res) => {
+// la collection Firestore sans accès console. { db: false } = Firestore Admin
+// non initialisé (credentials absents) — distingue ce cas de "collection vide".
+app.get('/debug/weekly-scores', async (req, res) => {
   if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
-  return res.json(debugWeeklyScores())
+  return res.json(await debugWeeklyScores())
 })
 
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────
