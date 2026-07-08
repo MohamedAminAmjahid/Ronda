@@ -253,17 +253,15 @@ export function TrophiesScreen({ onBack }: Props) {
         ) : noFriends ? (
           <Text style={s.empty}>{t('trophyNoFriends')}</Text>
         ) : (
-          <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>
             {METRICS.map((m) => (
-              <LeaderboardCard
+              <SummaryCard
                 key={m.key}
                 icon={m.icon}
                 title={m.title}
                 data={dataFor(m.key)}
                 format={m.format}
-                myUid={myUid}
-                onSeeAll={() => setSeeAll(m.key)}
-                onPressRow={openProfile}
+                onPress={() => setSeeAll(m.key)}
               />
             ))}
             <View style={{ height: 8 }} />
@@ -296,51 +294,42 @@ export function TrophiesScreen({ onBack }: Props) {
   )
 }
 
-// ── Card : top 5 + ligne « moi » + bouton Voir tout ─────────────────────────────
+// ── Card compacte : #1 uniquement, cliquable → ouvre le top 50 ─────────────────
 
-function LeaderboardCard({
-  icon, title, data, format, myUid, onSeeAll, onPressRow,
+function SummaryCard({
+  icon, title, data, format, onPress,
 }: {
   icon: string
   title: string
   data: CardData
   format: (n: number) => string
-  myUid: string | null
-  onSeeAll: () => void
-  onPressRow: (uid: string, username: string) => void
+  onPress: () => void
 }) {
   const { t } = useI18n()
-  const { entries, meOutsideTop } = data
-  const top5 = entries.slice(0, 5)
-  const myIndex = myUid ? entries.findIndex((e) => e.uid === myUid) : -1
-  const meInTop5 = myIndex >= 0 && myIndex < 5
+  const top = data.entries[0]
 
   return (
-    <View style={s.card}>
-      <View style={s.cardHead}>
-        <Text style={s.cardTitle}>{icon} {title}</Text>
-        {(entries.length > 5 || meOutsideTop) && (
-          <TouchableOpacity onPress={onSeeAll}>
-            <Text style={s.seeAll}>{t('trophySeeAll')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      {entries.length === 0 ? (
-        <Text style={s.emptySmall}>{t('trophyEmpty')}</Text>
+    <TouchableOpacity style={s.summaryCard} activeOpacity={0.8} onPress={onPress}>
+      <Text style={s.summaryTitle} numberOfLines={1}>{icon} {title}</Text>
+      {top ? (
+        <View style={s.summaryTopRow}>
+          <AvatarDisplay
+            type={(top.avatarType || 'initial') as 'initial' | 'emoji' | 'image'}
+            initial={top.username[0]?.toUpperCase() ?? '?'}
+            emoji={top.avatarEmoji ?? ''}
+            image={top.avatarImage ?? ''}
+            size={40}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={s.summaryName} numberOfLines={1}>🥇 {top.username}</Text>
+            <Text style={s.summaryValue} numberOfLines={1}>{format(top.value)}</Text>
+          </View>
+        </View>
       ) : (
-        <>
-          {top5.map((e, i) => (
-            <Row key={e.uid} rank={i + 1} entry={e} value={format(e.value)} me={e.uid === myUid} onPress={onPressRow} />
-          ))}
-          {!meInTop5 && myIndex >= 0 && (
-            <Row rank={myIndex + 1} entry={entries[myIndex]} value={format(entries[myIndex].value)} me onPress={onPressRow} />
-          )}
-          {meOutsideTop && (
-            <Row rank={null} entry={meOutsideTop} value={format(meOutsideTop.value)} me onPress={onPressRow} />
-          )}
-        </>
+        <Text style={s.emptySmall}>{t('trophyEmpty')}</Text>
       )}
-    </View>
+      <Text style={s.summaryBadge}>{t('trophyTop50')}</Text>
+    </TouchableOpacity>
   )
 }
 
@@ -438,15 +427,22 @@ const s = StyleSheet.create({
   scopeTabTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
   scopeTabTxtActive: { color: C.ink },
 
-  list: { paddingVertical: 4, gap: 14, paddingBottom: 24 },
-
-  card: {
-    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 16, padding: 14, gap: 8,
-    borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)',
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between',
+    paddingVertical: 4, rowGap: 12, paddingBottom: 24,
   },
-  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
-  cardTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.bone },
-  seeAll: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.brass },
+
+  summaryCard: {
+    width: '48%', minHeight: 160, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 16,
+    padding: 14, borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)', justifyContent: 'space-between',
+  },
+  summaryTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
+  summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  summaryName: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
+  summaryValue: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.brass, marginTop: 2 },
+  summaryBadge: {
+    alignSelf: 'flex-end', fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.boneOff,
+  },
 
   emptySmall: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, paddingVertical: 8 },
 
