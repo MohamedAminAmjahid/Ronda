@@ -14,11 +14,21 @@ import {
   type UserDoc, type FriendDoc, type GoldHistoryEntry, type PresenceInfo,
 } from '../firebase/firestore'
 import { PresenceDot, presenceLabel } from './PresenceDot'
+import { fetchUserLeagueByUsername } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
 
 // Écrans de partie : pendant une partie, « Inviter à jouer » n'a pas de sens
 // (on ne peut pas lancer une 2e partie) → remplacé par « Ajouter ami ».
 const IN_GAME = ['/game', '/dijouj', '/online', '/dijouj-online']
+
+/** Libellé + emoji par ligue (repli sur le nom brut si ligue inconnue). */
+const LEAGUE_EMOJI: Record<string, string> = {
+  Bronze:  '🥉 Bronze',
+  Argent:  '🥈 Argent',
+  Or:      '🥇 Or',
+  Diamant: '💎 Diamant',
+  Légende: '👑 Légende',
+}
 
 const C = {
   table:   '#0E5C4A',
@@ -58,12 +68,19 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
   const [friendState, setFriendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
   const [friendStatus, setFriendStatus] = useState<FriendDoc['status'] | null>(null)
+  const [league, setLeague] = useState<string | null>(null)
 
   useEffect(() => {
     if (!uid) return
     const unsub = subscribeOnlineStatus(uid, setPresence)
     return unsub
   }, [uid])
+
+  // Ligue courante (classement hebdomadaire) — best-effort depuis Railway.
+  useEffect(() => {
+    if (!profile?.username) return
+    void fetchUserLeagueByUsername(profile.username).then(setLeague)
+  }, [profile?.username])
 
   // Statut réel de l'amitié (moi → ce joueur) : conditionne « Inviter à jouer ».
   useEffect(() => {
@@ -152,6 +169,9 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
             <PresenceDot info={presence} size={16} ring={C.table} />
           </View>
           <Text style={s.username} numberOfLines={1}>{profile.username}</Text>
+          {league && (
+            <Text style={s.leagueBadge}>{LEAGUE_EMOJI[league] ?? `🏅 ${league}`}</Text>
+          )}
           {(() => {
             const label = presenceLabel(presence, t, { hours: true })
             if (!label) return null
@@ -328,6 +348,7 @@ const s = StyleSheet.create({
   identity: { alignItems: 'center', gap: 8, paddingVertical: 8 },
   avatarWrap: { position: 'relative' },
   username:    { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
+  leagueBadge: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.brass, letterSpacing: 0.3 },
   presenceTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
   presenceOnline: { color: '#27AE60' },
 

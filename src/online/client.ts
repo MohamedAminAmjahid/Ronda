@@ -92,6 +92,17 @@ export async function fetchUserLeague(username: string): Promise<string> {
   return league
 }
 
+/** Ligue courante d'un joueur — variante best-effort (repli 'Bronze', ne lève jamais). */
+export async function fetchUserLeagueByUsername(username: string): Promise<string> {
+  try {
+    const res = await fetch(`${httpBase()}/league/${encodeURIComponent(username)}`)
+    const data = (await res.json()) as { league?: string }
+    return data.league ?? 'Bronze'
+  } catch {
+    return 'Bronze'
+  }
+}
+
 /**
  * Enregistre une mise gagnée au classement hebdomadaire. À utiliser pour les
  * parties vs bot (repli matchmaking, hors-ligne) : elles ne passent par aucune
