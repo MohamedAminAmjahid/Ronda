@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
+import { useAuth } from '../firebase/auth'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
 import { searchUserByUsername } from '../firebase/firestore'
 import { PlayerProfileModal } from './PlayerProfileModal'
@@ -59,7 +60,9 @@ interface Props {
 }
 
 export function LeaderboardScreen({ onBack }: Props) {
-  const { username } = useProfile()
+  const { username, avatarType: myAvatarType, avatarEmoji: myAvatarEmoji, avatarImage: myAvatarImage } = useProfile()
+  const { user } = useAuth()
+  const myUid = user?.uid ?? null
   const { t } = useI18n()
 
   const [userLeague, setUserLeague] = useState<string>('Bronze')
@@ -137,6 +140,26 @@ export function LeaderboardScreen({ onBack }: Props) {
     return () => { cancelled = true }
   }, [selected, refreshKey])
 
+  // Ma propre ligne : utilise directement le profil local (useProfile),
+  // jamais une recherche Firestore par username. searchUserByUsername cherche
+  // par usernameLower — si mon pseudo a changé depuis que weekly_scores a
+  // enregistré mes mises de la semaine (ex. suffixe anti-collision ajouté
+  // après coup), l'ancien username qui y est figé ne correspond plus à AUCUN
+  // usernameLower actuel et la recherche renvoie null, alors même que
+  // l'entrée EST bien la mienne. Le profil local n'a pas ce problème : il
+  // reflète toujours mon compte réel, quel que soit le nom sous lequel une
+  // mise passée a été enregistrée.
+  useEffect(() => {
+    if (!username) return
+    profileCache.current.set(username, {
+      uid: myUid ?? '',
+      avatarType: myAvatarType || 'initial',
+      avatarEmoji: myAvatarEmoji ?? '',
+      avatarImage: myAvatarImage ?? '',
+    })
+    bumpProfiles((n) => n + 1)
+  }, [username, myUid, myAvatarType, myAvatarEmoji, myAvatarImage])
+
   // Précharge avatar + uid de chaque joueur visible (une seule fois par
   // username, grâce au cache) pour afficher la photo de profil dans la liste.
   // Par lots de 5 (pas tout en même temps) : la liste (rang/pseudo/or misé)
@@ -144,7 +167,7 @@ export function LeaderboardScreen({ onBack }: Props) {
   // arrivent progressivement, en cercle gris placeholder entre-temps.
   useEffect(() => {
     let cancelled = false
-    const toFetch = entries.filter((e) => !profileCache.current.has(e.username))
+    const toFetch = entries.filter((e) => e.username !== username && !profileCache.current.has(e.username))
     if (toFetch.length === 0) return
     const BATCH_SIZE = 5
     void (async () => {

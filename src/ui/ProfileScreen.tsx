@@ -11,6 +11,7 @@ import { frameDef } from '../cosmetics/avatarFrames'
 import * as ImagePicker from 'expo-image-picker'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
+import { FEMALE_AVATARS, MALE_AVATARS } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
 import { useInstallPrompt } from '../hooks/useInstallPrompt'
 import { uploadAvatar } from '../firebase/storage'
@@ -69,6 +70,24 @@ interface AvatarDisplayProps {
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
+/**
+ * Repli de compatibilité : certains profils de bot créés lors d'une itération
+ * antérieure du système d'avatars ont stocké avatarImage sous une forme
+ * "bot_f22"/"bot_m5" (identifiant genre+index) au lieu de l'URL statique
+ * réelle. getOrCreateBotProfile auto-répare ces docs à la prochaine sélection
+ * du bot par le matchmaking (voir botFallback.ts), mais un bot pas encore
+ * re-sélectionné depuis ce fix reste affiché cassé entre-temps — on résout
+ * donc aussi ce format ici, au rendu, en dernier recours.
+ */
+function resolveBotAvatarImage(image: string): string {
+  const match = image.match(/^bot_(f|m)(\d+)$/)
+  if (!match) return image
+  const female = match[1] === 'f'
+  const idx = parseInt(match[2], 10)
+  const list = female ? FEMALE_AVATARS : MALE_AVATARS
+  return list[idx] ?? list[0] ?? image
+}
+
 export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level, xp, xpMax }: AvatarDisplayProps) {
   const radius   = size / 2
   const fontSize = type === 'emoji' ? size * 0.48 : size * 0.45
@@ -98,10 +117,11 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
   // est une valeur légitime mais falsy en JS, donc `&& image` seul le rejette
   // à tort. On vérifie explicitement l'absence plutôt que la « vérité ».
   const hasImage = image !== '' && image !== undefined && image !== null
+  const resolvedImage = typeof image === 'string' ? resolveBotAvatarImage(image) : image
   const inner = (type === 'image' && hasImage) ? (
     <View style={[av.circle, { width: size, height: size, borderRadius: radius }]}>
       <Image
-        source={typeof image === 'number' ? image : { uri: image }}
+        source={typeof resolvedImage === 'number' ? resolvedImage : { uri: resolvedImage }}
         style={{ width: size, height: size, borderRadius: radius }}
         resizeMode="cover"
       />
