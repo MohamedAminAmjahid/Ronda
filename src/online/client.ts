@@ -70,11 +70,24 @@ export interface WeeklyStats {
   totalGold:  number
 }
 
-/** Classement hebdomadaire agrégé (Ronda + Di Jouj) d'une ligue. */
+const LEADERBOARD_TIMEOUT_MS = 5000
+
+/** Classement hebdomadaire agrégé (Ronda + Di Jouj) d'une ligue.
+ * Abandonne après 5 s (Railway qui met du temps à se réveiller à froid, etc.)
+ * plutôt que de laisser l'écran tourner indéfiniment. */
 export async function fetchWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
-  const res = await fetch(`${httpBase()}/leaderboard/weekly?league=${encodeURIComponent(league)}`)
-  if (!res.ok) throw new Error('Classement indisponible.')
-  return (await res.json()) as WeeklyEntry[]
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), LEADERBOARD_TIMEOUT_MS)
+  try {
+    const res = await fetch(
+      `${httpBase()}/leaderboard/weekly?league=${encodeURIComponent(league)}`,
+      { signal: controller.signal },
+    )
+    if (!res.ok) throw new Error('Classement indisponible.')
+    return (await res.json()) as WeeklyEntry[]
+  } finally {
+    clearTimeout(timeout)
+  }
 }
 
 /** Détail par jeu pour un joueur cette semaine. */

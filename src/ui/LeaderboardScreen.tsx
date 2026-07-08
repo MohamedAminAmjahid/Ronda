@@ -139,22 +139,33 @@ export function LeaderboardScreen({ onBack }: Props) {
 
   // Précharge avatar + uid de chaque joueur visible (une seule fois par
   // username, grâce au cache) pour afficher la photo de profil dans la liste.
+  // Par lots de 5 (pas tout en même temps) : la liste (rang/pseudo/or misé)
+  // s'affiche déjà avant même que cet effet ne démarre — seuls les avatars
+  // arrivent progressivement, en cercle gris placeholder entre-temps.
   useEffect(() => {
     let cancelled = false
     const toFetch = entries.filter((e) => !profileCache.current.has(e.username))
     if (toFetch.length === 0) return
-    void Promise.all(
-      toFetch.map(async (e) => {
-        try {
-          const u = await searchUserByUsername(e.username)
-          profileCache.current.set(e.username, u
-            ? { uid: u.uid, avatarType: u.avatarType ?? 'initial', avatarEmoji: u.avatarEmoji ?? '', avatarImage: u.avatarImage ?? '' }
-            : null)
-        } catch {
-          profileCache.current.set(e.username, null)
-        }
-      }),
-    ).then(() => { if (!cancelled) bumpProfiles((n) => n + 1) })
+    const BATCH_SIZE = 5
+    void (async () => {
+      for (let i = 0; i < toFetch.length; i += BATCH_SIZE) {
+        if (cancelled) return
+        const batch = toFetch.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map(async (e) => {
+            try {
+              const u = await searchUserByUsername(e.username)
+              profileCache.current.set(e.username, u
+                ? { uid: u.uid, avatarType: u.avatarType ?? 'initial', avatarEmoji: u.avatarEmoji ?? '', avatarImage: u.avatarImage ?? '' }
+                : null)
+            } catch {
+              profileCache.current.set(e.username, null)
+            }
+          }),
+        )
+        if (!cancelled) bumpProfiles((n) => n + 1)
+      }
+    })()
     return () => { cancelled = true }
   }, [entries])
 
