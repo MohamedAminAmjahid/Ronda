@@ -4,6 +4,7 @@ import { useAuth } from './auth'
 import { createOrUpdateUser, registerPendingReferral, migrateFriendCounts } from './firestore'
 import { fetchUserLeague } from '../online/client'
 import { preloadLeaderboard } from '../online/leaderboardCache'
+import { preloadFriends } from '../online/friendsCache'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
   setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
@@ -95,6 +96,10 @@ export function useFirebaseProfileSync(): void {
         void fetchUserLeague(username || p.username)
           .then((league) => preloadLeaderboard(league))
           .catch(() => {})
+
+        // Précharge la liste d'amis en arrière-plan — l'écran Amis l'affiche
+        // instantanément au lieu d'attendre Firestore à la 1re visite.
+        preloadFriends(user.uid)
 
         // Parrainage : enregistre le filleul « en attente » chez le parrain (le
         // crédit sera appliqué à sa 1re partie). No-op si déjà parrainé.

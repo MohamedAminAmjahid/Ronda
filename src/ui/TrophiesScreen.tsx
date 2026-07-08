@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useAuth } from '../firebase/auth'
-import {
-  getTopUsers, getFriends, getUserById, getWeeklyWagered, getWeeklyWageredLeaderboard,
-  type UserDoc, type FriendDoc,
-} from '../firebase/firestore'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
+import {
+  getCachedTrophies, isTrophiesStale, refreshTrophies, subscribeTrophies, emptyTrophyEntries,
+  type MetricKey, type TrophyEntry, type TrophiesData,
+} from '../online/trophiesCache'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -21,79 +21,14 @@ const C = {
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
-// Seuil de parties minimum pour apparaître au classement du taux de victoire
-// — sinon un joueur à 1 partie jouée et gagnée écraserait tout le monde à 100%.
-const MIN_GAMES_FOR_WINRATE = 10
-// Taille du bassin de candidats (les plus actifs par gamesPlayed) dans lequel
-// le taux de victoire est calculé — PAS un scan exhaustif de tous les
-// utilisateurs (impraticable côté client). Un joueur avec ≥10 parties mais
-// hors des 200 comptes les plus actifs de toute l'app ne sera pas détecté :
-// approximation assumée, pas un vrai top exhaustif.
-const WINRATE_POOL_SIZE = 200
-
-type MetricKey =
-  | 'level' | 'gold' | 'gamesWon' | 'currentStreak'
-  | 'gamesPlayed' | 'winRate' | 'weeklyWagered' | 'friendCount'
-
-interface Entry {
-  uid:         string
-  username:    string
-  avatarType:  string
-  avatarEmoji: string
-  avatarImage: string
-  value:       number
-}
+type Entry = TrophyEntry
 
 interface CardData {
   entries:      Entry[]        // classés, « moi » inclus s'il y figure
   meOutsideTop: Entry | null   // « moi », uniquement si absent du top (scope global)
 }
 
-interface StatShape {
-  level: number
-  gold: number
-  gamesWon: number
-  gamesPlayed: number
-  currentStreak: number
-  friendCount: number
-}
-
-function toEntry(
-  u: { uid: string; username: string; avatarType?: string; avatarEmoji?: string; avatarImage?: string },
-  value: number,
-): Entry {
-  return {
-    uid: u.uid, username: u.username,
-    avatarType: u.avatarType ?? 'initial', avatarEmoji: u.avatarEmoji ?? '', avatarImage: u.avatarImage ?? '',
-    value,
-  }
-}
-
-/** Construit l'entrée d'une métrique pour un joueur — null si non éligible
- * (uniquement le taux de victoire, sous le seuil de parties). */
-function buildEntry(
-  u: { uid: string; username: string; avatarType?: string; avatarEmoji?: string; avatarImage?: string },
-  metric: MetricKey,
-  stats: StatShape,
-  weeklyGold: number,
-): Entry | null {
-  switch (metric) {
-    case 'level':         return toEntry(u, stats.level)
-    case 'gold':           return toEntry(u, stats.gold)
-    case 'gamesWon':       return toEntry(u, stats.gamesWon)
-    case 'currentStreak':  return toEntry(u, stats.currentStreak)
-    case 'gamesPlayed':    return toEntry(u, stats.gamesPlayed)
-    case 'friendCount':    return toEntry(u, stats.friendCount)
-    case 'weeklyWagered':  return toEntry(u, weeklyGold)
-    case 'winRate':
-      if (stats.gamesPlayed < MIN_GAMES_FOR_WINRATE) return null
-      return toEntry(u, Math.round((stats.gamesWon / stats.gamesPlayed) * 100))
-  }
-}
-
-const METRIC_KEYS: MetricKey[] = [
-  'level', 'gold', 'gamesWon', 'currentStreak', 'gamesPlayed', 'winRate', 'weeklyWagered', 'friendCount',
-]
+const EMPTY_DATA: TrophiesData = { global: emptyTrophyEntries(), friends: emptyTrophyEntries(), hasFriends: false }
 
 interface Props {
   onBack: () => void
@@ -106,98 +41,46 @@ export function TrophiesScreen({ onBack }: Props) {
 
   const [scope, setScope] = useState<'global' | 'friends'>('global')
   const [loading, setLoading] = useState(true)
-  const emptyEntries = (): Record<MetricKey, Entry[]> => ({
-    level: [], gold: [], gamesWon: [], currentStreak: [],
-    gamesPlayed: [], winRate: [], weeklyWagered: [], friendCount: [],
-  })
-  const [globalEntries, setGlobalEntries] = useState<Record<MetricKey, Entry[]>>(emptyEntries)
-  const [friendsEntries, setFriendsEntries] = useState<Record<MetricKey, Entry[]>>(emptyEntries)
-  const [hasFriends, setHasFriends] = useState(false)
+  const [data, setData] = useState<TrophiesData>(EMPTY_DATA)
   const [seeAll, setSeeAll] = useState<MetricKey | null>(null)
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
 
+  // Affichage instantané depuis le cache (même périmé), puis refresh
+  // silencieux en arrière-plan si absent ou dépassé les 10 min de TTL. Le
+  // spinner plein écran ne s'affiche que si on n'a RIEN à montrer.
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    void (async () => {
-      try {
-        const [level, gold, gamesWon, currentStreak, gamesPlayedPool, friendCount, weeklyTop, mine, friends] =
-          await Promise.all([
-            getTopUsers('level'),
-            getTopUsers('gold'),
-            getTopUsers('gamesWon'),
-            getTopUsers('currentStreak'),
-            getTopUsers('gamesPlayed', WINRATE_POOL_SIZE),
-            getTopUsers('friendCount'),
-            getWeeklyWageredLeaderboard(50),
-            myUid ? getUserById(myUid) : Promise.resolve(null),
-            myUid ? getFriends(myUid) : Promise.resolve<FriendDoc[]>([]),
-          ])
+    const cached = getCachedTrophies(myUid)
+    if (cached) {
+      setData(cached)
+      setLoading(false)
+    }
+    if (isTrophiesStale(myUid)) {
+      if (!cached) setLoading(true)
+      void refreshTrophies(myUid).then(() => {
         if (cancelled) return
-
-        const winRateTop = gamesPlayedPool
-          .filter((u) => u.gamesPlayed >= MIN_GAMES_FOR_WINRATE)
-          .map((u) => toEntry(u, Math.round((u.gamesWon / u.gamesPlayed) * 100)))
-          .sort((a, b) => b.value - a.value)
-          .slice(0, 50)
-
-        setGlobalEntries({
-          level:         level.map((u) => toEntry(u, u.level)),
-          gold:          gold.map((u) => toEntry(u, u.gold)),
-          gamesWon:      gamesWon.map((u) => toEntry(u, u.gamesWon)),
-          currentStreak: currentStreak.map((u) => toEntry(u, u.currentStreak)),
-          gamesPlayed:   gamesPlayedPool.slice(0, 50).map((u) => toEntry(u, u.gamesPlayed)),
-          friendCount:   friendCount.map((u) => toEntry(u, u.friendCount)),
-          winRate:       winRateTop,
-          weeklyWagered: weeklyTop.map((w) => toEntry(w, w.gold)),
-        })
-
-        // Or misé cette semaine, pour moi + mes amis — requêtes ciblées par
-        // doc id déterministe (weekly_scores/{semaine}_{username}_{jeu}), pas
-        // de scan : bon marché même avec beaucoup d'amis.
-        const names = [...(mine ? [mine.username] : []), ...friends.map((f) => f.username)]
-        const weeklyAmounts = await Promise.all(names.map((n) => getWeeklyWagered(n)))
-        const weeklyByUsername = new Map(names.map((n, i) => [n, weeklyAmounts[i]]))
-
-        const meStats: StatShape | null = mine ? {
-          level: mine.level, gold: mine.gold, gamesWon: mine.gamesWon,
-          gamesPlayed: mine.gamesPlayed, currentStreak: mine.currentStreak, friendCount: mine.friendCount,
-        } : null
-
-        const friendsOut: Record<MetricKey, Entry[]> = Object.fromEntries(
-          METRIC_KEYS.map((metric) => {
-            const meEntry = mine && meStats
-              ? buildEntry(mine, metric, meStats, weeklyByUsername.get(mine.username) ?? 0)
-              : null
-            const friendEntries = friends
-              .map((f) => buildEntry(f, metric, {
-                level: f.level ?? 1, gold: f.gold ?? 0, gamesWon: f.gamesWon ?? 0,
-                gamesPlayed: f.gamesPlayed ?? 0, currentStreak: f.currentStreak ?? 0, friendCount: f.friendCount ?? 0,
-              }, weeklyByUsername.get(f.username) ?? 0))
-              .filter((e): e is Entry => e !== null)
-            const list = [...(meEntry ? [meEntry] : []), ...friendEntries]
-            list.sort((a, b) => b.value - a.value)
-            return [metric, list]
-          }),
-        ) as Record<MetricKey, Entry[]>
-
-        setFriendsEntries(friendsOut)
-        setHasFriends(friends.length > 0)
-      } catch {
-        // best-effort — l'écran reste utilisable avec des listes vides
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+        const fresh = getCachedTrophies(myUid)
+        if (fresh) { setData(fresh); setLoading(false) }
+        else if (!cached) setLoading(false) // échec ET rien en cache → écran vide, pas d'erreur bloquante
+      })
+    }
     return () => { cancelled = true }
   }, [myUid])
 
+  // Un refresh déclenché ailleurs (ex. preload au login) met aussi à jour cet écran.
+  useEffect(() => {
+    return subscribeTrophies(() => {
+      const fresh = getCachedTrophies(myUid)
+      if (fresh) setData(fresh)
+    })
+  }, [myUid])
+
   const dataFor = (metric: MetricKey): CardData => {
-    if (scope === 'friends') return { entries: friendsEntries[metric], meOutsideTop: null }
-    const entries = globalEntries[metric]
+    if (scope === 'friends') return { entries: data.friends[metric], meOutsideTop: null }
+    const entries = data.global[metric]
     const inList = myUid ? entries.some((e) => e.uid === myUid) : true
-    const meEntry = !inList ? friendsEntries[metric].find((e) => e.uid === myUid) ?? null : null
+    const meEntry = !inList ? data.friends[metric].find((e) => e.uid === myUid) ?? null : null
     return { entries, meOutsideTop: meEntry }
   }
 
@@ -217,7 +100,7 @@ export function TrophiesScreen({ onBack }: Props) {
     { key: 'friendCount',   icon: '🤝', title: t('trophyFriends'), format: (n) => t('trophyFriendsValue').replace('{n}', String(n)) },
   ]
 
-  const noFriends = scope === 'friends' && !hasFriends
+  const noFriends = scope === 'friends' && !data.hasFriends
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
@@ -249,7 +132,7 @@ export function TrophiesScreen({ onBack }: Props) {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={C.brass} style={{ marginTop: 40 }} />
+          <TrophySkeletonGrid count={8} />
         ) : noFriends ? (
           <Text style={s.empty}>{t('trophyNoFriends')}</Text>
         ) : (
@@ -404,6 +287,45 @@ function Row({
   )
 }
 
+// ── Grille skeleton (pulse) — affichée uniquement au tout premier chargement,
+// jamais préchargé (pas de cache du tout à montrer). ────────────────────────
+
+function TrophySkeletonCard() {
+  const pulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,   duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+
+  return (
+    <Animated.View style={[s.summaryCard, { opacity: pulse }]}>
+      <View style={s.skeletonTitle} />
+      <View style={s.summaryTopRow}>
+        <View style={s.skeletonAvatar} />
+        <View style={{ flex: 1, gap: 6 }}>
+          <View style={s.skeletonLine} />
+          <View style={[s.skeletonLine, { width: '50%' }]} />
+        </View>
+      </View>
+      <View style={[s.skeletonLine, { width: 60, alignSelf: 'flex-end' }]} />
+    </Animated.View>
+  )
+}
+
+function TrophySkeletonGrid({ count }: { count: number }) {
+  return (
+    <ScrollView contentContainerStyle={s.grid} showsVerticalScrollIndicator={false}>
+      {Array.from({ length: count }).map((_, i) => <TrophySkeletonCard key={i} />)}
+    </ScrollView>
+  )
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -457,6 +379,10 @@ const s = StyleSheet.create({
   value: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
 
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 40, lineHeight: 20 },
+
+  skeletonTitle:  { width: '60%', height: 12, borderRadius: 5, backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonLine:   { height: 10, borderRadius: 5, width: '80%', backgroundColor: 'rgba(244,236,216,0.16)' },
 
   modalBackdrop: {
     flex: 1, backgroundColor: 'rgba(6,20,15,0.86)', justifyContent: 'flex-end',

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -9,10 +9,11 @@ import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
 import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
-  getFriends, getPendingRequests, subscribePendingCount, subscribeFriendUnreadCounts,
+  subscribePendingCount, subscribeFriendUnreadCounts,
   subscribeOnlineStatuses, removeFriend,
   type FriendDoc, type UserDoc, type PresenceInfo,
 } from '../firebase/firestore'
+import { getCachedFriends, isFriendsStale, refreshFriends, subscribeFriends } from '../online/friendsCache'
 import { useI18n } from '../i18n/useI18n'
 import { InviteToPlayModal } from './InviteToPlayModal'
 import { PresenceDot, presenceLabel } from './PresenceDot'
@@ -57,21 +58,47 @@ export function FriendsScreen({ onBack }: Props) {
     return unsub
   }, [friends])
 
+  // Refresh FORCÉ (bypass le TTL) — utilisé après une action de l'utilisateur
+  // (accepter/refuser/supprimer un ami, envoyer une demande) : on veut des
+  // données fraîches immédiatement, peu importe si le cache vient d'être
+  // rempli il y a 10 secondes.
   const refresh = useCallback(async () => {
     if (!user) return
-    setLoading(true)
-    try {
-      const [f, r] = await Promise.all([getFriends(user.uid), getPendingRequests(user.uid)])
-      setFriends(f)
-      setRequests(r)
-    } catch {
-      // règles Firestore / hors-ligne
-    } finally {
-      setLoading(false)
-    }
+    await refreshFriends(user.uid)
+    const data = getCachedFriends(user.uid)
+    if (data) { setFriends(data.friends); setRequests(data.requests) }
   }, [user])
 
-  useEffect(() => { void refresh() }, [refresh])
+  // Affichage instantané depuis le cache (même périmé), puis refresh
+  // silencieux en arrière-plan si absent ou dépassé les 2 min de TTL.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    const cached = getCachedFriends(user.uid)
+    if (cached) {
+      setFriends(cached.friends)
+      setRequests(cached.requests)
+    }
+    if (isFriendsStale(user.uid)) {
+      if (!cached) setLoading(true)
+      void refreshFriends(user.uid).then(() => {
+        if (cancelled) return
+        const fresh = getCachedFriends(user.uid)
+        if (fresh) { setFriends(fresh.friends); setRequests(fresh.requests) }
+        setLoading(false)
+      })
+    }
+    return () => { cancelled = true }
+  }, [user])
+
+  // Un refresh déclenché ailleurs (ex. preload au login) met aussi à jour cet écran.
+  useEffect(() => {
+    if (!user) return
+    return subscribeFriends(() => {
+      const data = getCachedFriends(user.uid)
+      if (data) { setFriends(data.friends); setRequests(data.requests) }
+    })
+  }, [user])
 
   // Abonnements temps réel pour badges
   useEffect(() => {
@@ -197,7 +224,7 @@ export function FriendsScreen({ onBack }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-          {loading && tab !== 'add' && <ActivityIndicator color={C.brass} style={{ marginTop: 24 }} />}
+          {loading && tab !== 'add' && <FriendSkeletonRows count={5} />}
 
           {tab === 'friends' && !loading && (
             friends.length === 0
@@ -381,6 +408,41 @@ export function FriendsScreen({ onBack }: Props) {
   )
 }
 
+// ── Lignes skeleton (pulse) — affichées uniquement au tout premier chargement,
+// jamais préchargé (pas de cache du tout à montrer). ────────────────────────
+
+function FriendSkeletonRow() {
+  const pulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,   duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+
+  return (
+    <Animated.View style={[s.row, { opacity: pulse }]}>
+      <View style={s.skeletonAvatar} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={s.skeletonLine} />
+        <View style={[s.skeletonLine, { width: '35%' }]} />
+      </View>
+    </Animated.View>
+  )
+}
+
+function FriendSkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => <FriendSkeletonRow key={i} />)}
+    </>
+  )
+}
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 460, paddingHorizontal: 18 },
@@ -407,6 +469,9 @@ const s = StyleSheet.create({
   onboardingIcon:  { fontSize: 48, lineHeight: 56 },
   onboardingTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 17, color: C.bone, textAlign: 'center' },
   onboardingHint:  { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, textAlign: 'center', lineHeight: 20 },
+
+  skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonLine:   { height: 10, borderRadius: 5, width: '60%', backgroundColor: 'rgba(244,236,216,0.16)' },
 
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10,

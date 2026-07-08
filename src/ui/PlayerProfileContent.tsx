@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated,
 } from 'react-native'
 import { router, usePathname } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
@@ -10,9 +10,10 @@ import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
 import { useAuth } from '../firebase/auth'
 import {
-  getUserById, getGoldHistory, subscribeOnlineStatus, sendFriendRequest, getFriendStatus,
+  getGoldHistory, subscribeOnlineStatus, sendFriendRequest, getFriendStatus,
   type UserDoc, type FriendDoc, type GoldHistoryEntry, type PresenceInfo,
 } from '../firebase/firestore'
+import { getCachedProfile, isProfileStale, refreshProfile, subscribeProfile } from '../online/profileCache'
 import { PresenceDot, presenceLabel } from './PresenceDot'
 import { fetchUserLeagueByUsername } from '../online/client'
 import { useI18n } from '../i18n/useI18n'
@@ -92,22 +93,46 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
     return () => { cancelled = true }
   }, [user, uid])
 
+  // Affichage instantané depuis le cache (même périmé), puis refresh
+  // silencieux en arrière-plan si absent ou dépassé les 5 min de TTL.
   useEffect(() => {
     if (!uid) { setLoading(false); return }
     let cancelled = false
-    setLoading(true)
     setHistory([])
-    void getUserById(uid)
-      .then((u) => {
+    const cached = getCachedProfile(uid)
+    if (cached) {
+      setProfile(cached)
+      setLoading(false)
+      if (cached.goldHistoryPublic) void getGoldHistory(uid).then((h) => { if (!cancelled) setHistory(h) })
+    } else {
+      setLoading(true)
+    }
+    if (isProfileStale(uid)) {
+      void refreshProfile(uid).then(() => {
         if (cancelled) return
-        setProfile(u)
-        if (u?.goldHistoryPublic) {
-          void getGoldHistory(uid).then((h) => { if (!cancelled) setHistory(h) })
+        const fresh = getCachedProfile(uid)
+        if (fresh) {
+          setProfile(fresh)
+          setLoading(false)
+          if (fresh.goldHistoryPublic) void getGoldHistory(uid).then((h) => { if (!cancelled) setHistory(h) })
+        } else if (!cached) {
+          // Échec ET rien en cache : profil introuvable (ou hors-ligne).
+          setProfile(null)
+          setLoading(false)
         }
       })
-      .catch(() => { if (!cancelled) setProfile(null) })
-      .finally(() => { if (!cancelled) setLoading(false) })
+    }
     return () => { cancelled = true }
+  }, [uid])
+
+  // Un refresh déclenché ailleurs (ex. un autre écran affichant ce même
+  // profil) met aussi à jour cet affichage.
+  useEffect(() => {
+    if (!uid) return
+    return subscribeProfile(() => {
+      const fresh = getCachedProfile(uid)
+      if (fresh) setProfile(fresh)
+    })
   }, [uid])
 
   const relativeTime = (d: Date | null): string => {
@@ -147,7 +172,7 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
       }
     : null
 
-  if (loading) return <ActivityIndicator color={C.brass} style={{ marginTop: 40 }} />
+  if (loading) return <ProfileSkeleton />
   if (!profile) return <Text style={s.empty}>{t('profileNotFound')}</Text>
 
   return (
@@ -313,6 +338,37 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   )
 }
 
+// ── Skeleton (pulse) — affiché uniquement au tout premier chargement, jamais
+// préchargé (pas de cache du tout à montrer pour cet uid). ───────────────────
+
+function ProfileSkeleton() {
+  const pulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,   duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+
+  return (
+    <Animated.View style={[s.body, { opacity: pulse, paddingTop: 8 }]}>
+      <View style={[s.identity, { alignItems: 'center' }]}>
+        <View style={s.skeletonAvatarLg} />
+        <View style={[s.skeletonLine, { width: 140, height: 16 }]} />
+      </View>
+      <View style={s.statsRow}>
+        <View style={[s.statCard, { height: 90 }]} />
+        <View style={[s.statCard, { height: 90 }]} />
+      </View>
+      <View style={[s.card, { height: 70 }]} />
+    </Animated.View>
+  )
+}
+
 // ── Carte de stats par jeu ──────────────────────────────────────────────────────
 
 function StatCard({
@@ -351,6 +407,9 @@ const s = StyleSheet.create({
   leagueBadge: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.brass, letterSpacing: 0.3 },
   presenceTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
   presenceOnline: { color: '#27AE60' },
+
+  skeletonAvatarLg: { width: 88, height: 88, borderRadius: 44, backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonLine:     { height: 10, borderRadius: 5, backgroundColor: 'rgba(244,236,216,0.16)' },
 
   sectionLabel: {
     fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff,
