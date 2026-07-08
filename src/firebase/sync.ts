@@ -5,9 +5,10 @@ import { createOrUpdateUser, registerPendingReferral, migrateFriendCounts } from
 import { fetchUserLeague } from '../online/client'
 import { preloadLeaderboard } from '../online/leaderboardCache'
 import { preloadFriends } from '../online/friendsCache'
+import { preloadConversations } from '../online/messagesCache'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
-  setStatsPublicLocal, setInvisibleModeLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
+  setStatsPublicLocal, setInvisibleModeLocal, setStatsLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
@@ -51,6 +52,7 @@ export function useFirebaseProfileSync(): void {
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
           avatarType, avatarEmoji, avatarImage,
           xp, level,
+          gamesPlayed, gamesWon, rondaPlayed, rondaWon, dijoujPlayed, dijoujWon,
         } = await createOrUpdateUser(user, {
           username: p.username,
           gold: p.gold,
@@ -76,6 +78,7 @@ export function useFirebaseProfileSync(): void {
         })
         console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
         console.log('[sync] username Firestore:', username, '| local:', p.username)
+        console.log('[sync] stats après login:', { gamesPlayed, gamesWon })
         if (!cancelled) {
           // Firestore fait autorité : on n'écrase le local QUE si la valeur diffère.
           // Ne jamais renvoyer le username local vers Firestore ici.
@@ -85,6 +88,7 @@ export function useFirebaseProfileSync(): void {
           setGoldHistoryPublicLocal(goldHistoryPublic)
           setStatsPublicLocal(statsPublic)
           setInvisibleModeLocal(invisibleMode)
+          setStatsLocal({ gamesPlayed, gamesWon, rondaPlayed, rondaWon, dijoujPlayed, dijoujWon })
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
           setAvatarLocal(avatarType, avatarEmoji, avatarImage)
           setXpLevelLocal(xp, level)
@@ -101,6 +105,9 @@ export function useFirebaseProfileSync(): void {
         // Précharge la liste d'amis en arrière-plan — l'écran Amis l'affiche
         // instantanément au lieu d'attendre Firestore à la 1re visite.
         preloadFriends(user.uid)
+
+        // Idem pour la liste des conversations (écran Messages).
+        preloadConversations(user.uid)
 
         // Parrainage : enregistre le filleul « en attente » chez le parrain (le
         // crédit sera appliqué à sa 1re partie). No-op si déjà parrainé.

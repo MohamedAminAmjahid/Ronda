@@ -169,6 +169,9 @@ interface CreateOrUpdateUserResult {
   avatarFrame: string; ownedFrames: string[]; statsPublic: boolean; invisibleMode: boolean
   avatarType: string; avatarEmoji: string; avatarImage: string
   xp: number; level: number
+  gamesPlayed: number; gamesWon: number
+  rondaPlayed: number; rondaWon: number
+  dijoujPlayed: number; dijoujWon: number
 }
 
 /**
@@ -275,6 +278,9 @@ async function createOrUpdateUserInner(
       avatarEmoji: local.avatarEmoji ?? '',
       avatarImage: local.avatarImage ?? '',
       xp: local.xp ?? 0, level: local.level ?? 1,
+      gamesPlayed: local.gamesPlayed, gamesWon: local.gamesWon,
+      rondaPlayed: local.rondaPlayed, rondaWon: local.rondaWon,
+      dijoujPlayed: local.dijoujPlayed, dijoujWon: local.dijoujWon,
     }
   }
 
@@ -314,6 +320,14 @@ async function createOrUpdateUserInner(
     avatarImage: (data.avatarImage as string) ?? '',
     xp:    typeof data.xp === 'number' ? (data.xp as number) : 0,
     level: typeof data.level === 'number' ? (data.level as number) : 1,
+    // Firestore fait autorité pour les stats aussi : ne jamais relire local.X ici
+    // (le profil local peut être à 0 juste après un logout/resetProfile()).
+    gamesPlayed:  typeof data.gamesPlayed === 'number'  ? (data.gamesPlayed as number)  : local.gamesPlayed,
+    gamesWon:     typeof data.gamesWon === 'number'     ? (data.gamesWon as number)     : local.gamesWon,
+    rondaPlayed:  typeof data.rondaPlayed === 'number'  ? (data.rondaPlayed as number)  : local.rondaPlayed,
+    rondaWon:     typeof data.rondaWon === 'number'     ? (data.rondaWon as number)     : local.rondaWon,
+    dijoujPlayed: typeof data.dijoujPlayed === 'number' ? (data.dijoujPlayed as number) : local.dijoujPlayed,
+    dijoujWon:    typeof data.dijoujWon === 'number'    ? (data.dijoujWon as number)    : local.dijoujWon,
   }
 }
 
@@ -1022,6 +1036,23 @@ export function subscribeMessages(
       }),
     ),
   )
+}
+
+/** Charge une fois les messages d'un chat (triés chronologiquement). Pour le cache. */
+export async function getChatMessages(chatId: string): Promise<MessageDoc[]> {
+  const snap = await getDocs(query(
+    collection(db, 'chats', chatId, 'messages'),
+    orderBy('createdAt', 'asc'),
+  ))
+  return snap.docs.map((d) => {
+    const data = d.data()
+    return {
+      id: d.id,
+      fromUid: data.fromUid as string,
+      text: data.text as string,
+      createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+    }
+  })
 }
 
 /** Remet à 0 le compteur de non-lus pour myUid dans ce chat. */

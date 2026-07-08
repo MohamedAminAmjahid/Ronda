@@ -528,6 +528,28 @@ export function buyCosmetic(kind: CosmeticKind, id: string): boolean {
   return true
 }
 
+/**
+ * Applique les stats de partie Firebase au login (local uniquement, sans
+ * ré-écriture). Nécessaire après un logout : resetProfile() remet les stats
+ * locales à 0, et seul ce recharge depuis Firestore les restaure — sans ça,
+ * la 1re partie jouée après une reconnexion incrémenterait depuis 0 et
+ * écraserait les vraies stats Firestore via syncStatsToFirestore().
+ */
+export function setStatsLocal(s: {
+  gamesPlayed: number; gamesWon: number
+  rondaPlayed: number; rondaWon: number
+  dijoujPlayed: number; dijoujWon: number
+}): void {
+  profile = {
+    ...profile,
+    gamesPlayed: s.gamesPlayed, gamesWon: s.gamesWon,
+    rondaPlayed: s.rondaPlayed, rondaWon: s.rondaWon,
+    dijoujPlayed: s.dijoujPlayed, dijoujWon: s.dijoujWon,
+  }
+  void persist()
+  emit()
+}
+
 /** Applique les cosmétiques Firebase au login (local uniquement). */
 export function setCosmeticsLocal(c: {
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
