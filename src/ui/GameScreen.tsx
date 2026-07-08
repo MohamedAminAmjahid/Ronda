@@ -612,6 +612,10 @@ export function GameScreen({
           playLoseSound()
           // Le bot gagne la mise → met à jour son profil fantôme Firestore.
           if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
+          // Partie perçue comme en ligne : le bot doit apparaître au classement
+          // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
+          // (symétrique à l'appel côté victoire du joueur, ligne ~605).
+          if (stakeBet > 0 && rawBotName && isOnlineGame) void recordLeaderboardScore(rawBotName, stakeBet, 'ronda')
         }
       }
     } else {

@@ -299,6 +299,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
         playLoseSound()
         // Le bot gagne la mise → met à jour son profil fantôme Firestore.
         if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
+        // Partie perçue comme en ligne : le bot doit apparaître au classement
+        // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
+        // (symétrique à l'appel côté victoire du joueur, ligne ~293).
+        if (stakeBet > 0 && botName && isOnlineGame) void recordLeaderboardScore(botName, stakeBet, 'dijouj')
       }
     }
     setShowLastCardMsg(true)
