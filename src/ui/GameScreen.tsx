@@ -969,8 +969,21 @@ export function GameScreen({
                 onPress={() => {
                   setConfirmQuit(false)
                   // Forfait volontaire d'une partie misée : défaite enregistrée
-                  // (la mise, déjà déduite, reste perdue).
-                  if (stakeBet > 0) { recordResult(false); router.replace('/' as Href); return }
+                  // (la mise, déjà déduite au moment de miser via
+                  // BetScreen.launchGame → removeGold(bet), reste perdue — ne
+                  // PAS la redéduire ici, ça la débiterait deux fois). Le bot
+                  // gagnant doit en revanche recevoir le même traitement
+                  // qu'une défaite normale (updateBotStats + classement
+                  // hebdo), ce qui manquait sur ce chemin.
+                  if (stakeBet > 0) {
+                    recordResult(false, 'ronda', { online: isOnlineGame })
+                    if (rawBotName) {
+                      void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
+                      if (isOnlineGame) void recordLeaderboardScore(rawBotName, stakeBet, 'ronda')
+                    }
+                    router.replace('/' as Href)
+                    return
+                  }
                   onBack()
                 }}
               >

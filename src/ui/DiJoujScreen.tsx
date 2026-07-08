@@ -381,8 +381,18 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     if (forfeitedRef.current) return
     forfeitedRef.current = true
     setForfeited(true)
-    recordResult(false, 'dijouj')
+    recordResult(false, 'dijouj', { online: isOnlineGame })
     playLoseSound()
+    // La mise a déjà été déduite au moment de la miser (BetScreen.launchGame
+    // → removeGold(bet)) — ne PAS la redéduire ici, ça la débiterait deux
+    // fois. Un forfait est juste une défaite de plus : ne rien créditer en
+    // retour suffit à la laisser perdue. En revanche, le bot gagnant doit
+    // recevoir le même traitement qu'une défaite normale (updateBotStats +
+    // classement hebdo), ce qui manquait totalement sur ce chemin.
+    if (stakeBet > 0 && botName) {
+      void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
+      if (isOnlineGame) void recordLeaderboardScore(botName, stakeBet, 'dijouj')
+    }
     setTimeout(() => router.replace('/' as Href), 2000)
   }
 
