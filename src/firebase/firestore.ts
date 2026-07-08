@@ -166,7 +166,7 @@ export async function isUsernameAvailable(username: string, excludeUid?: string)
 interface CreateOrUpdateUserResult {
   username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
-  avatarFrame: string; ownedFrames: string[]; statsPublic: boolean
+  avatarFrame: string; ownedFrames: string[]; statsPublic: boolean; invisibleMode: boolean
   avatarType: string; avatarEmoji: string; avatarImage: string
   xp: number; level: number
 }
@@ -244,6 +244,7 @@ async function createOrUpdateUserInner(
       usernameChanges: local.usernameChanges,
       goldHistoryPublic: local.goldHistoryPublic,
       statsPublic: true,
+      invisibleMode: false,
       table: local.table,
       ownedTables: local.ownedTables,
       cardBack: local.cardBack,
@@ -269,6 +270,7 @@ async function createOrUpdateUserInner(
       cardBack: local.cardBack, ownedBacks: local.ownedBacks,
       avatarFrame: local.avatarFrame, ownedFrames: local.ownedFrames,
       statsPublic: true,
+      invisibleMode: false,
       avatarType:  local.avatarType  ?? 'initial',
       avatarEmoji: local.avatarEmoji ?? '',
       avatarImage: local.avatarImage ?? '',
@@ -306,6 +308,7 @@ async function createOrUpdateUserInner(
     avatarFrame: (data.avatarFrame as string) ?? local.avatarFrame,
     ownedFrames: (data.ownedFrames as string[]) ?? local.ownedFrames,
     statsPublic: typeof data.statsPublic === 'boolean' ? (data.statsPublic as boolean) : true,
+    invisibleMode: typeof data.invisibleMode === 'boolean' ? (data.invisibleMode as boolean) : false,
     avatarType:  (data.avatarType  as string) ?? 'initial',
     avatarEmoji: (data.avatarEmoji as string) ?? '',
     avatarImage: (data.avatarImage as string) ?? '',
@@ -317,6 +320,11 @@ async function createOrUpdateUserInner(
 /** Active/désactive la visibilité publique des statistiques. */
 export async function updateStatsPublic(uid: string, value: boolean): Promise<void> {
   await updateDoc(userRef(uid), { statsPublic: value })
+}
+
+/** Active/désactive le mode invisible (masque isOnline/gameStatus aux autres joueurs). */
+export async function updateInvisibleMode(uid: string, invisible: boolean): Promise<void> {
+  await updateDoc(userRef(uid), { invisibleMode: invisible })
 }
 
 /** Met à jour le username et usernameLower dans Firestore. */
@@ -774,6 +782,7 @@ export function subscribeOnlineStatus(uid: string, cb: (info: PresenceInfo) => v
     userRef(uid),
     (snap) => {
       const d = snap.data() ?? {}
+      if (d.invisibleMode === true) { cb({ isOnline: false, lastSeen: null, gameStatus: null }); return }
       cb({ isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen), gameStatus: toGameStatus(d.gameStatus) })
     },
     () => cb({ isOnline: false, lastSeen: null, gameStatus: null }),
@@ -799,11 +808,13 @@ export function subscribeOnlineStatuses(
       (snap) => {
         snap.forEach((d) => {
           const data = d.data()
-          acc[d.id] = {
-            isOnline: data.isOnline === true,
-            lastSeen: toDate(data.lastSeen),
-            gameStatus: toGameStatus(data.gameStatus),
-          }
+          acc[d.id] = data.invisibleMode === true
+            ? { isOnline: false, lastSeen: null, gameStatus: null }
+            : {
+                isOnline: data.isOnline === true,
+                lastSeen: toDate(data.lastSeen),
+                gameStatus: toGameStatus(data.gameStatus),
+              }
         })
         cb({ ...acc })
       },

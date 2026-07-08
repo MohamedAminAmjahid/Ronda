@@ -94,7 +94,7 @@ export function DiJoujOnlineScreen() {
   const handGap   = isSmall ? 3 : 8
 
   const { t }        = useI18n()
-  const { username, avatarType, avatarEmoji, avatarImage, level, xp } = useProfile()
+  const { username, avatarType, avatarEmoji, avatarImage, level, xp, invisibleMode } = useProfile()
   const { user }     = useAuth()
   const myUid        = user?.uid ?? ''
   const offline      = useIsOffline()
@@ -124,10 +124,12 @@ export function DiJoujOnlineScreen() {
   useEffect(() => {
     if (!myUid) return
     let status: GameStatus = null
-    if (connectionStatus === 'waiting') status = 'matchmaking'
-    else if (connectionStatus === 'playing') status = isQuick ? 'playing_online' : 'playing_friend'
+    if (!invisibleMode) {
+      if (connectionStatus === 'waiting') status = 'matchmaking'
+      else if (connectionStatus === 'playing') status = isQuick ? 'playing_online' : 'playing_friend'
+    }
     void updateGameStatus(myUid, status)
-  }, [myUid, connectionStatus, isQuick])
+  }, [myUid, connectionStatus, isQuick, invisibleMode])
 
   // Toujours effacer au démontage, même si l'effet ci-dessus n'a pas eu
   // l'occasion de tourner une dernière fois (navigation brutale).

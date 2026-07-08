@@ -206,7 +206,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   const handGap   = isSmall ? 3 : 8
 
   const { t } = useI18n()
-  const { table, username } = useProfile()
+  const { table, username, invisibleMode } = useProfile()
   const { user } = useAuth()
   const myUid = user?.uid ?? null
   const felt = tableColors(table)  // dégradé du tapis équipé
@@ -248,10 +248,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   // « online » ici contrairement à GameScreen.tsx (Ronda), qui partage un
   // seul composant entre les deux cas.
   useEffect(() => {
-    if (!myUid || !botName) return
+    if (!myUid || !botName || invisibleMode) return
     void updateGameStatus(myUid, 'playing_bot')
     return () => { void updateGameStatus(myUid, null) }
-  }, [myUid, botName])
+  }, [myUid, botName, invisibleMode])
 
   // Effacé dès la fin de la partie (pas seulement au démontage) : la partie
   // continue de s'afficher (écran de résultat) après isGameOver.

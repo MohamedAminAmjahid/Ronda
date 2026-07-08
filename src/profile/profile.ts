@@ -8,6 +8,7 @@ import {
   updateStats as firestoreUpdateStats,
   updateGoldHistoryPublic as firestoreUpdateGoldHistoryPublic,
   updateStatsPublic as firestoreUpdateStatsPublic,
+  updateInvisibleMode as firestoreUpdateInvisibleMode,
   updateCosmetics as firestoreUpdateCosmetics,
   updateXpLevel as firestoreUpdateXpLevel,
   applyReferral, REFERRAL_REWARD,
@@ -23,6 +24,7 @@ import { FRAMES, DEFAULT_FRAME } from '../cosmetics/avatarFrames'
 // Le store est pur côté UI : on s'abonne via subscribeProfile et on lit getProfile().
 
 const STORAGE_KEY = 'ronda_profile'
+const INVISIBLE_MODE_KEY = 'ronda_invisible_mode'
 const ACTIVE_ROOM_KEY = 'ronda_active_room'
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
 const STARTING_GOLD = 200
@@ -61,6 +63,8 @@ export interface Profile {
   goldHistoryPublic: boolean
   /** Statistiques visibles publiquement (true par défaut). */
   statsPublic: boolean
+  /** Masque la présence en ligne et le statut de jeu aux autres joueurs (false par défaut). */
+  invisibleMode: boolean
   /** Cosmétiques : tapis + dos de cartes + cadre d'avatar. */
   table: string
   ownedTables: string[]
@@ -100,6 +104,7 @@ let profile: Profile = {
   dailyTransferDate: '',
   goldHistoryPublic: true,
   statsPublic: true,
+  invisibleMode: false,
   table: DEFAULT_TABLE,
   ownedTables: [DEFAULT_TABLE],
   cardBack: DEFAULT_BACK,
@@ -163,6 +168,7 @@ export function loadProfile(): Promise<Profile> {
           dailyTransferDate: parsed.dailyTransferDate === todayStr() ? parsed.dailyTransferDate : todayStr(),
           goldHistoryPublic: typeof parsed.goldHistoryPublic === 'boolean' ? parsed.goldHistoryPublic : true,
           statsPublic: typeof parsed.statsPublic === 'boolean' ? parsed.statsPublic : true,
+          invisibleMode: typeof parsed.invisibleMode === 'boolean' ? parsed.invisibleMode : false,
           table:       typeof parsed.table === 'string' ? parsed.table : DEFAULT_TABLE,
           ownedTables: Array.isArray(parsed.ownedTables) ? parsed.ownedTables : [DEFAULT_TABLE],
           cardBack:    typeof parsed.cardBack === 'string' ? parsed.cardBack : DEFAULT_BACK,
@@ -182,6 +188,7 @@ export function loadProfile(): Promise<Profile> {
           dailyTransferSent: 0, dailyTransferDate: todayStr(),
           goldHistoryPublic: true,
           statsPublic: true,
+          invisibleMode: false,
           table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
           avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
           xp: 0, level: 1,
@@ -197,6 +204,7 @@ export function loadProfile(): Promise<Profile> {
         dailyTransferSent: 0, dailyTransferDate: todayStr(),
         goldHistoryPublic: true,
         statsPublic: true,
+        invisibleMode: false,
         table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
         avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
         xp: 0, level: 1,
@@ -451,6 +459,26 @@ export function setStatsPublicLocal(value: boolean): void {
   emit()
 }
 
+/** Active/désactive le mode invisible (local + Firestore + clé AsyncStorage dédiée). */
+export function setInvisibleMode(value: boolean): void {
+  if (value === profile.invisibleMode) return
+  profile = { ...profile, invisibleMode: value }
+  void persist()
+  void AsyncStorage.setItem(INVISIBLE_MODE_KEY, JSON.stringify(value)).catch(() => {})
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (uid) void firestoreUpdateInvisibleMode(uid, value).catch(() => {})
+  emit()
+}
+
+/** Applique la valeur Firebase au login (local uniquement, sans ré-écriture). */
+export function setInvisibleModeLocal(value: boolean): void {
+  if (value === profile.invisibleMode) return
+  profile = { ...profile, invisibleMode: value }
+  void persist()
+  void AsyncStorage.setItem(INVISIBLE_MODE_KEY, JSON.stringify(value)).catch(() => {})
+  emit()
+}
+
 // ── Cosmétiques (tapis + dos de cartes) ─────────────────────────────────────────
 
 /** Équipe un cosmétique déjà possédé. */
@@ -698,6 +726,7 @@ export async function resetProfile(): Promise<void> {
     dailyTransferSent: 0, dailyTransferDate: todayStr(),
     goldHistoryPublic: true,
     statsPublic: true,
+    invisibleMode: false,
     table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE],
     cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
     avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
@@ -714,6 +743,7 @@ export async function resetProfile(): Promise<void> {
     AsyncStorage.removeItem(ACTIVE_ROOM_KEY),
     AsyncStorage.removeItem(REFERRAL_CODE_KEY),
     AsyncStorage.removeItem(LEVELUP_KEY),
+    AsyncStorage.removeItem(INVISIBLE_MODE_KEY),
   ])
   emit()
 }

@@ -567,7 +567,7 @@ export function GameScreen({
 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
-  const { table, username } = useProfile()
+  const { table, username, invisibleMode } = useProfile()
   const { user } = useAuth()
   const myUid = user?.uid ?? null
   const felt = tableColors(table)[0]  // couleur de fond du tapis équipé
@@ -583,10 +583,10 @@ export function GameScreen({
   // partie vs bot (rawBotName présent), pour ne jamais écrire une valeur en
   // conflit avec celle d'OnlineScreen.
   useEffect(() => {
-    if (online || !myUid || !rawBotName) return
+    if (online || !myUid || !rawBotName || invisibleMode) return
     void updateGameStatus(myUid, 'playing_bot')
     return () => { void updateGameStatus(myUid, null) }
-  }, [online, myUid, rawBotName])
+  }, [online, myUid, rawBotName, invisibleMode])
 
   // Effacé dès la fin de la partie (pas seulement au démontage) : la partie
   // continue de s'afficher (écran de résultat) après isGameOver, l'ami ne

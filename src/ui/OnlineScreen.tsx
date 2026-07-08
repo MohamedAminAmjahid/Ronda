@@ -51,7 +51,7 @@ const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').s
 export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
-  const { username } = useProfile()
+  const { username, invisibleMode } = useProfile()
   const { user } = useAuth()
   const myUid = user?.uid ?? null
   const { t: tr } = useI18n()
@@ -77,10 +77,12 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   useEffect(() => {
     if (!myUid) return
     let status: GameStatus = null
-    if (connectionStatus === 'waiting') status = 'matchmaking'
-    else if (connectionStatus === 'playing') status = mode === 'friend' ? 'playing_friend' : 'playing_online'
+    if (!invisibleMode) {
+      if (connectionStatus === 'waiting') status = 'matchmaking'
+      else if (connectionStatus === 'playing') status = mode === 'friend' ? 'playing_friend' : 'playing_online'
+    }
     void updateGameStatus(myUid, status)
-  }, [myUid, connectionStatus, mode])
+  }, [myUid, connectionStatus, mode, invisibleMode])
 
   // Toujours effacer au démontage, même si l'effet ci-dessus n'a pas eu
   // l'occasion de tourner une dernière fois (navigation brutale).

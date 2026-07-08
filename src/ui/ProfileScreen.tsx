@@ -249,11 +249,11 @@ export function ProfileScreen() {
     dijoujPlayed, dijoujWon,
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
-    goldHistoryPublic, statsPublic, avatarFrame,
+    goldHistoryPublic, statsPublic, invisibleMode, avatarFrame,
     xp, level,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
-    setGoldHistoryPublic, setStatsPublic,
+    setGoldHistoryPublic, setStatsPublic, setInvisibleMode,
   } = useProfile()
   const { user }   = useAuth()
   const { t }      = useI18n()
@@ -694,6 +694,18 @@ export function ProfileScreen() {
               thumbColor={C.bone}
             />
           </View>
+          <View style={s.toggleRow}>
+            <View style={s.toggleTextCol}>
+              <Text style={s.toggleLabel}>👻 {t('invisibleMode')}</Text>
+              <Text style={s.toggleDesc}>{t('invisibleModeDesc')}</Text>
+            </View>
+            <Switch
+              value={invisibleMode}
+              onValueChange={setInvisibleMode}
+              trackColor={{ false: 'rgba(244,236,216,0.20)', true: C.brass }}
+              thumbColor={C.bone}
+            />
+          </View>
         </View>
 
         {/* ── Compte ────────────────────────────────────────────── */}
@@ -899,7 +911,9 @@ const s = StyleSheet.create({
   },
   goldAmount: { fontFamily: 'Cairo_600SemiBold', fontSize: 28, color: C.brass, marginTop: 2 },
   toggleRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 2 },
+  toggleTextCol: { flex: 1, paddingRight: 12 },
   toggleLabel: { flex: 1, fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.bone, paddingRight: 12 },
+  toggleDesc: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff, marginTop: 2 },
   toggleHint: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.boneOff },
   shopBtn:    {
     backgroundColor: C.brassDim, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,

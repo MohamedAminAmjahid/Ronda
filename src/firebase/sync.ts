@@ -7,7 +7,7 @@ import { preloadLeaderboard } from '../online/leaderboardCache'
 import { preloadFriends } from '../online/friendsCache'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
-  setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
+  setStatsPublicLocal, setInvisibleModeLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
@@ -47,7 +47,7 @@ export function useFirebaseProfileSync(): void {
         const p = getProfile()
         console.log('[sync] login uid:', user.uid, '| username local:', p.username)
         const {
-          username, gold, usernameChanges, goldHistoryPublic, statsPublic,
+          username, gold, usernameChanges, goldHistoryPublic, statsPublic, invisibleMode,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
           avatarType, avatarEmoji, avatarImage,
           xp, level,
@@ -84,6 +84,7 @@ export function useFirebaseProfileSync(): void {
           setUsernameChanges(usernameChanges)
           setGoldHistoryPublicLocal(goldHistoryPublic)
           setStatsPublicLocal(statsPublic)
+          setInvisibleModeLocal(invisibleMode)
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
           setAvatarLocal(avatarType, avatarEmoji, avatarImage)
           setXpLevelLocal(xp, level)

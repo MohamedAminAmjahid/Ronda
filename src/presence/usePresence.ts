@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { AppState, Platform, type AppStateStatus } from 'react-native'
 import { useAuth } from '../firebase/auth'
 import { setOnlineStatus } from '../firebase/firestore'
+import { getProfile, subscribeProfile } from '../profile/profile'
 
 const HEARTBEAT_MS = 2 * 60 * 1000  // 2 minutes
 
@@ -11,6 +12,7 @@ const HEARTBEAT_MS = 2 * 60 * 1000  // 2 minutes
  * - AppState background/inactive → hors-ligne, active → en ligne
  * - web beforeunload → hors-ligne
  * - heartbeat lastSeen toutes les 2 min tant que l'app est active
+ * - mode invisible (profile.invisibleMode) → toujours publié hors-ligne
  */
 export function usePresence(): void {
   const { user } = useAuth()
@@ -19,14 +21,27 @@ export function usePresence(): void {
     if (!user) return
     const uid = user.uid
 
-    void setOnlineStatus(uid, true)
+    const pushStatus = (active: boolean) => {
+      void setOnlineStatus(uid, active && !getProfile().invisibleMode)
+    }
+
+    pushStatus(true)
 
     const heartbeat = setInterval(() => {
-      if (AppState.currentState === 'active') void setOnlineStatus(uid, true)
+      if (AppState.currentState === 'active') pushStatus(true)
     }, HEARTBEAT_MS)
 
     const appSub = AppState.addEventListener('change', (next: AppStateStatus) => {
-      void setOnlineStatus(uid, next === 'active')
+      pushStatus(next === 'active')
+    })
+
+    // Bascule du mode invisible en cours de session : re-publie aussitôt le
+    // statut, sans attendre le prochain heartbeat ou changement d'AppState.
+    let lastInvisible = getProfile().invisibleMode
+    const unsubProfile = subscribeProfile((p) => {
+      if (p.invisibleMode === lastInvisible) return
+      lastInvisible = p.invisibleMode
+      if (AppState.currentState === 'active') pushStatus(true)
     })
 
     let onUnload: (() => void) | undefined
@@ -38,6 +53,7 @@ export function usePresence(): void {
     return () => {
       clearInterval(heartbeat)
       appSub.remove()
+      unsubProfile()
       if (onUnload && typeof window !== 'undefined') window.removeEventListener('beforeunload', onUnload)
       void setOnlineStatus(uid, false)
     }
