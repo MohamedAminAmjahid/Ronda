@@ -297,16 +297,23 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
             // « Inviter à jouer » n'a de sens que si (a) on n'est pas déjà en
             // partie (on ne peut pas en lancer une 2e) ET (b) on est déjà ami
             // avec ce joueur (sinon → juste « Ajouter ami » d'abord).
-            <TouchableOpacity
-              style={s.actionBtnPrimary}
-              onPress={() => { void handleAddFriend() }}
-              disabled={friendState === 'sending' || friendState === 'sent'}
-              activeOpacity={0.85}
-            >
-              <Text style={s.actionBtnPrimaryTxt}>
-                {friendState === 'sent' ? '✓' : `➕ ${t('addFriend')}`}
-              </Text>
-            </TouchableOpacity>
+            friendStatus === 'pending' || friendState === 'sent' ? (
+              // Demande déjà envoyée (statut Firestore 'pending' rechargé à
+              // l'ouverture du profil, ou 'sent' juste après ce clic) → plus
+              // de bouton cliquable, pour ne jamais ré-envoyer la demande.
+              <View style={s.actionBtnDisabled}>
+                <Text style={s.actionBtnDisabledTxt}>✅ {t('requestSentLabel')}</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={s.actionBtnPrimary}
+                onPress={() => { void handleAddFriend() }}
+                disabled={friendState === 'sending'}
+                activeOpacity={0.85}
+              >
+                <Text style={s.actionBtnPrimaryTxt}>➕ {t('addFriend')}</Text>
+              </TouchableOpacity>
+            )
           ) : (
             <TouchableOpacity
               style={s.actionBtnPrimary}
@@ -457,4 +464,12 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: C.brass,
   },
   actionBtnPrimaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink },
+  actionBtnDisabled: {
+    flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center',
+    backgroundColor: 'rgba(244,236,216,0.08)',
+    borderWidth: 1, borderColor: 'rgba(244,236,216,0.15)',
+  },
+  actionBtnDisabledTxt: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff,
+  },
 })
