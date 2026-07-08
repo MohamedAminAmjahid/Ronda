@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Animated } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
+import { getCachedLeaderboard, isStale, refreshLeaderboard, subscribeLeaderboard } from '../online/leaderboardCache'
 import { searchUserByUsername } from '../firebase/firestore'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { AvatarDisplay } from './ProfileScreen'
@@ -120,25 +121,49 @@ export function LeaderboardScreen({ onBack }: Props) {
     return () => { cancelled = true }
   }, [username, refreshKey])
 
-  // Classement de la ligue sélectionnée — refetch au changement de ligue OU
-  // au retour au focus sur cet écran (refreshKey).
+  // Classement de la ligue sélectionnée — affichage instantané depuis le
+  // cache (même périmé), puis refresh silencieux en arrière-plan si le cache
+  // est absent ou dépassé les 5 min de TTL. Le spinner plein écran ne
+  // s'affiche que si on n'a RIEN à montrer (1re visite jamais préchargée).
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
     setError(null)
-    void (async () => {
-      try {
-        const data = await fetchWeeklyLeaderboard(selected)
-        console.log('[leaderboard] users chargés:', data.length)
-        if (!cancelled) setEntries(data)
-      } catch {
-        if (!cancelled) setError(t('leaderboardError'))
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
+    const cached = getCachedLeaderboard(selected)
+    if (cached) {
+      setEntries(cached)
+      setLoading(false)
+    }
+
+    if (isStale(selected)) {
+      if (!cached) setLoading(true)
+      void refreshLeaderboard(selected).then(() => {
+        // `selected` a pu changer pendant le fetch (l'utilisateur a basculé
+        // d'onglet) — ne pas écraser la ligue affichée avec des données
+        // périmées pour une AUTRE ligue.
+        if (cancelled) return
+        const fresh = getCachedLeaderboard(selected)
+        if (fresh) {
+          console.log('[leaderboard] users chargés:', fresh.length)
+          setEntries(fresh)
+          setLoading(false)
+        } else if (!cached) {
+          // Échec ET rien en cache : seul cas où l'utilisateur voit une erreur.
+          setError(t('leaderboardError'))
+          setLoading(false)
+        }
+      })
+    }
     return () => { cancelled = true }
   }, [selected, refreshKey])
+
+  // Un refresh déclenché ailleurs (ex. preload au login, ou un autre écran
+  // qui partage ce cache) doit aussi mettre à jour cet affichage.
+  useEffect(() => {
+    return subscribeLeaderboard(() => {
+      const data = getCachedLeaderboard(selected)
+      if (data) setEntries(data)
+    })
+  }, [selected])
 
   // Ma propre ligne : utilise directement le profil local (useProfile),
   // jamais une recherche Firestore par username. searchUserByUsername cherche
@@ -257,8 +282,8 @@ export function LeaderboardScreen({ onBack }: Props) {
 
         {/* Liste */}
         <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
-          {loading ? (
-            <ActivityIndicator color={C.brass} style={{ marginTop: 30 }} />
+          {loading && entries.length === 0 ? (
+            <SkeletonRows count={5} />
           ) : error ? (
             <Text style={s.empty}>{error}</Text>
           ) : entries.length === 0 ? (
@@ -336,6 +361,42 @@ export function LeaderboardScreen({ onBack }: Props) {
   )
 }
 
+// ── Lignes skeleton (pulse) — affichées uniquement au tout premier chargement
+// d'une ligue jamais préchargée (pas de cache du tout à montrer). ─────────────
+
+function SkeletonRow() {
+  const pulse = useRef(new Animated.Value(0.4)).current
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1,   duration: 650, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 650, useNativeDriver: true }),
+      ]),
+    )
+    loop.start()
+    return () => loop.stop()
+  }, [pulse])
+
+  return (
+    <Animated.View style={[s.row, { opacity: pulse }]}>
+      <View style={s.skeletonAvatar} />
+      <View style={{ flex: 1, gap: 6 }}>
+        <View style={s.skeletonLine} />
+        <View style={[s.skeletonLine, { width: '40%' }]} />
+      </View>
+      <View style={s.skeletonValue} />
+    </Animated.View>
+  )
+}
+
+function SkeletonRows({ count }: { count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => <SkeletonRow key={i} />)}
+    </>
+  )
+}
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 480, paddingHorizontal: 18 },
@@ -376,6 +437,10 @@ const s = StyleSheet.create({
   gameBadgeDijouj: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: 'rgba(244,236,216,0.55)' },
   wagered: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
   chevron: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.boneOff, marginLeft: 2, width: 14, textAlign: 'center' },
+
+  skeletonAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonLine:   { height: 10, borderRadius: 5, width: '70%', backgroundColor: 'rgba(244,236,216,0.16)' },
+  skeletonValue:  { width: 40, height: 14, borderRadius: 5, backgroundColor: 'rgba(244,236,216,0.16)' },
 
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 30, lineHeight: 20 },
 

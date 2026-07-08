@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from './auth'
 import { createOrUpdateUser, registerPendingReferral, migrateFriendCounts } from './firestore'
+import { fetchUserLeague } from '../online/client'
+import { preloadLeaderboard } from '../online/leaderboardCache'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
   setStatsPublicLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
@@ -85,6 +87,14 @@ export function useFirebaseProfileSync(): void {
           setAvatarLocal(avatarType, avatarEmoji, avatarImage)
           setXpLevelLocal(xp, level)
         }
+
+        // Préchauffe le cache du classement hebdo de la ligue du joueur, en
+        // arrière-plan — LeaderboardScreen l'affichera instantanément au lieu
+        // d'attendre Railway au premier clic sur l'onglet. Best-effort, ne
+        // bloque jamais le reste du login (voir leaderboardCache.ts).
+        void fetchUserLeague(username || p.username)
+          .then((league) => preloadLeaderboard(league))
+          .catch(() => {})
 
         // Parrainage : enregistre le filleul « en attente » chez le parrain (le
         // crédit sera appliqué à sa 1re partie). No-op si déjà parrainé.
