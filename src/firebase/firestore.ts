@@ -163,23 +163,51 @@ export async function isUsernameAvailable(username: string, excludeUid?: string)
   return false
 }
 
-/**
- * Crée le profil Firebase au premier login (en reprenant le profil local), sinon
- * met à jour lastSeen. Retourne username + gold + usernameChanges Firebase.
- * Au premier login, si le username local est déjà pris, ajoute un suffixe numérique.
- */
-export async function createOrUpdateUser(
-  user: User,
-  local: LocalProfileSeed,
-): Promise<{
+interface CreateOrUpdateUserResult {
   username: string; gold: number; usernameChanges: number; goldHistoryPublic: boolean
   table: string; ownedTables: string[]; cardBack: string; ownedBacks: string[]
   avatarFrame: string; ownedFrames: string[]; statsPublic: boolean
   avatarType: string; avatarEmoji: string; avatarImage: string
   xp: number; level: number
-}> {
+}
+
+/**
+ * Guard anti-course : onAuthStateChanged (firebase/auth) peut émettre plusieurs
+ * fois de suite pendant le démarrage (session mise en cache puis revalidée),
+ * chaque fois avec un NOUVEL objet User — donc useFirebaseProfileSync (dont
+ * l'effet dépend de [user] par égalité de référence) peut relancer
+ * createOrUpdateUser en parallèle pour le même uid. Si les deux appels lisent
+ * le doc AVANT que l'un des deux ait fini de l'écrire, les deux verront
+ * !snap.exists() et généreront CHACUN leur propre suffixe (dernier setDoc
+ * gagnant) — c'est ce qui produit un nouveau suffixe à chaque connexion.
+ * On fait donc partager le même appel en cours pour un uid donné.
+ */
+const pendingCreateOrUpdate = new Map<string, Promise<CreateOrUpdateUserResult>>()
+
+export function createOrUpdateUser(user: User, local: LocalProfileSeed): Promise<CreateOrUpdateUserResult> {
+  const existing = pendingCreateOrUpdate.get(user.uid)
+  if (existing) return existing
+  const p = createOrUpdateUserInner(user, local).finally(() => {
+    pendingCreateOrUpdate.delete(user.uid)
+  })
+  pendingCreateOrUpdate.set(user.uid, p)
+  return p
+}
+
+/**
+ * Crée le profil Firebase au premier login (en reprenant le profil local), sinon
+ * met à jour lastSeen. Retourne username + gold + usernameChanges Firebase.
+ * Au premier login, si le username local est déjà pris, ajoute un suffixe numérique.
+ */
+async function createOrUpdateUserInner(
+  user: User,
+  local: LocalProfileSeed,
+): Promise<CreateOrUpdateUserResult> {
   const ref = userRef(user.uid)
   const snap = await getDoc(ref)
+  console.log('[firestore] snap.exists():', snap.exists())
+  console.log('[firestore] snap.data():', snap.data())
+  console.log('[firestore] local username:', local.username)
 
   if (!snap.exists()) {
     // Document inexistant → premier login : on génère un username unique une fois.
@@ -238,9 +266,13 @@ export async function createOrUpdateUser(
 
   // Document existant → on NE régénère JAMAIS le username : Firestore fait autorité.
   // On ne relit QUE data.username ici — jamais local.username — pour ne jamais
-  // réintroduire un suffixe aléatoire une fois le document créé.
+  // réintroduire un suffixe aléatoire une fois le document créé. .trim() en plus
+  // du falsy-check : un champ blanc ("   ") ne doit pas non plus faire retomber
+  // sur local.username, qui pourrait lui-même être périmé côté appareil.
   const data = snap.data()
-  const existingUsername = (data.username as string) || local.username
+  const existingUsername = (typeof data.username === 'string' && data.username.trim())
+    ? (data.username as string)
+    : local.username
   console.log('[firestore] createOrUpdateUser: doc EXISTANT pour', user.uid, '→ username Firestore =', existingUsername)
   console.log('[firestore] username retourné:', existingUsername)
   await updateDoc(ref, { lastSeen: serverTimestamp() })
