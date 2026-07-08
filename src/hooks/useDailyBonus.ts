@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { getAuth } from 'firebase/auth'
+import { firebaseApp } from '../firebase/config'
+import { updateStreak } from '../firebase/firestore'
 import { addGold } from '../profile/profile'
 
 const KEY = 'ronda_daily_bonus'
@@ -76,6 +79,11 @@ export function useDailyBonus() {
       const stored: Stored = { lastClaim: today(), streak: pending.streak }
       await AsyncStorage.setItem(KEY, JSON.stringify(stored))
       addGold(pending.goldToday)
+      // Best-effort : alimente le classement « Streak record » (TrophiesScreen).
+      // Le streak lui-même reste piloté par AsyncStorage (source de vérité) ;
+      // Firestore n'en reçoit qu'une copie pour les classements globaux.
+      const uid = getAuth(firebaseApp).currentUser?.uid
+      if (uid) void updateStreak(uid, pending.streak).catch(() => {})
       setClaimed(true)
       setAlreadyClaimed(true)
       setPending(null)

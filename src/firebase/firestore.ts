@@ -44,6 +44,21 @@ export interface UserDoc {
   level: number
   /** true = profil fantôme d'un bot de repli matchmaking (voir botFallback.ts). */
   isBot: boolean
+  /**
+   * Streak de connexion journalière courant. Nouveau champ (voir
+   * useDailyBonus.ts, synchronisé à chaque réclamation) — absent sur les
+   * comptes existants tant qu'ils n'ont pas réclamé leur bonus au moins une
+   * fois après son introduction, d'où le fallback à 0.
+   */
+  currentStreak: number
+  /**
+   * Nombre d'amis acceptés — dénormalisé (incrémenté/décrémenté dans
+   * acceptFriendRequest/removeFriend) pour permettre un classement global
+   * "plus sociable" sans scanner les sous-collections friends de tout le
+   * monde. Comme currentStreak, absent → 0 tant que le compte n'a pas eu de
+   * mouvement d'amitié depuis l'introduction du champ.
+   */
+  friendCount: number
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -87,6 +102,12 @@ export interface FriendDoc {
   avatarImage: string
   level?: number
   xp?: number
+  /** Pour les classements « Amis » (TrophiesScreen) — pas utilisé ailleurs. */
+  gold?: number
+  gamesWon?: number
+  gamesPlayed?: number
+  currentStreak?: number
+  friendCount?: number
 }
 
 /** Profil local utilisé pour initialiser le document Firebase au 1er login. */
@@ -334,7 +355,89 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     xp:    (data.xp as number) ?? 0,
     level: (data.level as number) ?? 1,
     isBot: (data.isBot as boolean) ?? false,
+    currentStreak: (data.currentStreak as number) ?? 0,
+    friendCount: (data.friendCount as number) ?? 0,
   }
+}
+
+/**
+ * Top N joueurs triés par un champ numérique décroissant (classements globaux
+ * de TrophiesScreen). Une seule condition orderBy() par requête — pas de
+ * where() combiné, donc pas d'index composite Firestore à créer.
+ *
+ * Note : les documents n'ayant jamais eu ce champ écrit sont exclus par
+ * Firestore (orderBy ne renvoie que les docs où le champ existe). Pour
+ * `currentStreak`, champ tout juste introduit, ça veut dire que les comptes
+ * existants n'apparaîtront qu'après leur prochaine réclamation du bonus
+ * journalier (voir useDailyBonus.ts) — pas un bug, juste l'absence de
+ * rétro-remplissage historique. Même chose pour `friendCount` (nouveau champ,
+ * incrémenté seulement à partir des prochains accepteFriendRequest/removeFriend).
+ */
+export async function getTopUsers(
+  field: 'level' | 'gold' | 'gamesWon' | 'currentStreak' | 'gamesPlayed' | 'friendCount', count = 50,
+): Promise<UserDoc[]> {
+  const q = query(collection(db, 'users'), orderBy(field, 'desc'), limit(count))
+  const res = await getDocs(q)
+  return res.docs.map((d) => toUserDoc(d.id, d.data()))
+}
+
+/** Lundi 00:00 UTC de la semaine courante (même formule que le serveur, voir
+ * ronda-server/src/db/queries.ts mondayUTC/currentWeekStart). */
+function weeklyMondayUTC(): string {
+  const d = new Date()
+  const day = d.getUTCDay()
+  const shift = day === 0 ? -6 : 1 - day
+  const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + shift))
+  return monday.toISOString().slice(0, 10)
+}
+
+/** Or misé cette semaine par un joueur donné (0 s'il n'a encore rien misé). */
+export async function getWeeklyWagered(username: string): Promise<number> {
+  const week = weeklyMondayUTC()
+  const [ronda, dijouj] = await Promise.all([
+    getDoc(doc(db, 'weekly_scores', `${week}_${username}_ronda`)),
+    getDoc(doc(db, 'weekly_scores', `${week}_${username}_dijouj`)),
+  ])
+  return ((ronda.data()?.gold as number) ?? 0) + ((dijouj.data()?.gold as number) ?? 0)
+}
+
+export interface WeeklyWagerEntry {
+  uid:         string
+  username:    string
+  avatarType:  string
+  avatarEmoji: string
+  avatarImage: string
+  gold:        number
+}
+
+/**
+ * Top N joueurs par or misé cette semaine, tous jeux et ligues confondus
+ * (TrophiesScreen — distinct du classement hebdo par ligue de
+ * LeaderboardScreen). weekly_scores n'a qu'un `username`, pas d'uid : on
+ * résout le profil de chaque top joueur via searchUserByUsername, comme le
+ * fait déjà LeaderboardScreen pour ses lignes cliquables.
+ */
+export async function getWeeklyWageredLeaderboard(count = 50): Promise<WeeklyWagerEntry[]> {
+  const week = weeklyMondayUTC()
+  const snap = await getDocs(query(collection(db, 'weekly_scores'), where('week', '==', week)))
+  const totals = new Map<string, number>()
+  for (const d of snap.docs) {
+    const data = d.data() as { username: string; gold?: number }
+    totals.set(data.username, (totals.get(data.username) ?? 0) + (data.gold ?? 0))
+  }
+  const top = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, count)
+  const profiles = await Promise.all(top.map(([username]) => searchUserByUsername(username)))
+  return top.map(([username, gold], i) => {
+    const p = profiles[i]
+    return {
+      uid: p?.uid ?? username,
+      username,
+      avatarType:  p?.avatarType  ?? 'initial',
+      avatarEmoji: p?.avatarEmoji ?? '',
+      avatarImage: p?.avatarImage ?? '',
+      gold,
+    }
+  })
 }
 
 /** Recherche un utilisateur par username (insensible à la casse). null si introuvable. */
@@ -365,6 +468,11 @@ export async function updateStats(uid: string, stats: StatsUpdate): Promise<void
 /** Synchronise XP et niveau dans Firestore. */
 export async function updateXpLevel(uid: string, xp: number, level: number): Promise<void> {
   await updateDoc(userRef(uid), { xp, level })
+}
+
+/** Synchronise le streak de connexion journalière (voir useDailyBonus.ts). */
+export async function updateStreak(uid: string, streak: number): Promise<void> {
+  await updateDoc(userRef(uid), { currentStreak: streak })
 }
 
 /** Active/désactive la visibilité publique de l'historique de gold. */
@@ -658,6 +766,9 @@ export async function acceptFriendRequest(myUid: string, fromUid: string): Promi
   await Promise.all([
     setDoc(friendRef(myUid, fromUid), { uid: fromUid, username: fromUsername, status: 'accepted' }),
     setDoc(friendRef(fromUid, myUid), { uid: myUid, username: myUsername, status: 'accepted' }),
+    // Compteur dénormalisé pour le classement « Plus sociable » (TrophiesScreen).
+    updateDoc(userRef(myUid), { friendCount: increment(1) }),
+    updateDoc(userRef(fromUid), { friendCount: increment(1) }),
   ])
 }
 
@@ -671,6 +782,8 @@ export async function removeFriend(myUid: string, friendUid: string): Promise<vo
   await Promise.all([
     deleteDoc(friendRef(myUid, friendUid)),
     deleteDoc(friendRef(friendUid, myUid)),
+    updateDoc(userRef(myUid), { friendCount: increment(-1) }),
+    updateDoc(userRef(friendUid), { friendCount: increment(-1) }),
   ])
 }
 
@@ -690,6 +803,12 @@ async function readFriends(ownerUid: string, status: FriendDoc['status']): Promi
       avatarType:  (pd.avatarType  as string) ?? 'initial',
       avatarEmoji: (pd.avatarEmoji as string) ?? '',
       avatarImage: (pd.avatarImage as string) ?? '',
+      level:         (pd.level         as number) ?? 1,
+      gold:          (pd.gold          as number) ?? 0,
+      gamesWon:      (pd.gamesWon      as number) ?? 0,
+      gamesPlayed:   (pd.gamesPlayed   as number) ?? 0,
+      currentStreak: (pd.currentStreak as number) ?? 0,
+      friendCount:   (pd.friendCount   as number) ?? 0,
     }
   })
 }

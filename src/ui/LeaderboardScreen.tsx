@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useFocusEffect } from 'expo-router'
+import { router, useFocusEffect, type Href } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
 import { searchUserByUsername } from '../firebase/firestore'
@@ -200,6 +200,9 @@ export function LeaderboardScreen({ onBack }: Props) {
             <Text style={s.title}>{t('leaderboard')}</Text>
             <Text style={s.countdown}>⏳ {formatCountdown(countdown)}</Text>
           </View>
+          <TouchableOpacity style={s.trophiesBtn} onPress={() => router.push('/trophies' as Href)}>
+            <Text style={s.trophiesBtnTxt}>🏆 {t('trophies')}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Sélecteur de ligue */}
@@ -314,6 +317,12 @@ const s = StyleSheet.create({
     letterSpacing: 1, textTransform: 'uppercase',
   },
   countdown: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+  trophiesBtn: {
+    marginTop: 10, alignSelf: 'center', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    backgroundColor: 'rgba(201,162,39,0.12)',
+  },
+  trophiesBtnTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
 
   tabsWrap: { paddingVertical: 8 },
   tabs: { gap: 8, paddingHorizontal: 2 },
