@@ -31,6 +31,7 @@ const corsOptions: cors.CorsOptions = {
 
 // ── Base de données ────────────────────────────────────────────────────────────
 initDatabase()
+console.log('🔥 [firebase] firebaseReady():', firebaseReady())
 
 // ── HTTP (Express) ───────────────────────────────────────────────────────────
 const app = express()
@@ -137,6 +138,17 @@ app.get('/debug/weekly-scores', async (req, res) => {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
   return res.json(await debugWeeklyScores())
+})
+
+// Test direct (admin uniquement) : force un appel addWageredGold pour
+// vérifier de bout en bout l'écriture Firestore sans dépendre d'une vraie
+// partie. Un doc weekly_scores/{semaine}_TestUser_ronda doit apparaître.
+app.post('/debug/test-leaderboard', async (req, res) => {
+  if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
+    return res.status(401).json({ error: 'Non autorisé.' })
+  }
+  await addWageredGold('TestUser', 100, 'ronda')
+  return res.json({ ok: true })
 })
 
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────

@@ -165,6 +165,10 @@ export function getUserLeague(username: string): League {
 export async function addWageredGold(
   username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda',
 ): Promise<void> {
+  const week = currentWeekStart()
+  // Log très visible en tête de fonction — tire à CHAQUE appel, avant tout
+  // check, pour distinguer "jamais appelée" de "appelée mais no-op".
+  console.log('🏆 [leaderboard] addWageredGold APPELÉ:', { username, amount, game, week })
   if (!firebaseReady()) {
     // Firestore Admin non initialisé (credentials absents) → no-op silencieux
     // sans ce log, ce qui ressemble exactement à "le classement ne se met
@@ -173,7 +177,6 @@ export async function addWageredGold(
     return
   }
   if (amount <= 0) return
-  const week = currentWeekStart()
   const league = getUserLeague(username)
   console.log('[leaderboard] addWageredGold:', { username, week, game, amount, league })
   const docId = `${week}_${username}_${game}`

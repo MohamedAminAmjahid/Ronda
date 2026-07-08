@@ -125,12 +125,14 @@ export async function fetchUserLeagueByUsername(username: string): Promise<strin
 export async function recordLeaderboardScore(
   username: string, amount: number, game: 'ronda' | 'dijouj',
 ): Promise<void> {
+  console.log('📊 [leaderboard] recordLeaderboardScore appelé:', { username, amount, game })
   try {
-    await fetch(`${httpBase()}/leaderboard/record`, {
+    const res = await fetch(`${httpBase()}/leaderboard/record`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, amount, game }),
     })
+    console.log('📊 [leaderboard] réponse:', res.status, await res.text())
   } catch (e) {
     console.error('[client] recordLeaderboardScore:', e)
   }
