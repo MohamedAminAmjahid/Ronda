@@ -13,21 +13,43 @@ let ready = false
 function init(): void {
   if (getApps().length) { ready = true; return }
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT
-  try {
-    if (raw) {
-      const svc = JSON.parse(raw) as ServiceAccount
-      initializeApp({ credential: cert(svc) })
-    } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-      initializeApp({ credential: applicationDefault() })
-    } else {
-      console.warn('[firebase-admin] Aucun credential (FIREBASE_SERVICE_ACCOUNT absent) — routes Firebase désactivées.')
+  console.log('🔥 FIREBASE_SERVICE_ACCOUNT présent:', !!raw)
+  console.log('🔥 FIREBASE_SERVICE_ACCOUNT longueur:', raw?.length ?? 0)
+
+  if (raw) {
+    let svc: ServiceAccount
+    try {
+      const parsed = JSON.parse(raw) as { project_id?: string; client_email?: string }
+      console.log('🔥 project_id:', parsed.project_id)
+      console.log('🔥 client_email:', parsed.client_email)
+      svc = parsed as ServiceAccount
+    } catch (e) {
+      // Ne JAMAIS logger `raw` en entier ici : contient private_key (secret).
+      console.error('🔥 ERREUR parsing JSON FIREBASE_SERVICE_ACCOUNT:', e)
       return
     }
-    ready = true
-    console.log('[firebase-admin] initialisé.')
-  } catch (e) {
-    console.error('[firebase-admin] échec initialisation:', e)
+    try {
+      initializeApp({ credential: cert(svc) })
+      ready = true
+      console.log('🔥 Firebase Admin initialisé avec succès')
+    } catch (e) {
+      console.error('🔥 ERREUR initialisation Firebase Admin:', e)
+    }
+    return
   }
+
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    try {
+      initializeApp({ credential: applicationDefault() })
+      ready = true
+      console.log('🔥 Firebase Admin initialisé avec succès (GOOGLE_APPLICATION_CREDENTIALS)')
+    } catch (e) {
+      console.error('🔥 ERREUR initialisation Firebase Admin:', e)
+    }
+    return
+  }
+
+  console.warn('[firebase-admin] Aucun credential (FIREBASE_SERVICE_ACCOUNT absent) — routes Firebase désactivées.')
 }
 
 init()

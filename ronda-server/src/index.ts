@@ -147,8 +147,10 @@ app.post('/debug/test-leaderboard', async (req, res) => {
   if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
     return res.status(401).json({ error: 'Non autorisé.' })
   }
+  const ready = firebaseReady()
+  if (!ready) return res.json({ ok: false, reason: 'Firebase Admin non initialisé', firebaseReady: ready })
   await addWageredGold('TestUser', 100, 'ronda')
-  return res.json({ ok: true })
+  return res.json({ ok: true, firebaseReady: ready })
 })
 
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────
