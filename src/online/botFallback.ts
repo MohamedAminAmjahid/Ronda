@@ -188,7 +188,21 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
     const uid = botUid(name)
     const ref = doc(db(), 'users', uid)
     const snap = await getDoc(ref)
-    if (snap.exists()) return
+    if (snap.exists()) {
+      // Auto-réparation : un bot créé avant le passage aux URLs statiques
+      // (public/bot-avatars/…) a pu garder un avatarImage périmé (ancien
+      // require() Metro, ou chemin src/assets jamais servi tel quel) — cette
+      // fonction est idempotente sur tout le reste, donc sans ce patch, un
+      // bot "ancien" resterait cassé pour toujours (in-game l'avatar est
+      // recalculé en direct depuis botAvatarIdx/botFemale, donc ça n'y paraît
+      // pas — mais le profil, lui, lit avatarImage stocké et l'affiche cassé).
+      const currentImage = snap.data()?.avatarImage as string | undefined
+      const correctImage = getBotAvatar(idx, female)
+      if (currentImage !== correctImage && (!currentImage || !currentImage.startsWith('/bot-avatars/'))) {
+        await updateDoc(ref, { avatarImage: correctImage })
+      }
+      return
+    }
 
     const level        = randInt(3, 18)
     const gamesPlayed  = randInt(50, 250)

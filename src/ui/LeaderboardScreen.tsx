@@ -245,6 +245,7 @@ export function LeaderboardScreen({ onBack }: Props) {
               const me = e.username === username
               const resolving = resolvingName === e.username
               const avatar = profileCache.current.get(e.username)
+              console.log('[leaderboard] avatar cache pour', e.username, ':', avatar)
               return (
                 <TouchableOpacity
                   key={e.username}
