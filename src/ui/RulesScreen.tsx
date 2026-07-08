@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TERMS } from './terms'
@@ -21,6 +22,8 @@ interface Props {
 export function RulesScreen({ onBack }: Props) {
   const { t, lang } = useI18n()
   const isFr = lang === 'fr'
+  const [game, setGame] = useState<'ronda' | 'dijouj'>('ronda')
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
@@ -30,9 +33,60 @@ export function RulesScreen({ onBack }: Props) {
             <Text style={s.backTxt}>{t('back')}</Text>
           </TouchableOpacity>
           <Text style={s.title}>{t('rules')}</Text>
-          <Text style={s.subtitle}>{t('rulesSubtitle')}</Text>
+          <Text style={s.subtitle}>{game === 'ronda' ? t('rulesSubtitle') : t('dijoujCardDesc')}</Text>
+
+          <View style={s.gameTabs}>
+            <TouchableOpacity
+              style={[s.gameTab, game === 'ronda' && s.gameTabActive]}
+              onPress={() => setGame('ronda')}
+            >
+              <Text style={[s.gameTabTxt, game === 'ronda' && s.gameTabTxtActive]}>Ronda</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.gameTab, game === 'dijouj' && s.gameTabActive]}
+              onPress={() => setGame('dijouj')}
+            >
+              <Text style={[s.gameTabTxt, game === 'dijouj' && s.gameTabTxtActive]}>Di Jouj</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
+        {game === 'dijouj' ? (
+        <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
+
+          <Section title={t('rulesDijoujSec1')}>
+            <P>{t('rulesDijoujGame1')}</P>
+          </Section>
+
+          <Section title={t('rulesDijoujSec2')}>
+            <P>{t('rulesDijoujSetup1')}</P>
+            <P>{t('rulesDijoujSetup2')}</P>
+          </Section>
+
+          <Section title={t('rulesDijoujSec3')}>
+            <P>{t('rulesDijoujPlay1')}</P>
+            <P>{t('rulesDijoujPlay2')}</P>
+          </Section>
+
+          <Section title={t('rulesDijoujSec4')}>
+            <SpecialCard label="2" desc={t('rulesDijoujCard2')} />
+            <SpecialCard label={lang === 'en' ? 'Ace' : 'As'} desc={t('rulesDijoujCardAs')} />
+            <SpecialCard label="7 Oros" desc={t('rulesDijoujCard7')} />
+          </Section>
+
+          <Section title={t('rulesDijoujSec5')}>
+            <P>{t('rulesDijoujDraw1')}</P>
+            <P>{t('rulesDijoujDraw2')}</P>
+          </Section>
+
+          <Section title={t('rulesDijoujSec6')}>
+            <P>{t('rulesDijoujWin1')}</P>
+            <P>{t('rulesDijoujWin2')}</P>
+          </Section>
+
+          <View style={{ height: 8 }} />
+        </ScrollView>
+        ) : (
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
 
           <Section title={t('rulesSec1')}>
@@ -152,6 +206,7 @@ export function RulesScreen({ onBack }: Props) {
             )}
             <Bonus sign="+5" color={C.brass} label={t('rulesMabBonus1')} />
             <Bonus sign="−5" color={C.clay}  label={t('rulesMabBonus2')} />
+            <Bonus sign="+5" color={C.brass} label={t('rulesMabBonus3')} />
             <P>{t('rulesMab2')}</P>
           </Section>
 
@@ -177,6 +232,7 @@ export function RulesScreen({ onBack }: Props) {
 
           <View style={{ height: 8 }} />
         </ScrollView>
+        )}
 
       </View>
     </SafeAreaView>
@@ -224,6 +280,15 @@ function Bonus({ sign, color, label }: { sign: string; color: string; label: str
   )
 }
 
+function SpecialCard({ label, desc }: { label: string; desc: string }) {
+  return (
+    <View style={s.rule}>
+      <Text style={s.cardLabel}>{label}</Text>
+      <Text style={s.ruleDesc}>{desc}</Text>
+    </View>
+  )
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -241,6 +306,15 @@ const s = StyleSheet.create({
     textTransform: 'uppercase',
   },
   subtitle: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, letterSpacing: 0.5 },
+
+  gameTabs: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  gameTab: {
+    paddingHorizontal: 18, paddingVertical: 8, borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.2)', borderWidth: 1, borderColor: 'rgba(244,236,216,0.12)',
+  },
+  gameTabActive: { backgroundColor: C.brass, borderColor: C.brass },
+  gameTabTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
+  gameTabTxtActive: { color: C.ink },
 
   scroll: { flex: 1 },
   scrollContent: { gap: 16, paddingBottom: 32 },
@@ -280,6 +354,7 @@ const s = StyleSheet.create({
   },
   rulePts: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass },
   ruleDesc: { fontFamily: 'Cairo_400Regular', fontSize: 12.5, color: C.boneOff, lineHeight: 19 },
+  cardLabel: { fontFamily: 'Cairo_600SemiBold', fontSize: 15, color: C.brass, letterSpacing: 0.3 },
 
   bonus: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bonusSign: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, width: 34 },
