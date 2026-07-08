@@ -1,6 +1,7 @@
 import type { Room } from 'colyseus.js'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
 import { joinOrCreate, createPrivate, joinByCode, getClient } from './client'
+import { invalidateLeaderboard } from './leaderboardCache'
 import { setActiveRoom, clearActiveRoom, addGold } from '../profile/profile'
 
 // ── Types des messages serveur ─────────────────────────────────────────────────
@@ -168,11 +169,18 @@ function wireRoom(r: Room): void {
     set({ gameOver: payload })
     if (payload.aborted) {
       set({ status: 'disconnected', error: 'Partie annulée (adversaire absent).' })
-    } else if (payload.goldWon && payload.goldWon > 0) {
-      const mySeat = snapshot.mySeat
-      if (mySeat !== null && payload.winnerSeat === mySeat) {
-        addGold(payload.goldWon)
+    } else {
+      if (payload.goldWon && payload.goldWon > 0) {
+        const mySeat = snapshot.mySeat
+        if (mySeat !== null && payload.winnerSeat === mySeat) {
+          addGold(payload.goldWon)
+        }
       }
+      // Partie en ligne (vraie Room, addWageredGold déjà appelé côté serveur)
+      // qui se conclut avec une mise, gagnée ou perdue : le classement hebdo
+      // a changé dans les deux cas (le gagnant, moi ou l'adversaire, vient d'y
+      // être crédité) → invalide pour forcer un refetch au prochain affichage.
+      if (snapshot.bet > 0) invalidateLeaderboard()
     }
   })
 

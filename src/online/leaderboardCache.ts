@@ -49,3 +49,21 @@ export async function refreshLeaderboard(league: string): Promise<void> {
 export function preloadLeaderboard(league: string): void {
   void refreshLeaderboard(league)
 }
+
+/**
+ * Invalide le cache après une partie misée qui vient de se conclure (voir
+ * store.ts/storeDiJouj.ts pour les vraies parties en ligne, GameScreen.tsx/
+ * DiJoujScreen.tsx pour le repli bot) — sans ça, une victoire (ou une
+ * défaite : l'or misé de l'adversaire aussi change le classement) reste
+ * invisible jusqu'à expiration du TTL (5 min). Pas de league connue à cet
+ * endroit dans la plupart des cas → invalide tout par défaut ; peu coûteux,
+ * le prochain affichage refetch simplement les ligues consultées.
+ */
+export function invalidateLeaderboard(league?: string): void {
+  if (league) {
+    cache.delete(league)
+  } else {
+    cache.clear()
+  }
+  notify()
+}

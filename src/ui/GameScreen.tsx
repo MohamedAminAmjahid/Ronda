@@ -17,6 +17,7 @@ import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { recordLeaderboardScore } from '../online/client'
+import { invalidateLeaderboard } from '../online/leaderboardCache'
 import { router, useLocalSearchParams, type Href } from 'expo-router'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -602,7 +603,10 @@ export function GameScreen({
         if (stakeBet > 0 && !online && won) addGold(stakeBet * 2)
         // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
         // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
-        if (won && stakeBet > 0 && rawBotName) void recordLeaderboardScore(username, stakeBet, 'ronda')
+        if (won && stakeBet > 0 && rawBotName) {
+          void recordLeaderboardScore(username, stakeBet, 'ronda')
+          invalidateLeaderboard() // force un refetch au prochain affichage
+        }
         setWinReward(goldReward)
         const after = getProfile()
         setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
@@ -615,7 +619,10 @@ export function GameScreen({
           // Partie perçue comme en ligne : le bot doit apparaître au classement
           // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
           // (symétrique à l'appel côté victoire du joueur, ligne ~605).
-          if (stakeBet > 0 && rawBotName && isOnlineGame) void recordLeaderboardScore(rawBotName, stakeBet, 'ronda')
+          if (stakeBet > 0 && rawBotName && isOnlineGame) {
+            void recordLeaderboardScore(rawBotName, stakeBet, 'ronda')
+            invalidateLeaderboard()
+          }
         }
       }
     } else {
@@ -979,7 +986,7 @@ export function GameScreen({
                     recordResult(false, 'ronda', { online: isOnlineGame })
                     if (rawBotName) {
                       void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
-                      if (isOnlineGame) void recordLeaderboardScore(rawBotName, stakeBet, 'ronda')
+                      if (isOnlineGame) { void recordLeaderboardScore(rawBotName, stakeBet, 'ronda'); invalidateLeaderboard() }
                     }
                     router.replace('/' as Href)
                     return

@@ -14,6 +14,7 @@ import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
 import { getBotAvatar, updateBotStats } from '../online/botFallback'
 import { recordLeaderboardScore } from '../online/client'
+import { invalidateLeaderboard } from '../online/leaderboardCache'
 import { useDiJoujGame, DJ_HUMAN_ID } from '../game/useDiJoujGame'
 import { recordResult, addGold, getProfile } from '../profile/profile'
 import { XpGainBar, type XpGain } from './components/XpGainBar'
@@ -290,7 +291,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       if (stakeBet > 0 && won) addGold(stakeBet * 2)
       // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
       // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
-      if (won && stakeBet > 0 && botName) void recordLeaderboardScore(username, stakeBet, 'dijouj')
+      if (won && stakeBet > 0 && botName) {
+        void recordLeaderboardScore(username, stakeBet, 'dijouj')
+        invalidateLeaderboard() // force un refetch au prochain affichage
+      }
       const after = getProfile()
       setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
       // Sons de fin de partie.
@@ -302,7 +306,10 @@ function LocalGame({ onBack }: { onBack: () => void }) {
         // Partie perçue comme en ligne : le bot doit apparaître au classement
         // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
         // (symétrique à l'appel côté victoire du joueur, ligne ~293).
-        if (stakeBet > 0 && botName && isOnlineGame) void recordLeaderboardScore(botName, stakeBet, 'dijouj')
+        if (stakeBet > 0 && botName && isOnlineGame) {
+          void recordLeaderboardScore(botName, stakeBet, 'dijouj')
+          invalidateLeaderboard()
+        }
       }
     }
     setShowLastCardMsg(true)
@@ -391,7 +398,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     // classement hebdo), ce qui manquait totalement sur ce chemin.
     if (stakeBet > 0 && botName) {
       void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
-      if (isOnlineGame) void recordLeaderboardScore(botName, stakeBet, 'dijouj')
+      if (isOnlineGame) { void recordLeaderboardScore(botName, stakeBet, 'dijouj'); invalidateLeaderboard() }
     }
     setTimeout(() => router.replace('/' as Href), 2000)
   }

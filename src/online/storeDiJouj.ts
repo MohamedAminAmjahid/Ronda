@@ -1,6 +1,7 @@
 import type { Room } from 'colyseus.js'
 import type { Suit, Value, PendingEffect } from '../engine-dijouj/types'
 import { joinDiJoujQuick, createDiJoujPrivate, joinByCode } from './client'
+import { invalidateLeaderboard } from './leaderboardCache'
 import { addGold } from '../profile/profile'
 import { auth } from '../firebase/auth'
 
@@ -150,6 +151,11 @@ function wireRoom(r: Room): void {
         addGold(payload.goldWon)
       }
     }
+    // Partie en ligne (vraie Room, addWageredGold déjà appelé côté serveur)
+    // qui se conclut avec une mise, gagnée ou perdue : le classement hebdo a
+    // changé dans les deux cas → invalide pour forcer un refetch au prochain
+    // affichage.
+    if (!payload.aborted && snapshot.bet > 0) invalidateLeaderboard()
   })
 
   r.onMessage('opponent_disconnected', () => set({ opponentDisconnected: true }))
