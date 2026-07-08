@@ -1,5 +1,5 @@
 import {
-  getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
+  getFirestore, doc, getDoc, getDocFromServer, setDoc, addDoc, updateDoc, deleteDoc,
   collection, query, where, getDocs, limit, serverTimestamp,
   onSnapshot, increment, orderBy, documentId,
 } from 'firebase/firestore'
@@ -204,7 +204,19 @@ async function createOrUpdateUserInner(
   local: LocalProfileSeed,
 ): Promise<CreateOrUpdateUserResult> {
   const ref = userRef(user.uid)
-  const snap = await getDoc(ref)
+  // getDoc() peut répondre depuis le cache local (mémoire ou IndexedDB selon
+  // la plateforme) si le serveur ne répond pas assez vite ou si le cache n'a
+  // pas encore été invalidé — un faux `exists(): false` ici déclenche à tort
+  // la branche "nouveau compte" (regénération de username avec suffixe) pour
+  // un compte qui existe pourtant bel et bien côté serveur. On force donc une
+  // lecture serveur pour CETTE vérification précise, quitte à retomber sur le
+  // cache seulement si l'appareil est réellement hors-ligne.
+  let snap
+  try {
+    snap = await getDocFromServer(ref)
+  } catch {
+    snap = await getDoc(ref)
+  }
   console.log('[firestore] snap.exists():', snap.exists())
   console.log('[firestore] snap.data():', snap.data())
   console.log('[firestore] local username:', local.username)

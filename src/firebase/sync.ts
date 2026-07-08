@@ -10,6 +10,16 @@ import {
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
 const FRIENDCOUNT_MIGRATED_KEY = 'ronda_friendcount_migrated'
 
+// Anti-rafale : onAuthStateChanged peut réémettre pour le même uid bien après
+// que le 1er appel a fini (ex. refresh de token ~1h, ou revalidation réseau),
+// donc hors de portée du guard anti-course pendingCreateOrUpdate côté
+// firestore.ts (qui ne protège que les appels VRAIMENT concurrents, pas deux
+// appels successifs mais rapprochés). Un cooldown court évite de relancer
+// createOrUpdateUser (et donc une lecture Firestore + un cycle de sync local)
+// pour un événement redondant survenant juste après le précédent.
+const RESYNC_COOLDOWN_MS = 10_000
+const lastCallTime = new Map<string, number>()
+
 /**
  * Synchronise username, gold et usernameChanges local ↔ Firebase à la connexion :
  *  - 1er login → le document Firebase reprend le profil local (avec résolution de
@@ -23,6 +33,10 @@ export function useFirebaseProfileSync(): void {
 
   useEffect(() => {
     if (!user) return
+    const now = Date.now()
+    const last = lastCallTime.get(user.uid) ?? 0
+    if (now - last < RESYNC_COOLDOWN_MS) return
+    lastCallTime.set(user.uid, now)
     let cancelled = false
     void (async () => {
       try {
