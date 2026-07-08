@@ -611,6 +611,24 @@ export function GameScreen({
   const [xpInfo, setXpInfo] = useState<XpGain | null>(null)
   const resultRecorded = useRef(false)
 
+  // ── Compte à rebours du tour (15 s) — miroir de DiJoujOnlineScreen ─────────
+  // Barre + secondes qui s'écoulent pendant le tour du joueur (parties en ligne).
+  const TURN_SECS = 15
+  const [turnLeft, setTurnLeft] = useState(TURN_SECS)
+  const turnBar = useRef(new Animated.Value(1)).current
+  const isMyLiveTurn = online && view.isHumanTurn && !view.isGameOver && !view.isDealEnd
+
+  useEffect(() => {
+    if (!isMyLiveTurn) { turnBar.stopAnimation(); turnBar.setValue(1); setTurnLeft(TURN_SECS); return }
+    setTurnLeft(TURN_SECS)
+    turnBar.setValue(1)
+    Animated.timing(turnBar, {
+      toValue: 0, duration: TURN_SECS * 1000, easing: Easing.linear, useNativeDriver: false,
+    }).start()
+    const id = setInterval(() => setTurnLeft(sec => Math.max(0, sec - 1)), 1000)
+    return () => clearInterval(id)
+  }, [isMyLiveTurn, turnBar])
+
   // Pulsation du bouton Ronda/Tringa
   const rondaPulse = useRef(new Animated.Value(1)).current
   const rondaPulseAnim = useRef<Animated.CompositeAnimation | null>(null)
@@ -974,6 +992,26 @@ export function GameScreen({
         </TouchableOpacity>
       </View>
 
+      {/* Compte à rebours du tour (parties en ligne, mon tour) */}
+      {isMyLiveTurn && (
+        <View style={styles.turnTimer}>
+          <Text style={[styles.turnTimerTxt, turnLeft <= 5 && styles.turnTimerTxtUrgent]}>
+            ⏱ {t('yourTurn')} · {turnLeft}s
+          </Text>
+          <View style={styles.turnTimerTrack}>
+            <Animated.View
+              style={[
+                styles.turnTimerFill,
+                {
+                  width: turnBar.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                  backgroundColor: turnLeft <= 5 ? '#C0392B' : '#C9A227',
+                },
+              ]}
+            />
+          </View>
+        </View>
+      )}
+
       {/* Profil de l'adversaire (tap sur l'avatar du bot déguisé) */}
       <PlayerProfileModal
         visible={showBotProfile}
@@ -1215,6 +1253,15 @@ const styles = StyleSheet.create({
   },
 
   // Score bar
+  turnTimer: { paddingHorizontal: 32, paddingTop: 8, gap: 4, alignItems: 'center' },
+  turnTimerTxt: { fontFamily: 'Cairo_600SemiBold', color: '#C9A227', fontSize: 12, letterSpacing: 0.4 },
+  turnTimerTxtUrgent: { color: '#C0392B' },
+  turnTimerTrack: {
+    width: '100%', height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(244,236,216,0.12)', overflow: 'hidden',
+  },
+  turnTimerFill: { height: '100%', borderRadius: 3 },
+
   scorebar: {
     backgroundColor: 'rgba(9,64,47,0.92)',
     flexDirection: 'row',

@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { LinearGradient } from 'expo-linear-gradient'
 import { router, type Href } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { GameScreen } from './GameScreen'
 import { Matchmaking } from './components/Matchmaking'
+import { AvatarDisplay } from './ProfileScreen'
 import { useOnlineGame } from '../online/useOnlineGame'
 import { leave as leaveRondaRoom, voiceTransport } from '../online/store'
 import { useProfile } from '../profile/useProfile'
+import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
 import { updateGameStatus, type GameStatus } from '../firebase/firestore'
 import { roomTypeByCode } from '../online/client'
@@ -27,14 +30,20 @@ function goLobby2v2(pseudo: string, code?: string): void {
   router.push(`/lobby2v2${q}` as Href)
 }
 
+// Palette : même structure que DiJoujOnlineScreen (dégradé sombre + laiton),
+// déclinée dans le vert de la Ronda pour garder l'identité du jeu.
 const C = {
-  table:   '#0E5C4A',
-  deep:    '#09402F',
+  gradTop: '#0C3A29' as const,
+  gradBot: '#061A12' as const,
+  surface: '#0E5C4A',
+  acc:     '#127A5E',
   brass:   '#C9A227',
-  clay:    '#B5532A',
   bone:    '#F4ECD8',
+  boneOff: 'rgba(244,236,216,0.50)',
+  ghost:   'rgba(244,236,216,0.12)',
   ink:     '#1C2622',
-  boneOff: 'rgba(244,236,216,0.45)',
+  clay:    '#B5532A',
+  red:     '#C0392B',
 } as const
 
 interface Props {
@@ -51,11 +60,13 @@ const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').s
 export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
-  const { username, invisibleMode } = useProfile()
+  const { username, invisibleMode, avatarType, avatarEmoji, avatarImage, level, xp } = useProfile()
   const { user } = useAuth()
   const myUid = user?.uid ?? null
   const { t: tr } = useI18n()
   const offline = useIsOffline()
+
+  const avatar = { avatarType, avatarEmoji, avatarImage, level, xp }
 
   const [codeInput, setCodeInput] = useState(() => normalizeCode(initialCode ?? ''))
   const [lookupError, setLookupError] = useState<string | null>(null)
@@ -157,6 +168,9 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
       <WaitingScreen
         code={roomCode}
         mode={mode}
+        bet={game.bet ?? 0}
+        username={username || 'Joueur'}
+        avatar={avatar}
         onCancel={() => game.newGame()}
         onBotFallback={(name, emoji, avatarIdx, female) => {
           const stake = game.bet ?? 0
@@ -171,25 +185,43 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
     )
   }
 
-  // ── Étapes pseudo / choix (idle ou déconnecté) ─────────────────────────────
+  // ── Lobby (idle / déconnecté) — dégradé sombre façon Di Jouj ────────────────
   return (
-    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <View style={s.column}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>← Menu</Text>
-          </TouchableOpacity>
-          <Text style={s.title}>{mode === 'friend' ? tr('playWithFriend') : tr('playOnline')}</Text>
-        </View>
-
-        {error && (
-          <View style={s.errorBox}>
-            <Text style={s.errorTxt}>{error}</Text>
+    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+        <View style={s.column}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={onBack} style={s.backBtn} activeOpacity={0.7}>
+              <Text style={s.backTxt}>{tr('back')}</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>RONDA</Text>
+            <View style={s.headerSpacer} />
           </View>
-        )}
 
-        <View style={s.body}>
-          <Text style={s.helloTxt}>Salut {username} 👋</Text>
+          {/* Avatar + pseudo centrés */}
+          <View style={s.identity}>
+            <AvatarDisplay
+              type={(avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+              initial={(username?.[0] ?? '?').toUpperCase()}
+              emoji={avatarEmoji ?? ''}
+              image={avatarImage ?? ''}
+              size={72}
+              level={level}
+              xp={xp} xpMax={xpRequired(level ?? 1)}
+            />
+            <Text style={s.identityName} numberOfLines={1}>{username}</Text>
+            <Text style={s.identitySub}>{mode === 'friend' ? tr('playWithFriend') : tr('playOnline')}</Text>
+          </View>
+
+          {game.bet > 0 && (
+            <View style={s.betBar}>
+              <Text style={s.betTxt}>Mise · {game.bet} 🪙</Text>
+            </View>
+          )}
+
+          {error && (
+            <View style={s.errorBox}><Text style={s.errorTxt}>{error}</Text></View>
+          )}
 
           {offline && (
             <View style={s.offlineNotice}>
@@ -197,105 +229,92 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
             </View>
           )}
 
-          {mode === 'friend' && (
-            <>
-              <Text style={s.label}>Inviter</Text>
-              <TouchableOpacity style={s.btnPrimary} onPress={inviteFriend}>
-                <Text style={s.btnPrimaryTxt}>Inviter un ami</Text>
-              </TouchableOpacity>
-              <Text style={s.hint}>Partage le lien de l'app à un ami.</Text>
-              <View style={s.divider} />
-            </>
-          )}
-
-          {mode !== 'friend' && (
-            <>
-              <Text style={s.label}>Adversaire aléatoire</Text>
+          <View style={s.body}>
+            {mode !== 'friend' && (
               <TouchableOpacity
                 style={[s.btnPrimary, offline && s.btnDisabled]}
                 onPress={() => { if (!offline) game.connectQuick(username) }}
                 disabled={offline}
+                activeOpacity={0.85}
               >
                 <Text style={s.btnPrimaryTxt}>{tr('quickMatch')}</Text>
               </TouchableOpacity>
-              <Text style={s.hint}>Pour jouer avec un ami, reviens au menu → « Jouer avec un ami ».</Text>
-            </>
-          )}
+            )}
 
-          {mode === 'friend' && (
-            <>
-              <Text style={s.label}>Avec un ami</Text>
-              <TouchableOpacity
-                style={[s.btnSecondary, offline && s.btnDisabled]}
-                onPress={() => { if (!offline) game.connectCreate(username) }}
-                disabled={offline}
-              >
-                <Text style={s.btnSecondaryTxt}>{tr('createGame')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[s.btnSecondary, offline && s.btnDisabled]}
-                onPress={() => { if (!offline) goLobby2v2(username) }}
-                disabled={offline}
-              >
-                <Text style={s.btnSecondaryTxt}>{tr('lobby2v2')}</Text>
-              </TouchableOpacity>
+            {mode === 'friend' && (
+              <>
+                <TouchableOpacity style={[s.btnPrimary, offline && s.btnDisabled]} onPress={inviteFriend} activeOpacity={0.85}>
+                  <Text style={s.btnPrimaryTxt}>Inviter un ami</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.btnSecondary, offline && s.btnDisabled]}
+                  onPress={() => { if (!offline) game.connectCreate(username) }}
+                  disabled={offline}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.btnSecondaryTxt}>{tr('createGame')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.btnSecondary, offline && s.btnDisabled]}
+                  onPress={() => { if (!offline) goLobby2v2(username) }}
+                  disabled={offline}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.btnSecondaryTxt}>{tr('lobby2v2')}</Text>
+                </TouchableOpacity>
 
-              <Text style={s.label}>{tr('joinWithCode')}</Text>
-              <TextInput
-                style={s.input}
-                value={codeInput}
-                onChangeText={(v) => setCodeInput(normalizeCode(v))}
-                placeholder={tr('codePlaceholder')}
-                placeholderTextColor={C.boneOff}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                editable={!joining && !offline}
-              />
-              {joining ? (
-                <Text style={s.hint}>{tr('connecting')}</Text>
-              ) : lookupError ? (
-                <Text style={s.lookupErr}>{lookupError}</Text>
-              ) : (
-                <Text style={s.hint}>Le type de partie est détecté automatiquement.</Text>
-              )}
-            </>
-          )}
+                <Text style={s.label}>{tr('joinWithCode')}</Text>
+                <TextInput
+                  style={s.input}
+                  value={codeInput}
+                  onChangeText={(v) => setCodeInput(normalizeCode(v))}
+                  placeholder={tr('codePlaceholder')}
+                  placeholderTextColor={C.boneOff}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  editable={!joining && !offline}
+                />
+                {joining ? (
+                  <Text style={s.hint}>{tr('connecting')}</Text>
+                ) : lookupError ? (
+                  <Text style={s.lookupErr}>{lookupError}</Text>
+                ) : (
+                  <Text style={s.hint}>Le type de partie est détecté automatiquement.</Text>
+                )}
+              </>
+            )}
+          </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   )
 }
 
-// ── Écran d'attente ──────────────────────────────────────────────────────────
+// ── Écran d'attente (matchmaking) — style Di Jouj ────────────────────────────
+
+interface AvatarInfo {
+  avatarType: string; avatarEmoji: string; avatarImage: string
+  level: number; xp: number
+}
 
 function WaitingScreen({
-  code, mode = 'quick', onCancel, onBotFallback,
+  code, mode = 'quick', bet, username, avatar, onCancel, onBotFallback,
 }: {
   code: string | null
   mode?: 'quick' | 'friend'
+  bet: number
+  username: string
+  avatar: AvatarInfo
   onCancel: () => void
   onBotFallback?: (name: string, emoji: string, avatarIdx: number, female: boolean) => void
 }) {
   const { t: tr } = useI18n()
-  const pulse     = useRef(new Animated.Value(0.4)).current
   const calledRef = useRef(false)
   // Délai aléatoire (25–70 s), figé pour toute la durée de cette recherche —
   // empêche de deviner le repli bot en comptant les secondes.
   const botWaitSecs = useRef(getBotWaitSecs()).current
   const [elapsed, setElapsed] = useState(0)
   const [copied, setCopied]   = useState(false)
-
-  // Texte principal (mode ami) — pulse d'opacité
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1,   duration: 800, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 800, useNativeDriver: true }),
-      ]),
-    )
-    loop.start()
-    return () => loop.stop()
-  }, [pulse])
 
   // Compteur 1 s (quick uniquement) — sert de chrono « matchmaking ».
   useEffect(() => {
@@ -326,9 +345,7 @@ function WaitingScreen({
       await Share.share({
         message: `Rejoins ma partie de Ronda ! 🎴\nCode : ${code}\nLien : ${GAME_URL}/join?code=${code}`,
       })
-    } catch {
-      // partage annulé / indisponible
-    }
+    } catch { /* annulé */ }
   }
 
   const copyCode = async () => {
@@ -337,112 +354,149 @@ function WaitingScreen({
       await Clipboard.setStringAsync(code)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // clipboard indisponible
-    }
+    } catch { /* indisponible */ }
   }
 
   return (
-    <SafeAreaView style={[s.root, { justifyContent: 'center' }]}>
-      <View style={[s.column, { alignItems: 'center', gap: 18 }]}>
+    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+        <View style={s.header}>
+          <Text style={s.title}>RONDA</Text>
+        </View>
 
-        {/* Mode recherche rapide : animation de matchmaking (aucune mention de bot) */}
-        {mode === 'quick' && (
-          <Matchmaking
-            accent={C.brass}
-            track="rgba(201,162,39,0.18)"
-            textColor={C.bone}
-            label={tr('searchingOpponent')}
-            timeLabel={formatTime(elapsed)}
-          />
+        {bet > 0 && (
+          <View style={s.betBar}>
+            <Text style={s.betTxt}>Mise · {bet} 🪙</Text>
+          </View>
         )}
 
-        {/* Mode ami : texte d'attente pulsé */}
-        {mode === 'friend' && (
-          <Animated.Text style={[s.waitTxt, { opacity: pulse }]}>
-            {tr('waitingOpponent')}
-          </Animated.Text>
-        )}
+        <View style={s.center}>
+          {/* Avatar + pseudo du joueur */}
+          <View style={s.identity}>
+            <AvatarDisplay
+              type={(avatar.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+              initial={(username?.[0] ?? '?').toUpperCase()}
+              emoji={avatar.avatarEmoji ?? ''}
+              image={avatar.avatarImage ?? ''}
+              size={64}
+              level={avatar.level}
+            />
+            <Text style={s.identityName} numberOfLines={1}>{username}</Text>
+          </View>
 
-        {/* Mode ami : affiche le code de la chambre */}
-        {mode === 'friend' && code && (
-          <>
-            <View style={s.codeBox}>
-              <Text style={s.codeLabel}>{tr('joinWithCode')}</Text>
-              <Text style={s.codeValue}>{code}</Text>
-            </View>
-            <View style={s.shareRow}>
-              <TouchableOpacity style={s.btnShare} onPress={shareCode}>
-                <Text style={s.btnShareTxt}>{tr('share')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.btnCopy} onPress={copyCode}>
-                <Text style={s.btnCopyTxt}>{copied ? tr('copied') : tr('copy')}</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
+          {/* Recherche rapide : animation de matchmaking (aucune mention de bot) */}
+          {mode === 'quick' && (
+            <Matchmaking
+              accent={C.brass}
+              track="rgba(201,162,39,0.18)"
+              textColor={C.bone}
+              label={tr('searchingOpponent')}
+              timeLabel={formatTime(elapsed)}
+            />
+          )}
 
-        <TouchableOpacity style={s.btnCancel} onPress={onCancel}>
+          {/* Mode ami : code de la chambre à partager */}
+          {mode === 'friend' && (
+            <>
+              <Text style={s.waitTxt}>{tr('waitingOpponent')}</Text>
+              {code && (
+                <>
+                  <View style={s.codeBox}>
+                    <Text style={s.codeLabel}>{tr('joinWithCode')}</Text>
+                    <Text style={s.codeValue}>{code}</Text>
+                  </View>
+                  <View style={s.shareRow}>
+                    <TouchableOpacity style={s.btnShare} onPress={shareCode} activeOpacity={0.85}>
+                      <Text style={s.btnShareTxt}>{tr('share')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.btnCopy} onPress={copyCode} activeOpacity={0.85}>
+                      <Text style={s.btnCopyTxt}>{copied ? tr('copied') : tr('copy')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </>
+          )}
+        </View>
+
+        <TouchableOpacity style={s.btnCancel} onPress={onCancel} activeOpacity={0.8}>
           <Text style={s.btnCancelTxt}>{tr('cancel')}</Text>
         </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </LinearGradient>
   )
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: C.table, alignItems: 'center' },
-  column: { flex: 1, width: '100%', maxWidth: 430, paddingHorizontal: 24 },
-  header: { paddingTop: 16, paddingBottom: 24, alignItems: 'center', gap: 6 },
-  backBtn: { alignSelf: 'flex-start', paddingVertical: 6, marginBottom: 4 },
+  root: { flex: 1 },
+  safe: { flex: 1 },
+  column: { flex: 1, width: '100%', maxWidth: 430, alignSelf: 'center', paddingHorizontal: 24 },
+
+  header: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingTop: 12, paddingBottom: 8, paddingHorizontal: 8,
+  },
+  backBtn: { paddingRight: 12, paddingVertical: 6, minWidth: 60 },
   backTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
   title: {
-    fontFamily: 'Cairo_600SemiBold', fontSize: 26, color: C.bone,
-    letterSpacing: 1, textTransform: 'uppercase',
+    flex: 1, textAlign: 'center',
+    fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.brass, letterSpacing: 6,
   },
-  body: { gap: 14 },
+  headerSpacer: { minWidth: 60 },
+
+  identity: { alignItems: 'center', gap: 8, paddingVertical: 12 },
+  identityName: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.bone },
+  identitySub:  { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff, letterSpacing: 0.4 },
+
+  betBar: {
+    alignSelf: 'center', backgroundColor: 'rgba(201,162,39,0.14)',
+    borderRadius: 12, paddingHorizontal: 18, paddingVertical: 8, marginTop: 4,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.30)',
+  },
+  betTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, letterSpacing: 0.3 },
+
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24, paddingHorizontal: 8 },
+
+  body: { gap: 14, marginTop: 20 },
   label: {
     fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff,
-    letterSpacing: 1.5, textTransform: 'uppercase',
+    letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6,
   },
   hint: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff, marginTop: -8 },
-  helloTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, marginBottom: 4 },
   input: {
-    backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 10, paddingHorizontal: 16,
+    backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 10, paddingHorizontal: 16,
     paddingVertical: 14, fontFamily: 'Cairo_400Regular', fontSize: 16, color: C.bone,
     borderWidth: 1, borderColor: 'rgba(201,162,39,0.25)',
   },
   btnPrimary: {
-    backgroundColor: C.brass, borderRadius: 12, paddingVertical: 16, alignItems: 'center',
+    backgroundColor: C.brass, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
   },
   btnPrimaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.ink, letterSpacing: 0.4 },
   btnSecondary: {
-    borderRadius: 12, paddingVertical: 16, alignItems: 'center',
-    borderWidth: 1.5, borderColor: C.brass,
+    borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+    borderWidth: 1.5, borderColor: C.brass, backgroundColor: 'rgba(201,162,39,0.08)',
   },
   btnSecondaryTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.brass, letterSpacing: 0.4 },
   btnDisabled: { opacity: 0.4 },
+
   offlineNotice: {
-    backgroundColor: 'rgba(90,42,42,0.5)', borderRadius: 10, padding: 12,
-    borderLeftWidth: 3, borderLeftColor: '#C0392B',
+    backgroundColor: 'rgba(90,42,42,0.5)', borderRadius: 10, padding: 12, marginTop: 12,
+    borderLeftWidth: 3, borderLeftColor: C.red,
   },
-  offlineNoticeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone },
-  divider: {
-    height: 1, backgroundColor: 'rgba(244,236,216,0.12)', marginVertical: 6,
-  },
+  offlineNoticeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.bone, textAlign: 'center' },
   lookupErr: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.clay, marginTop: -8 },
 
   errorBox: {
-    backgroundColor: 'rgba(181,83,42,0.18)', borderRadius: 10, padding: 12, marginBottom: 14,
+    backgroundColor: 'rgba(181,83,42,0.18)', borderRadius: 10, padding: 12, marginTop: 12,
     borderLeftWidth: 3, borderLeftColor: C.clay,
   },
-  errorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.bone },
+  errorTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.bone, textAlign: 'center' },
 
-  waitTxt:      { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
+  waitTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
   codeBox: {
-    backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 28,
+    backgroundColor: 'rgba(0,0,0,0.28)', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 28,
     alignItems: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',
   },
   codeLabel: {
@@ -451,21 +505,22 @@ const s = StyleSheet.create({
   },
   codeValue: { fontFamily: 'Cairo_600SemiBold', fontSize: 34, color: C.brass, letterSpacing: 4 },
   shareRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  btnShare: {
-    backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22,
-  },
+  btnShare: { backgroundColor: C.brass, borderRadius: 10, paddingVertical: 12, paddingHorizontal: 22 },
   btnShareTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.ink, letterSpacing: 0.3 },
   btnCopy: {
     borderRadius: 10, paddingVertical: 12, paddingHorizontal: 18,
     borderWidth: 1.5, borderColor: C.brass,
   },
   btnCopyTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass, letterSpacing: 0.3 },
-  btnCancel: { paddingVertical: 10, paddingHorizontal: 20 },
-  btnCancelTxt: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
+  btnCancel: {
+    alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 28, marginBottom: 12,
+    borderRadius: 12, borderWidth: 1, borderColor: 'rgba(244,236,216,0.25)',
+  },
+  btnCancelTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.boneOff, letterSpacing: 0.3 },
 
   discOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(9,64,47,0.88)', gap: 8,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(6,26,18,0.9)', gap: 8,
   },
   discTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
   discSub: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
