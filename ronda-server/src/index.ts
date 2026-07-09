@@ -9,6 +9,11 @@ import {
   getWeeklyLeaderboard, getWeeklyStats, getUserLeague, processWeeklyReset,
   debugWeeklyScores, addWageredGold,
 } from './db/queries'
+import {
+  createWeeklyTournament, registerPlayer, generateBracket,
+  checkForfaits, distributePrizes, reportMatchResult, getCurrentTournament,
+  type Tournament, type BracketRound, type BracketMatch,
+} from './db/tournamentQueries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { DiJoujRoom } from './rooms/DiJoujRoom'
@@ -151,6 +156,147 @@ app.post('/debug/test-leaderboard', async (req, res) => {
   if (!ready) return res.json({ ok: false, reason: 'Firebase Admin non initialisé', firebaseReady: ready })
   await addWageredGold('TestUser', 100, 'ronda')
   return res.json({ ok: true, firebaseReady: ready })
+})
+
+// ── Tournois hebdomadaires ──────────────────────────────────────────────────
+
+/** Mêmes règles que les gardes admin inline ci-dessus (league/reset, debug/*),
+ * extraites ici en middleware réutilisable pour les nouvelles routes /tournament/admin/*. */
+function adminGuard(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (!process.env.ADMIN_KEY || req.header('x-admin-key') !== process.env.ADMIN_KEY) {
+    res.status(401).json({ error: 'Non autorisé.' })
+    return
+  }
+  next()
+}
+
+/** Convertit un Timestamp Firestore Admin en ISO string (JSON-friendly), ou null. */
+function serializeTs(ts: unknown): string | null {
+  const t = ts as { toDate?: () => Date } | null | undefined
+  return t?.toDate ? t.toDate().toISOString() : null
+}
+
+function serializeMatch(m: BracketMatch) {
+  return { ...m, deadline: serializeTs(m.deadline) }
+}
+
+function serializeTournament(t: Tournament) {
+  return {
+    ...t,
+    createdAt: serializeTs(t.createdAt),
+    registrationDeadline: serializeTs(t.registrationDeadline),
+    startAt: serializeTs(t.startAt),
+    finishAt: serializeTs(t.finishAt),
+    bracket: (t.bracket ?? []).map((r: BracketRound) => ({ ...r, matches: r.matches.map(serializeMatch) })),
+  }
+}
+
+// Tournoi de la semaine courante (404 si l'admin ne l'a pas encore créé).
+app.get('/tournament/current', async (_req, res) => {
+  try {
+    const t = await getCurrentTournament()
+    if (!t) return res.status(404).json({ error: 'no_tournament' })
+    return res.json(serializeTournament(t))
+  } catch (e) {
+    console.error('[/tournament/current] erreur:', e)
+    return res.status(500).json({ error: 'server_error' })
+  }
+})
+
+// Inscription au tournoi de la semaine courante. uid dérivé du token Firebase
+// (jamais du body — déviation volontaire du schéma { uid, username } suggéré :
+// faire confiance à un uid fourni par le client permettrait de débiter
+// l'entryFee de N'IMPORTE QUEL compte, même pattern que /gold/gift et
+// /gold/transfer plus bas dans ce fichier).
+app.post('/tournament/register', async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { fromToken, username } = (req.body ?? {}) as { fromToken?: string; username?: string }
+  const uid = await uidFromToken(fromToken)
+  if (!uid) return res.status(401).json({ error: 'unauthorized' })
+  if (typeof username !== 'string' || !username.trim()) return res.status(400).json({ error: 'bad_params' })
+  try {
+    const t = await getCurrentTournament()
+    if (!t) return res.status(404).json({ error: 'no_tournament' })
+    await registerPlayer(t.weekId, uid, username.trim(), t.entryFee)
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/tournament/register] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Déclare le résultat d'un match (déclencheur : un des deux joueurs, identifié
+// par son token — jamais winnerUid/loserUid bruts sans vérification). N'avance
+// le bracket QUE quand les deux joueurs ont rapporté le MÊME vainqueur
+// (reportMatchResult) — anti-triche demandé, implémenté via double-confirmation
+// plutôt qu'un unique appel non vérifié à recordMatchWinner.
+app.post('/tournament/report-win', async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { fromToken, matchId, winnerUid } = (req.body ?? {}) as {
+    fromToken?: string; matchId?: string; winnerUid?: string
+  }
+  const reporterUid = await uidFromToken(fromToken)
+  if (!reporterUid) return res.status(401).json({ error: 'unauthorized' })
+  if (typeof matchId !== 'string' || typeof winnerUid !== 'string') {
+    return res.status(400).json({ error: 'bad_params' })
+  }
+  try {
+    const result = await reportMatchResult(matchId, reporterUid, winnerUid)
+    return res.json({ ok: true, result })
+  } catch (e) {
+    console.error('[/tournament/report-win] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Crée le tournoi de la semaine courante (admin uniquement, idempotent).
+app.post('/tournament/admin/create', adminGuard, async (_req, res) => {
+  try {
+    const id = await createWeeklyTournament()
+    return res.json({ ok: true, tournamentId: id })
+  } catch (e) {
+    console.error('[/tournament/admin/create] erreur:', e)
+    return res.status(500).json({ error: (e as Error).message })
+  }
+})
+
+// Génère le bracket du tournoi (admin uniquement).
+app.post('/tournament/admin/generate-bracket', adminGuard, async (req, res) => {
+  const { tournamentId } = (req.body ?? {}) as { tournamentId?: string }
+  if (typeof tournamentId !== 'string') return res.status(400).json({ error: 'bad_params' })
+  try {
+    await generateBracket(tournamentId)
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/tournament/admin/generate-bracket] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Force le traitement des forfaits (deadlines dépassées) — admin uniquement.
+app.post('/tournament/admin/check-forfaits', adminGuard, async (req, res) => {
+  const { tournamentId } = (req.body ?? {}) as { tournamentId?: string }
+  if (typeof tournamentId !== 'string') return res.status(400).json({ error: 'bad_params' })
+  try {
+    await checkForfaits(tournamentId)
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/tournament/admin/check-forfaits] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Distribue le prizePool au podium (admin uniquement).
+app.post('/tournament/admin/distribute-prizes', adminGuard, async (req, res) => {
+  const { tournamentId } = (req.body ?? {}) as { tournamentId?: string }
+  if (typeof tournamentId !== 'string') return res.status(400).json({ error: 'bad_params' })
+  try {
+    await distributePrizes(tournamentId)
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/tournament/admin/distribute-prizes] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
 })
 
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────
