@@ -35,6 +35,14 @@ type Phase = 'loading' | 'ready' | 'paying' | 'success' | 'error'
 export function PaymentModal({ visible, packId, gold, priceLabel, onClose, onSuccess }: Props) {
   const [phase, setPhase]   = useState<Phase>('loading')
   const [errMsg, setErrMsg] = useState('')
+  // phase passe à 'ready' dès que le PaymentIntent est créé côté serveur — PAS
+  // quand le CardElement est effectivement monté et interactif (mount() est
+  // suivi d'un chargement d'iframe asynchrone). Sans ce 2e état, cliquer
+  // "Payer" dans cette fenêtre laisse pay() sortir silencieusement (cardRef
+  // encore null) ou, si mount() vient juste de rendre cardRef non-null mais
+  // que l'iframe Stripe n'a pas fini de se charger, peut déclencher
+  // l'IntegrationError "Element not mounted" de confirmCardPayment.
+  const [cardMounted, setCardMounted] = useState(false)
   const stripeRef  = useRef<Stripe | null>(null)
   const cardRef    = useRef<StripeCardElement | null>(null)
   const secretRef  = useRef<string>('')
@@ -42,6 +50,7 @@ export function PaymentModal({ visible, packId, gold, priceLabel, onClose, onSuc
   const reset = useCallback(() => {
     setPhase('loading')
     setErrMsg('')
+    setCardMounted(false)
     secretRef.current = ''
     cardRef.current?.unmount()
     cardRef.current = null
@@ -105,6 +114,7 @@ export function PaymentModal({ visible, packId, gold, priceLabel, onClose, onSuc
         },
       })
       card.mount(container)
+      card.on('ready', () => setCardMounted(true))
       cardRef.current = card
       return true
     }
@@ -171,12 +181,12 @@ export function PaymentModal({ visible, packId, gold, priceLabel, onClose, onSuc
               )}
 
               <TouchableOpacity
-                style={[s.btnPrimary, phase !== 'ready' && s.btnDisabled]}
+                style={[s.btnPrimary, (phase !== 'ready' || !cardMounted) && s.btnDisabled]}
                 onPress={pay}
-                disabled={phase !== 'ready'}
+                disabled={phase !== 'ready' || !cardMounted}
               >
-                <Text style={[s.btnPrimaryTxt, phase !== 'ready' && s.btnDisabledTxt]}>
-                  {phase === 'paying' ? 'Traitement…' : `Payer ${priceLabel}`}
+                <Text style={[s.btnPrimaryTxt, (phase !== 'ready' || !cardMounted) && s.btnDisabledTxt]}>
+                  {phase === 'paying' ? 'Traitement…' : !cardMounted ? 'Chargement…' : `Payer ${priceLabel}`}
                 </Text>
               </TouchableOpacity>
 
