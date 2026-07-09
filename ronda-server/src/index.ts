@@ -1,6 +1,7 @@
 import http from 'node:http'
 import express from 'express'
 import cors from 'cors'
+import cron from 'node-cron'
 import { Server } from 'colyseus'
 import { WebSocketTransport } from '@colyseus/ws-transport'
 import { initDatabase } from './db/database'
@@ -449,6 +450,59 @@ app.post('/notify/friend-request', async (req, res) => {
   const fromName = await getUsername(fromUid)
   void sendPushNotification(toUid, '👥 Demande d\'ami', `${fromName} veut être ton ami`, { type: 'friend_request' })
   return res.json({ ok: true })
+})
+
+// ── Cron : cycle hebdomadaire du tournoi ────────────────────────────────────
+// Suppose une seule instance du serveur (pas de coordinateur distribué) —
+// avec plusieurs instances Railway, chaque réplique exécuterait ces tâches
+// indépendamment. createWeeklyTournament() est déjà idempotent (par doc
+// weekId), donc sans risque en double ; generateBracket()/distributePrizes()
+// vérifient le statut avant d'agir mais ne sont pas protégées par une
+// transaction couvrant toute leur durée — un doublon exact au même instant
+// reste possible en théorie sur un déploiement multi-instances (pas le cas
+// ici, mais à garder en tête si la config Railway change).
+
+// Chaque lundi à 00:00 UTC → crée automatiquement le tournoi de la semaine.
+cron.schedule('0 0 * * 1', async () => {
+  console.log('[cron] Création automatique du tournoi hebdomadaire...')
+  try {
+    const id = await createWeeklyTournament()
+    console.log('[cron] Tournoi créé:', id)
+  } catch (e) {
+    console.error('[cron] Erreur création tournoi:', e)
+  }
+})
+
+// Chaque vendredi à 00:00 UTC → génère le bracket automatiquement.
+cron.schedule('0 0 * * 5', async () => {
+  console.log('[cron] Génération automatique du bracket...')
+  try {
+    const t = await getCurrentTournament()
+    // 'registration' = complet avant même la deadline (dernier slot pris,
+    // voir registerPlayer) — generateBracket() accepte déjà les deux statuts ;
+    // se limiter à 'open' comme suggéré aurait laissé un tournoi complet tôt
+    // bloqué sans bracket jusqu'à une action admin manuelle.
+    if (t && (t.status === 'open' || t.status === 'registration')) {
+      await generateBracket(t.weekId)
+      console.log('[cron] Bracket généré pour:', t.weekId)
+    }
+  } catch (e) {
+    console.error('[cron] Erreur génération bracket:', e)
+  }
+})
+
+// Chaque dimanche à 23:00 UTC → distribue les prix automatiquement.
+cron.schedule('0 23 * * 0', async () => {
+  console.log('[cron] Distribution automatique des prix...')
+  try {
+    const t = await getCurrentTournament()
+    if (t && t.status === 'finished') {
+      await distributePrizes(t.weekId)
+      console.log('[cron] Prix distribués pour:', t.weekId)
+    }
+  } catch (e) {
+    console.error('[cron] Erreur distribution prix:', e)
+  }
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────
