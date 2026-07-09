@@ -75,7 +75,7 @@ export function BottomNav() {
   const pathname  = usePathname()
   const insets    = useSafeAreaInsets()
   const { user }  = useAuth()
-  const { pending, unread } = useNotifBadges(user?.uid ?? null)
+  const { pending, unread, tournamentBadge } = useNotifBadges(user?.uid ?? null)
 
   // Badge Quêtes : nombre de récompenses accomplies mais pas encore réclamées
   // (missions + streak de connexion du jour).
@@ -106,7 +106,9 @@ export function BottomNav() {
             ? unread
             : tab.href === '/daily-quests'
               ? questBadge
-              : 0
+              : tab.href === '/tournament'
+                ? tournamentBadge
+                : 0
         return <TabItem key={tab.href} tab={tab} active={active} badge={badge} />
       })}
     </View>

@@ -8,6 +8,7 @@ import {
   getCachedTrophies, isTrophiesStale, refreshTrophies, subscribeTrophies, emptyTrophyEntries,
   type MetricKey, type TrophyEntry, type TrophiesData,
 } from '../online/trophiesCache'
+import { getUserById } from '../firebase/firestore'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -45,6 +46,19 @@ export function TrophiesScreen({ onBack }: Props) {
   const [seeAll, setSeeAll] = useState<MetricKey | null>(null)
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
+
+  // ── « Mes tournois » : users/{uid}.trophies[] (écrit uniquement côté
+  // serveur par distributePrizes — voir ronda-server/tournamentQueries.ts). ──
+  const [tournamentTrophies, setTournamentTrophies] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!myUid) { setTournamentTrophies([]); return }
+    let cancelled = false
+    void getUserById(myUid).then((u) => {
+      if (!cancelled && u) setTournamentTrophies(u.trophies)
+    })
+    return () => { cancelled = true }
+  }, [myUid])
 
   // Affichage instantané depuis le cache (même périmé), puis refresh
   // silencieux en arrière-plan si absent ou dépassé les 10 min de TTL. Le
@@ -147,6 +161,21 @@ export function TrophiesScreen({ onBack }: Props) {
                 onPress={() => setSeeAll(m.key)}
               />
             ))}
+
+            {/* ── Mes tournois (hebdomadaires) ─────────────────────────── */}
+            <View style={s.tournamentSection}>
+              <Text style={s.tournamentSectionTitle}>{t('myTournaments')}</Text>
+              {tournamentTrophies.length === 0 ? (
+                <Text style={s.tournamentEmpty}>{t('noTournamentWinYet')}</Text>
+              ) : (
+                <View style={s.tournamentBadgeList}>
+                  {tournamentTrophies.map((tr) => (
+                    <Text key={tr} style={s.tournamentBadge}>🏆 {tr}</Text>
+                  ))}
+                </View>
+              )}
+            </View>
+
             <View style={{ height: 8 }} />
           </ScrollView>
         )}
@@ -379,6 +408,22 @@ const s = StyleSheet.create({
   value: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
 
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 40, lineHeight: 20 },
+
+  tournamentSection: {
+    width: '100%', backgroundColor: C.deep, borderRadius: 14, padding: 16, gap: 10, marginTop: 4,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.3)',
+  },
+  tournamentSectionTitle: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff,
+    letterSpacing: 1.5, textTransform: 'uppercase',
+  },
+  tournamentEmpty: { fontFamily: 'Cairo_400Regular', fontSize: 13, color: C.boneOff },
+  tournamentBadgeList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tournamentBadge: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.brass,
+    backgroundColor: 'rgba(201,162,39,0.14)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5,
+  },
 
   skeletonTitle:  { width: '60%', height: 12, borderRadius: 5, backgroundColor: 'rgba(244,236,216,0.16)' },
   skeletonAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(244,236,216,0.16)' },

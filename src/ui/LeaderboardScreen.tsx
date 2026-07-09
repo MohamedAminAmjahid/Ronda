@@ -143,7 +143,6 @@ export function LeaderboardScreen({ onBack }: Props) {
         if (cancelled) return
         const fresh = getCachedLeaderboard(selected)
         if (fresh) {
-          console.log('[leaderboard] users chargés:', fresh.length)
           setEntries(fresh)
           setLoading(false)
         } else if (!cached) {
@@ -293,7 +292,6 @@ export function LeaderboardScreen({ onBack }: Props) {
               const me = e.username === username
               const resolving = resolvingName === e.username
               const avatar = profileCache.current.get(e.username)
-              console.log('[leaderboard] avatar cache pour', e.username, ':', avatar)
               return (
                 <TouchableOpacity
                   key={e.username}

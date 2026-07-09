@@ -46,7 +46,6 @@ export function useFirebaseProfileSync(): void {
       try {
         await loadProfile()
         const p = getProfile()
-        console.log('[sync] login uid:', user.uid, '| username local:', p.username)
         const {
           username, gold, usernameChanges, goldHistoryPublic, statsPublic, invisibleMode,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
@@ -76,9 +75,6 @@ export function useFirebaseProfileSync(): void {
           xp: p.xp,
           level: p.level,
         })
-        console.log('[sync] Firebase → username:', username, '| gold:', gold, '| usernameChanges:', usernameChanges)
-        console.log('[sync] username Firestore:', username, '| local:', p.username)
-        console.log('[sync] stats après login:', { gamesPlayed, gamesWon })
         if (!cancelled) {
           // Firestore fait autorité : on n'écrase le local QUE si la valeur diffère.
           // Ne jamais renvoyer le username local vers Firestore ici.

@@ -34,3 +34,43 @@ export async function sendPushNotification(
     console.error('[sendPushNotification] échec:', e)
   }
 }
+
+// ── Notifications tournoi hebdomadaire ──────────────────────────────────────
+// Toutes réutilisent sendPushNotification ci-dessus (lecture fcmToken, gestion
+// des tokens périmés, no-op si Firebase indisponible) plutôt que de refaire un
+// appel Admin Messaging direct par fonction.
+
+/** Notifie tous les participants qu'un bracket vient d'être généré. */
+export async function notifyBracketReady(participants: string[]): Promise<void> {
+  await Promise.all(participants.map((uid) =>
+    sendPushNotification(
+      uid,
+      '🏆 Le bracket est prêt !',
+      'Ton 1er match commence vendredi — prépare-toi !',
+      { type: 'tournament_bracket_ready' },
+    ),
+  ))
+}
+
+/** Notifie un joueur que son prochain match de tournoi est prêt à être joué. */
+export async function notifyYourTurn(uid: string, opponentName: string, deadline: Date): Promise<void> {
+  const deadlineStr = deadline.toLocaleString('fr-FR', {
+    weekday: 'long', hour: '2-digit', minute: '2-digit',
+  })
+  await sendPushNotification(
+    uid,
+    '⚔️ Ton match de tournoi !',
+    `Tu affrontes ${opponentName} — joue avant ${deadlineStr}`,
+    { type: 'tournament_your_turn' },
+  )
+}
+
+/** Notifie le champion du tournoi (or gagné inclus dans le message). */
+export async function notifyChampion(uid: string, goldWon: number): Promise<void> {
+  await sendPushNotification(
+    uid,
+    '🏆 CHAMPION !',
+    `Tu as gagné le tournoi et remporté ${goldWon} 🪙 !`,
+    { type: 'tournament_champion' },
+  )
+}

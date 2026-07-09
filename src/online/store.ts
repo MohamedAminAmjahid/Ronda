@@ -247,7 +247,7 @@ function wireRoom(r: Room): void {
 }
 
 async function connect(
-  factory: () => Promise<Room>, bet = 0, label = 'quick', tournament: TournamentContext | null = null,
+  factory: () => Promise<Room>, bet = 0, tournament: TournamentContext | null = null,
 ): Promise<void> {
   reset()
   // bet (et tournament) sont passés APRÈS reset() (qui les remet à 0/null)
@@ -256,7 +256,6 @@ async function connect(
   set({ status: 'connecting', error: null, bet, tournament })
   try {
     const r = await factory()
-    console.log('[matchmaking] mode:', label, 'roomId:', r.roomId)
     wireRoom(r)
     // En attente du 2e joueur jusqu'au 1er game_state en phase PLAYING.
     set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
@@ -270,21 +269,21 @@ async function connect(
 // ── Actions exposées ─────────────────────────────────────────────────────────
 
 export function connectQuick(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => joinOrCreate(pseudo, bet), bet, 'quick')
+  return connect(() => joinOrCreate(pseudo, bet), bet)
 }
 export function connectCreate(pseudo: string): Promise<void> {
-  return connect(() => createPrivate(pseudo), 0, 'friend-host')
+  return connect(() => createPrivate(pseudo), 0)
 }
 export function connectByCode(pseudo: string, code: string): Promise<void> {
-  return connect(() => joinByCode(pseudo, code), 0, 'friend-guest')
+  return connect(() => joinByCode(pseudo, code), 0)
 }
 /** Crée une room privée Ronda pour une partie entre amis (hôte). */
 export function connectFriendHost(pseudo: string, bet = 0): Promise<void> {
-  return connect(() => createPrivate(pseudo), bet, 'friend-host')
+  return connect(() => createPrivate(pseudo), bet)
 }
 /** Rejoint une room privée Ronda par code (invité). */
 export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
-  return connect(() => joinByCode(pseudo, code), bet, 'friend-guest')
+  return connect(() => joinByCode(pseudo, code), bet)
 }
 /**
  * Rejoint (ou crée) un match de tournoi : voir joinTournamentMatch pour le
@@ -294,7 +293,7 @@ export function connectTournamentMatch(
   pseudo: string, matchId: string, opponentUid: string, isFinal: boolean, uid?: string,
 ): Promise<void> {
   return connect(
-    () => joinTournamentMatch(pseudo, matchId, uid), 0, 'tournament',
+    () => joinTournamentMatch(pseudo, matchId, uid), 0,
     { matchId, opponentUid, isFinal },
   )
 }

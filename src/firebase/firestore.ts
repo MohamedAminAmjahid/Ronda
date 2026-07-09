@@ -224,10 +224,6 @@ async function createOrUpdateUserInner(
   } catch {
     snap = await getDoc(ref)
   }
-  console.log('[firestore] snap.exists():', snap.exists())
-  console.log('[firestore] snap.data():', snap.data())
-  console.log('[firestore] local username:', local.username)
-
   if (!snap.exists()) {
     // Document inexistant → premier login : on génère un username unique une fois.
     let finalUsername = local.username
@@ -236,8 +232,6 @@ async function createOrUpdateUserInner(
       const suffix = Math.floor(10 + Math.random() * 90)
       finalUsername = `${local.username.slice(0, 13)}_${suffix}`
     }
-    console.log('[firestore] createOrUpdateUser: NOUVEAU doc pour', user.uid, '→ username =', finalUsername)
-    console.log('[firestore] username retourné:', finalUsername)
     await setDoc(ref, {
       username: finalUsername,
       usernameLower: finalUsername.toLowerCase(),
@@ -297,8 +291,6 @@ async function createOrUpdateUserInner(
   const existingUsername = (typeof data.username === 'string' && data.username.trim())
     ? (data.username as string)
     : local.username
-  console.log('[firestore] createOrUpdateUser: doc EXISTANT pour', user.uid, '→ username Firestore =', existingUsername)
-  console.log('[firestore] username retourné:', existingUsername)
   await updateDoc(ref, { lastSeen: serverTimestamp() })
   return {
     username: existingUsername,

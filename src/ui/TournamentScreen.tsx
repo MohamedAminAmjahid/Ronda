@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal, Share } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { router, useFocusEffect, type Href } from 'expo-router'
@@ -174,13 +174,34 @@ export function TournamentScreen({ onBack }: Props) {
     return 'can_register' as const
   }, [tournament, isRegistered])
 
+  const handleShare = async () => {
+    if (!tournament) return
+    try {
+      await Share.share({
+        message:
+          `Je participe au Tournoi Ronda sur Dar Lwar9a TM ! 🏆\n` +
+          `Prize Pool : ${tournament.prizePool} 🪙\n` +
+          `Rejoins-moi : ronda-virid.vercel.app`,
+      })
+    } catch {
+      // partage annulé / indisponible — sans effet
+    }
+  }
+
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
       <View style={s.column}>
         <View style={s.header}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>{t('back')}</Text>
-          </TouchableOpacity>
+          <View style={s.headerTopRow}>
+            <TouchableOpacity onPress={onBack} style={s.backBtn}>
+              <Text style={s.backTxt}>{t('back')}</Text>
+            </TouchableOpacity>
+            {!!tournament && (
+              <TouchableOpacity onPress={() => { void handleShare() }} style={s.shareBtn} activeOpacity={0.8}>
+                <Text style={s.shareBtnTxt}>📤 {t('share')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
           <Text style={s.title}>🏆 {t('tournamentTitle')}</Text>
         </View>
 
@@ -405,8 +426,14 @@ const s = StyleSheet.create({
   column: { flex: 1, width: '100%', maxWidth: 480, paddingHorizontal: 18 },
 
   header: { paddingTop: 16, paddingBottom: 8, gap: 4 },
+  headerTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   backBtn: { alignSelf: 'flex-start', paddingVertical: 6 },
   backTxt: { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
+  shareBtn: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: 12,
+    backgroundColor: 'rgba(201,162,39,0.14)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+  },
+  shareBtnTxt: { fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 12 },
   title: {
     fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone,
     letterSpacing: 0.5, textTransform: 'uppercase',

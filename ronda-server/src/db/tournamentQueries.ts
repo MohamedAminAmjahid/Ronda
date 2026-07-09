@@ -2,6 +2,7 @@ import { Timestamp } from 'firebase-admin/firestore'
 import { adminDb, firebaseReady, getPublicProfile, FieldValue } from '../firebaseAdmin'
 import { generateCode } from '../rooms/registry'
 import { currentWeekStart } from './queries'
+import { notifyBracketReady, notifyYourTurn, notifyChampion } from '../notifications'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -255,9 +256,11 @@ export async function generateBracket(tournamentId: string): Promise<void> {
 
   const batch = adminDb().batch()
   batch.set(tRef, { bracket, status: 'running' }, { merge: true })
+  const readyMatches: BracketMatch[] = []
   for (const round of bracket) {
     for (const m of round.matches) {
       if (m.status !== 'ready') continue
+      readyMatches.push(m)
       batch.set(matchesCol().doc(m.matchId), {
         tournamentId, round: round.round,
         player1Uid: m.player1Uid, player2Uid: m.player2Uid,
@@ -268,6 +271,20 @@ export async function generateBracket(tournamentId: string): Promise<void> {
     }
   }
   await batch.commit()
+
+  // Notifications best-effort, APRÈS le commit (jamais dans la transaction/le
+  // batch : un retry de transaction renverrait sinon plusieurs fois le même
+  // push). Un participant qui a un bye immédiat (pas de match 'ready' à ce
+  // tour) reçoit seulement notifyBracketReady, pas notifyYourTurn.
+  void notifyBracketReady(participants).catch((e) => console.error('[tournament] notifyBracketReady:', e))
+  for (const m of readyMatches) {
+    if (!m.player1Uid || !m.player2Uid || !m.deadline) continue
+    const deadline = m.deadline.toDate()
+    void notifyYourTurn(m.player1Uid, names[m.player2Uid] ?? 'Joueur', deadline)
+      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    void notifyYourTurn(m.player2Uid, names[m.player1Uid] ?? 'Joueur', deadline)
+      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+  }
 }
 
 /** Trouve un match dans le bracket par matchId. Renvoie les indices [round, match] ou null. */
@@ -300,7 +317,7 @@ export async function recordMatchWinner(
   const tournamentId = match.tournamentId
   const tRef = tournamentsCol().doc(tournamentId)
 
-  await adminDb().runTransaction(async (tx) => {
+  const result = await adminDb().runTransaction(async (tx) => {
     const tSnap = await tx.get(tRef)
     if (!tSnap.exists) throw new Error('tournament_not_found')
     const tData = tSnap.data() as Tournament
@@ -315,6 +332,7 @@ export async function recordMatchWinner(
 
     const nextRoundIdx = roundIdx + 1
     let finished = false
+    let readyNext: { player1Uid: string; player2Uid: string; deadline: Timestamp } | null = null
 
     if (nextRoundIdx < bracket.length) {
       const nextMatchIdx = Math.floor(matchIdx / 2)
@@ -333,6 +351,7 @@ export async function recordMatchWinner(
           winnerUid: null, roomCode: next.roomCode, status: 'ready', deadline: next.deadline,
           createdAt: FieldValue.serverTimestamp(),
         }, { merge: true })
+        readyNext = { player1Uid: next.player1Uid, player2Uid: next.player2Uid, deadline: next.deadline }
       }
       bracket[nextRoundIdx].matches[nextMatchIdx] = next
     } else {
@@ -344,7 +363,24 @@ export async function recordMatchWinner(
       bracket,
       ...(finished ? { champion: winnerUid, status: 'finished' } : {}),
     }, { merge: true })
+
+    return { readyNext, participantNames: tData.participantNames ?? {} }
   })
+
+  // Notification best-effort, APRÈS le commit de la transaction — jamais À
+  // L'INTÉRIEUR : un retry de transaction (contention) renverrait sinon le
+  // même push plusieurs fois. Pas explicitement demandé pour les tours 2+
+  // (seul generateBracket → round 1 l'est), mais l'omettre laisserait les
+  // joueurs sans notification à partir des quarts de finale.
+  if (result.readyNext) {
+    const { player1Uid, player2Uid, deadline } = result.readyNext
+    const names = result.participantNames
+    const d = deadline.toDate()
+    void notifyYourTurn(player1Uid, names[player2Uid] ?? 'Joueur', d)
+      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    void notifyYourTurn(player2Uid, names[player1Uid] ?? 'Joueur', d)
+      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+  }
 }
 
 /**
@@ -457,6 +493,9 @@ export async function distributePrizes(tournamentId: string): Promise<void> {
   }
   batch.set(tRef, { prizesDistributed: true }, { merge: true })
   await batch.commit()
+
+  const championReward = rewards.get(champion) ?? 0
+  void notifyChampion(champion, championReward).catch((e) => console.error('[tournament] notifyChampion:', e))
 }
 
 /** Tournoi de la semaine courante, ou null s'il n'a pas encore été créé. */

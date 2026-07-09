@@ -203,7 +203,6 @@ async function connect(factory: () => Promise<Room>, isQuick = false, bet = 0): 
   set({ status: 'connecting', error: null, isQuick, bet })
   try {
     const r = await factory()
-    console.log('[matchmaking] mode:', isQuick ? 'quick' : 'friend', 'roomId:', r.roomId)
     wireRoom(r)
     set({ status: 'waiting', roomCode: (r.state as { code?: string })?.code ?? null })
   } catch (e) {
