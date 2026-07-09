@@ -19,6 +19,7 @@ const TABS = [
   { icon: '🎮', label: 'Jeux',       href: '/'             },
   { icon: '📊', label: 'Classement', href: '/leaderboard'  },
   { icon: '🏆', label: 'Trophées',   href: '/trophies'     },
+  { icon: '⚔️', label: 'Tournoi',    href: '/tournament'   },
   { icon: '👥', label: 'Amis',       href: '/friends'      },
   { icon: '💬', label: 'Messages',   href: '/messages'     },
   { icon: '🎯', label: 'Quêtes',     href: '/daily-quests' },

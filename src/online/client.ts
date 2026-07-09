@@ -1,4 +1,6 @@
 import { Client, Room } from 'colyseus.js'
+import { getAuth } from 'firebase/auth'
+import { firebaseApp } from '../firebase/config'
 
 // URL du serveur Colyseus. En dev : ws://localhost:2567.
 // En prod : définir EXPO_PUBLIC_SERVER_URL (wss://…railway.app) dans .env.local.
@@ -149,4 +151,109 @@ export async function roomTypeByCode(
   )
   if (!res.ok) throw new Error('Code de partie introuvable.')
   return (await res.json()) as { type: RoomType; roomId: string }
+}
+
+// ── Tournois hebdomadaires ────────────────────────────────────────────────────
+
+export type TournamentStatus = 'open' | 'registration' | 'running' | 'finished'
+export type MatchStatus = 'pending' | 'ready' | 'playing' | 'done' | 'forfeit'
+
+export interface BracketMatch {
+  matchId: string
+  player1Uid: string | null
+  player2Uid: string | null
+  winnerUid: string | null
+  roomCode: string | null
+  /** ISO string (sérialisé par le serveur), ou null. */
+  deadline: string | null
+  status: MatchStatus
+}
+
+export interface BracketRound {
+  round: number
+  matches: BracketMatch[]
+}
+
+export interface TournamentAvatar {
+  avatarType: string
+  avatarEmoji: string
+  avatarImage: string
+}
+
+export interface Tournament {
+  weekId: string
+  game: 'ronda'
+  status: TournamentStatus
+  entryFee: number
+  prizePool: number
+  maxPlayers: number
+  participants: string[]
+  participantNames: Record<string, string>
+  participantAvatars: Record<string, TournamentAvatar>
+  bracket: BracketRound[]
+  champion: string | null
+  createdAt: string | null
+  registrationDeadline: string | null
+  startAt: string | null
+  finishAt: string | null
+}
+
+/** Token d'identité Firebase de l'utilisateur courant, ou null si déconnecté.
+ * Dupliqué (volontairement) depuis online/serverApi.ts : serverApi.ts importe
+ * déjà httpBase() depuis CE fichier — importer idToken() en sens inverse
+ * créerait un import circulaire entre les deux modules. */
+async function idToken(): Promise<string | null> {
+  const u = getAuth(firebaseApp).currentUser
+  if (!u) return null
+  try { return await u.getIdToken() } catch { return null }
+}
+
+/** Tournoi de la semaine courante, ou null si l'admin ne l'a pas encore créé. */
+export async function fetchCurrentTournament(): Promise<Tournament | null> {
+  const res = await fetch(`${httpBase()}/tournament/current`)
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error('Tournoi indisponible.')
+  return (await res.json()) as Tournament
+}
+
+/**
+ * Inscrit l'utilisateur courant au tournoi de la semaine. `uid` n'est pas
+ * envoyé au serveur (qui le dérive lui-même d'un token Firebase vérifié —
+ * voir ronda-server/src/index.ts) ; gardé dans la signature pour matcher
+ * l'API demandée, mais un uid client non authentifié ne serait jamais fiable
+ * pour débiter un entryFee.
+ */
+export async function registerForTournament(_uid: string, username: string): Promise<void> {
+  const fromToken = await idToken()
+  if (!fromToken) throw new Error('unauthorized')
+  const res = await fetch(`${httpBase()}/tournament/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromToken, username }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? 'registration_failed')
+  }
+}
+
+/**
+ * Déclare le vainqueur d'un match de tournoi tel que vu par l'utilisateur
+ * courant (double-confirmation côté serveur : n'avance le bracket que quand
+ * les DEUX joueurs rapportent le même vainqueur). `loserUid` n'est pas
+ * envoyé — le serveur déduit l'autre joueur depuis le match lui-même —
+ * gardé dans la signature pour matcher l'API demandée.
+ */
+export async function reportMatchWin(matchId: string, winnerUid: string, _loserUid: string): Promise<void> {
+  const fromToken = await idToken()
+  if (!fromToken) throw new Error('unauthorized')
+  const res = await fetch(`${httpBase()}/tournament/report-win`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromToken, matchId, winnerUid }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? 'report_failed')
+  }
 }
