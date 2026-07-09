@@ -3,6 +3,16 @@ import { adminDb, firebaseReady, getPublicProfile, FieldValue } from '../firebas
 import { generateCode } from '../rooms/registry'
 import { currentWeekStart } from './queries'
 import { notifyBracketReady, notifyYourTurn, notifyChampion } from '../notifications'
+import { ALL_BOTS, getBotAvatar, type BotIdentity } from '../botNames'
+
+/** true si cet uid désigne un bot de repli (schéma bot_<prénom>, voir botNames.ts). */
+function isBotUid(uid: string): boolean {
+  return uid.startsWith('bot_')
+}
+
+function randInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -184,9 +194,79 @@ function shuffle<T>(arr: readonly T[]): T[] {
   return out
 }
 
+/** Prochaine puissance de 2 ≥ n, plafonnée à 16 (= maxPlayers par défaut,
+ * voir registerPlayer). Un tournoi à 2 inscrits reste à 2 (pas de padding
+ * inutile) — seul un effectif NON puissance de 2 est complété avec des bots. */
+function nextPowerOf2(n: number): number {
+  if (n <= 2) return 2
+  if (n <= 4) return 4
+  if (n <= 8) return 8
+  return 16
+}
+
 /**
- * Génère le bracket : mélange les participants, crée les matches du tour 1
- * (bye automatique si nombre impair), et la structure vide des tours
+ * Crée le profil fantôme Firestore d'un bot ajouté au tournoi, s'il n'existe
+ * pas déjà (idempotent — un bot déjà créé par le repli matchmaking client, ou
+ * par un tournoi précédent, est réutilisé tel quel). Port Admin SDK de
+ * getOrCreateBotProfile (client, botFallback.ts) : même structure de profil,
+ * pour que le bot soit indiscernable d'un vrai joueur partout où son profil
+ * peut être consulté (bracket, avatar, historique…).
+ */
+async function ensureBotProfile(bot: BotIdentity): Promise<void> {
+  try {
+    const ref = adminDb().collection('users').doc(bot.uid)
+    const snap = await ref.get()
+    if (snap.exists) return
+    const gamesPlayed  = randInt(50, 250)
+    const rondaPlayed  = Math.round(gamesPlayed * 0.5)
+    const dijoujPlayed = gamesPlayed - rondaPlayed
+    const winRate      = randInt(40, 70) / 100
+    const rondaWon     = Math.round(rondaPlayed  * winRate)
+    const dijoujWon    = Math.round(dijoujPlayed * winRate)
+    await ref.set({
+      username: bot.name, usernameLower: bot.name.toLowerCase(), isBot: true,
+      level: randInt(3, 18), xp: 0, gold: randInt(500, 3000),
+      gamesPlayed, gamesWon: rondaWon + dijoujWon, onlineGamesPlayed: 0,
+      rondaPlayed, rondaWon, dijoujPlayed, dijoujWon,
+      avatarType: 'image', avatarEmoji: '', avatarImage: getBotAvatar(bot.avatarIdx, bot.female),
+      avatarFrame: 'none', statsPublic: true, goldHistoryPublic: false, friendCount: 0,
+      createdAt: FieldValue.serverTimestamp(), lastSeen: FieldValue.serverTimestamp(),
+    })
+  } catch (e) {
+    console.error('[tournament] ensureBotProfile:', e)
+  }
+}
+
+/**
+ * Résout immédiatement tout match 'ready' opposant deux bots : aucun des deux
+ * ne rejoindra jamais une vraie Room pour "jouer" — sans ce court-circuit, un
+ * tel match resterait bloqué jusqu'au prochain passage de checkForfaits (24h,
+ * voir ROUND_DURATION_MS). Cascade bornée au nombre de tours max (16 joueurs
+ * → 4 tours) : résoudre un bot-vs-bot peut faire apparaître un AUTRE
+ * bot-vs-bot au tour suivant.
+ */
+async function resolveBotVsBotMatches(tournamentId: string): Promise<void> {
+  for (let iter = 0; iter < 4; iter++) {
+    const snap = await matchesCol().where('tournamentId', '==', tournamentId).get()
+    const botVsBot = snap.docs.filter((d) => {
+      const m = d.data() as TournamentMatch
+      return m.status === 'ready' && isBotUid(m.player1Uid) && isBotUid(m.player2Uid)
+    })
+    if (botVsBot.length === 0) return
+    for (const doc of botVsBot) {
+      const m = doc.data() as TournamentMatch
+      const winnerUid = Math.random() < 0.5 ? m.player1Uid : m.player2Uid
+      await recordMatchWinner(doc.id, winnerUid)
+    }
+  }
+}
+
+/**
+ * Génère le bracket : complète d'abord avec des bots aléatoires jusqu'à la
+ * prochaine puissance de 2 si l'effectif humain n'en est pas déjà une (jamais
+ * bloqué en attente d'inscriptions supplémentaires), mélange les participants,
+ * crée les matches du tour 1 (bye automatique si nombre impair malgré le
+ * padding — cas limite avec 0 bot disponible), et la structure vide des tours
  * suivants. Propage les byes vers les tours suivants (cascade possible avec
  * plusieurs byes) puis active tout match devenu complet. Crée les docs
  * tournament_matches pour tous les matches immédiatement jouables (tour 1 ET
@@ -200,9 +280,34 @@ export async function generateBracket(tournamentId: string): Promise<void> {
   const data = snap.data() as Tournament
   if (data.status !== 'open' && data.status !== 'registration') throw new Error('bracket_already_generated')
 
-  const participants = data.participants ?? []
+  const humanParticipants = data.participants ?? []
+  const names: Record<string, string> = { ...(data.participantNames ?? {}) }
+  const avatars: Record<string, { avatarType: string; avatarEmoji: string; avatarImage: string }> =
+    { ...(data.participantAvatars ?? {}) }
+
+  // Complète avec des bots aléatoires jusqu'à la prochaine puissance de 2 —
+  // seulement si au moins 2 humains sont déjà inscrits (sinon même un seul
+  // bot ne suffirait pas à constituer un vrai match, et 0 inscrit ne doit pas
+  // se transformer en "tournoi 100% bots").
+  const participants = [...humanParticipants]
+  const addedBots: BotIdentity[] = []
+  if (participants.length >= 2) {
+    const targetSize = nextPowerOf2(participants.length)
+    const availableBots = shuffle(ALL_BOTS.filter((b) => !participants.includes(b.uid)))
+    while (participants.length < targetSize && availableBots.length > 0) {
+      const bot = availableBots.pop()!
+      await ensureBotProfile(bot)
+      participants.push(bot.uid)
+      names[bot.uid] = bot.name
+      avatars[bot.uid] = { avatarType: 'image', avatarEmoji: '', avatarImage: getBotAvatar(bot.avatarIdx, bot.female) }
+      addedBots.push(bot)
+    }
+  }
+  // Minimum absolu : même complété de TOUS les bots disponibles (plus de 60
+  // au total, jamais atteint en pratique), impossible de constituer un
+  // bracket à au moins 2 joueurs → seul cas où l'erreur est encore renvoyée.
   if (participants.length < 2) throw new Error('not_enough_players')
-  const names = data.participantNames ?? {}
+
   const shuffled = shuffle(participants)
 
   const round1: BracketMatch[] = []
@@ -255,7 +360,13 @@ export async function generateBracket(tournamentId: string): Promise<void> {
   }
 
   const batch = adminDb().batch()
-  batch.set(tRef, { bracket, status: 'running' }, { merge: true })
+  batch.set(tRef, {
+    bracket, status: 'running',
+    // Le tournoi ne connaissait que les inscrits humains jusqu'ici — persiste
+    // les bots ajoutés pour que /tournament/current les affiche comme des
+    // participants à part entière (nom + avatar), pas seulement dans le bracket.
+    ...(addedBots.length > 0 ? { participants, participantNames: names, participantAvatars: avatars } : {}),
+  }, { merge: true })
   const readyMatches: BracketMatch[] = []
   for (const round of bracket) {
     for (const m of round.matches) {
@@ -272,18 +383,29 @@ export async function generateBracket(tournamentId: string): Promise<void> {
   }
   await batch.commit()
 
+  // Résout tout de suite les matches bot-vs-bot (voir resolveBotVsBotMatches)
+  // AVANT de calculer les notifications ci-dessous : sans ça, on notifierait
+  // "à toi de jouer" pour un match qui ne sera jamais réellement joué.
+  if (addedBots.length > 0) await resolveBotVsBotMatches(tournamentId)
+
   // Notifications best-effort, APRÈS le commit (jamais dans la transaction/le
   // batch : un retry de transaction renverrait sinon plusieurs fois le même
   // push). Un participant qui a un bye immédiat (pas de match 'ready' à ce
-  // tour) reçoit seulement notifyBracketReady, pas notifyYourTurn.
-  void notifyBracketReady(participants).catch((e) => console.error('[tournament] notifyBracketReady:', e))
+  // tour) reçoit seulement notifyBracketReady, pas notifyYourTurn. Les bots
+  // n'ont ni compte ni appareil : jamais notifiés, dans aucun des deux cas.
+  void notifyBracketReady(humanParticipants).catch((e) => console.error('[tournament] notifyBracketReady:', e))
   for (const m of readyMatches) {
     if (!m.player1Uid || !m.player2Uid || !m.deadline) continue
+    if (isBotUid(m.player1Uid) && isBotUid(m.player2Uid)) continue // déjà résolu ci-dessus
     const deadline = m.deadline.toDate()
-    void notifyYourTurn(m.player1Uid, names[m.player2Uid] ?? 'Joueur', deadline)
-      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
-    void notifyYourTurn(m.player2Uid, names[m.player1Uid] ?? 'Joueur', deadline)
-      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    if (!isBotUid(m.player1Uid)) {
+      void notifyYourTurn(m.player1Uid, names[m.player2Uid] ?? 'Joueur', deadline)
+        .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    }
+    if (!isBotUid(m.player2Uid)) {
+      void notifyYourTurn(m.player2Uid, names[m.player1Uid] ?? 'Joueur', deadline)
+        .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    }
   }
 }
 
@@ -443,6 +565,12 @@ export async function checkForfaits(tournamentId: string): Promise<void> {
  * Distribue le prizePool : champion 60%, finaliste 25%, les deux
  * demi-finalistes 7.5% chacun. Idempotent (prizesDistributed). Le champion
  * reçoit aussi le badge 'champion' dans users/{uid}.trophies[].
+ *
+ * Un bot (padding automatique du bracket, voir generateBracket) n'a pas de
+ * vrai compte : add() l'exclut de rewards, donc il ne reçoit ni or ni
+ * trophée — sa part n'est pas redistribuée, elle reste simplement non
+ * attribuée (choix délibéré, plus simple qu'une redistribution proportionnelle
+ * au meilleur humain restant).
  */
 export async function distributePrizes(tournamentId: string): Promise<void> {
   if (!firebaseReady()) throw new Error('firebase_unavailable')
@@ -470,7 +598,7 @@ export async function distributePrizes(tournamentId: string): Promise<void> {
 
   const rewards = new Map<string, number>()
   const add = (uid: string | null, share: number) => {
-    if (!uid || prizePool <= 0) return
+    if (!uid || prizePool <= 0 || isBotUid(uid)) return
     const amount = Math.round(prizePool * share)
     if (amount > 0) rewards.set(uid, (rewards.get(uid) ?? 0) + amount)
   }
@@ -494,8 +622,10 @@ export async function distributePrizes(tournamentId: string): Promise<void> {
   batch.set(tRef, { prizesDistributed: true }, { merge: true })
   await batch.commit()
 
-  const championReward = rewards.get(champion) ?? 0
-  void notifyChampion(champion, championReward).catch((e) => console.error('[tournament] notifyChampion:', e))
+  if (!isBotUid(champion)) {
+    const championReward = rewards.get(champion) ?? 0
+    void notifyChampion(champion, championReward).catch((e) => console.error('[tournament] notifyChampion:', e))
+  }
 }
 
 /** Tournoi de la semaine courante, ou null s'il n'a pas encore été créé. */
