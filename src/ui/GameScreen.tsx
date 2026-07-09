@@ -33,6 +33,15 @@ import { CardDrawScreen } from './CardDrawScreen'
 import { RpsScreen } from './RpsScreen'
 import { TERMS } from './terms'
 import { initSounds, playSound } from './sounds'
+import { VoiceButton } from '../voice/VoiceButton'
+import { GameChat } from '../voice/GameChat'
+import type { ChatMessage } from '../online/store'
+
+// Repli bot (matchmaking en ligne) : aucune vraie Room, donc aucun message —
+// le panneau reste vide et l'envoi ne fait rien (silencieusement), pour ne
+// jamais révéler que l'adversaire est un bot.
+const NO_CHAT_MESSAGES: ChatMessage[] = []
+function noopSend(): void {}
 import { getSoundEnabled, subscribeSound, setSoundEnabled } from '../hooks/soundPrefs'
 import { playWinSound, playLoseSound, playGoldSound } from '../hooks/useSoundEffects'
 import { ESCALIER_SEQUENCE } from '../engine/capture'
@@ -961,6 +970,7 @@ export function GameScreen({
     human.pendingCombo?.type === 'tringa' ? TERMS.tringa : TERMS.ronda
 
   return (
+    <View style={{ flex: 1 }}>
     <SafeAreaView style={[styles.root, { backgroundColor: felt }]} edges={['top', 'bottom']}>
       {/* Colonne centrée — max 430 px sur grand écran */}
       <View style={styles.column}>
@@ -1255,6 +1265,19 @@ export function GameScreen({
 
       </View>{/* /column */}
     </SafeAreaView>
+    {isOnlineGame && rawBotName && !online && (
+      <>
+        <VoiceButton transport={null} active={!isGameOver} username={username || 'Joueur'} />
+        <GameChat
+          messages={NO_CHAT_MESSAGES}
+          sendMessage={noopSend}
+          myUsername={username || 'Joueur'}
+          accentColor="#2E7D32"
+          isGameOver={isGameOver}
+        />
+      </>
+    )}
+    </View>
   )
 }
 

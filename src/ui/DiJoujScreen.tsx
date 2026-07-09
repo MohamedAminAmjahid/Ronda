@@ -25,6 +25,15 @@ import type { Card, Suit } from '../engine-dijouj/types'
 import { CardFace, CardBack } from './components/Card'
 import { SoundToggle } from './components/SoundToggle'
 import { playCardSound, playWinSound, playLoseSound, playGoldSound } from '../hooks/useSoundEffects'
+import { VoiceButton } from '../voice/VoiceButton'
+import { GameChat } from '../voice/GameChat'
+import type { ChatMessage } from '../online/store'
+
+// Repli bot (matchmaking en ligne) : aucune vraie Room, donc aucun message —
+// le panneau reste vide et l'envoi ne fait rien (silencieusement, comme
+// demandé), pour ne jamais révéler que l'adversaire est un bot.
+const NO_CHAT_MESSAGES: ChatMessage[] = []
+function noopSend(): void {}
 
 const DJ_BET:   Href = '/bet?game=dijouj' as Href
 const DJ_LOBBY: Href = '/dijouj-lobby'   as Href
@@ -495,6 +504,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
+    <View style={{ flex: 1 }}>
     <LinearGradient colors={felt} style={s.root}>
       <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
 
@@ -665,12 +675,6 @@ function LocalGame({ onBack }: { onBack: () => void }) {
           </ScrollView>
         </View>
 
-        {/* Repli bot (matchmaking en ligne) : ni micro ni chat possibles avec
-            un bot — message discret plutôt que des boutons inertes/masqués. */}
-        {isOnlineGame && botName && (
-          <Text style={s.botNoticeTxt}>🤖 {t('djBotNoChat')}</Text>
-        )}
-
         {/* ── Profil de l'adversaire (tap sur l'avatar) ─────────────────────── */}
         <PlayerProfileModal
           visible={showBotProfile}
@@ -785,6 +789,19 @@ function LocalGame({ onBack }: { onBack: () => void }) {
 
       </SafeAreaView>
     </LinearGradient>
+    {isOnlineGame && botName && (
+      <>
+        <VoiceButton transport={null} active={!isGameOver} username={username || 'Joueur'} />
+        <GameChat
+          messages={NO_CHAT_MESSAGES}
+          sendMessage={noopSend}
+          myUsername={username || 'Joueur'}
+          accentColor="#6B1A2C"
+          isGameOver={isGameOver}
+        />
+      </>
+    )}
+    </View>
   )
 }
 
@@ -810,10 +827,6 @@ const s = StyleSheet.create({
   },
   backBtn:      { paddingRight: 12, paddingVertical: 6 },
   backTxt:      { fontFamily: 'Cairo_400Regular', color: C.boneOff, fontSize: 13 },
-  botNoticeTxt: {
-    fontFamily: 'Cairo_400Regular', fontSize: 11, fontStyle: 'italic',
-    color: 'rgba(201,162,39,0.55)', textAlign: 'center', marginTop: 6,
-  },
   title: {
     flex: 1, textAlign: 'center',
     fontFamily: 'Cairo_600SemiBold', color: C.brass, fontSize: 20, letterSpacing: 6,

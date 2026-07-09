@@ -141,17 +141,22 @@ export function useVoiceChat(transport: VoiceSignalTransport | null, active: boo
   useEffect(() => () => teardown(), [teardown])
 
   const enableMic = useCallback(async () => {
-    if (!supported || !transport) return
+    if (!supported) return
     setError(null)
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       streamRef.current = stream
-      const pc = ensurePc()
-      if (!pc) return
-      const track = stream.getAudioTracks()[0]
-      if (track) {
-        if (senderRef.current) void senderRef.current.replaceTrack(track)
-        else senderRef.current = pc.addTrack(track, stream) // déclenche onnegotiationneeded
+      // Sans transport (repli bot déguisé, pas de vraie Room) : pas de pair à
+      // qui envoyer le flux, mais le micro doit tout de même s'activer
+      // visuellement (🔴 pulsant) — sinon le bouton trahirait qu'il n'y a
+      // personne en face.
+      const pc = transport ? ensurePc() : null
+      if (pc) {
+        const track = stream.getAudioTracks()[0]
+        if (track) {
+          if (senderRef.current) void senderRef.current.replaceTrack(track)
+          else senderRef.current = pc.addTrack(track, stream) // déclenche onnegotiationneeded
+        }
       }
       setMicOn(true)
     } catch (e) {
