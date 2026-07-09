@@ -59,6 +59,10 @@ export interface UserDoc {
    * mouvement d'amitié depuis l'introduction du champ.
    */
   friendCount: number
+  /** Trophées de tournoi hebdomadaire (ex. 'Champion Semaine 28') — écrits
+   * uniquement côté serveur via Admin SDK (distributePrizes), jamais par le
+   * client. Absent → tableau vide (aucun tournoi remporté). */
+  trophies: string[]
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -423,6 +427,7 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     isBot: (data.isBot as boolean) ?? false,
     currentStreak: (data.currentStreak as number) ?? 0,
     friendCount: (data.friendCount as number) ?? 0,
+    trophies: Array.isArray(data.trophies) ? (data.trophies as string[]) : [],
   }
 }
 

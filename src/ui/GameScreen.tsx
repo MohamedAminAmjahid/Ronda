@@ -587,11 +587,14 @@ interface GameScreenProps {
    * score habituel. undefined en solo (pas de forfait pour inactivité vs bot).
    */
   forfeitReason?: string
+  /** Présent = ce match vient du bracket d'un tournoi hebdomadaire → « Retour
+   * au menu » ramène sur /tournament plutôt que sur l'accueil. */
+  tournamentMatchId?: string
 }
 
 export function GameScreen({
   onBack, useGame = useRondaGame, opponentName, online = false, stakeBet = 0,
-  botAvatarIdx, botFemale, botUid, rawBotName, forfeitReason,
+  botAvatarIdx, botFemale, botUid, rawBotName, forfeitReason, tournamentMatchId,
 }: GameScreenProps) {
   const { appPhase, view, setCaptureAnimating, startGame, nextDeal, playCard, declare, contest, newGame } = useGame()
   const { t } = useI18n()
@@ -928,7 +931,7 @@ export function GameScreen({
           setSelectedRitual(null); newGame()
         }}
         onWatchReplay={() => router.push('/replay' as Href)}
-        onMenu={() => router.replace('/' as Href)}
+        onMenu={() => router.replace((tournamentMatchId ? '/tournament' : '/') as Href)}
       />
     )
   }

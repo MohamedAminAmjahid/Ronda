@@ -1,8 +1,22 @@
 import type { Room } from 'colyseus.js'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { getAuth } from 'firebase/auth'
+import { firebaseApp } from '../firebase/config'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
-import { joinOrCreate, createPrivate, joinByCode, getClient } from './client'
+import {
+  joinOrCreate, createPrivate, joinByCode, joinTournamentMatch, getClient,
+  reportMatchWin, TOURNAMENT_ADVANCE_KEY,
+} from './client'
 import { invalidateLeaderboard } from './leaderboardCache'
 import { setActiveRoom, clearActiveRoom, addGold } from '../profile/profile'
+
+/** Contexte transmis par TournamentScreen.tsx (via OnlineScreen) quand la
+ * partie qu'on rejoint est un match de bracket, pas une invitation classique. */
+export interface TournamentContext {
+  matchId: string
+  opponentUid: string
+  isFinal: boolean
+}
 
 // ── Types des messages serveur ─────────────────────────────────────────────────
 
@@ -74,6 +88,8 @@ export interface OnlineSnapshot {
   dealEnd: DealEndPayload | null
   error: string | null
   chatMessages: ChatMessage[]
+  /** Présent uniquement pour un match issu du bracket d'un tournoi. */
+  tournament: TournamentContext | null
 }
 
 // ── Store singleton ─────────────────────────────────────────────────────────────
@@ -93,6 +109,7 @@ let snapshot: OnlineSnapshot = {
   dealEnd: null,
   error: null,
   chatMessages: [],
+  tournament: null,
 }
 
 const listeners = new Set<() => void>()
@@ -181,6 +198,30 @@ function wireRoom(r: Room): void {
       // a changé dans les deux cas (le gagnant, moi ou l'adversaire, vient d'y
       // être crédité) → invalide pour forcer un refetch au prochain affichage.
       if (snapshot.bet > 0) invalidateLeaderboard()
+
+      // Match de tournoi : rapporte le résultat vu de mon côté (double-
+      // confirmation côté serveur — l'autre joueur fait le même appel du
+      // sien ; le bracket n'avance que si les deux concordent).
+      const tournament = snapshot.tournament
+      if (tournament && payload.winnerSeat != null) {
+        const myUid = getAuth(firebaseApp).currentUser?.uid ?? null
+        const mySeat = snapshot.mySeat
+        if (myUid && mySeat !== null) {
+          const iWon = payload.winnerSeat === mySeat
+          const winnerUid = iWon ? myUid : tournament.opponentUid
+          const loserUid = iWon ? tournament.opponentUid : myUid
+          void reportMatchWin(tournament.matchId, winnerUid, loserUid).catch((e) => {
+            console.error('[tournament] reportMatchWin:', e)
+          })
+          // Notif « tu avances / tu es champion » affichée par TournamentScreen
+          // au prochain focus — lu puis effacé là-bas (voir TOURNAMENT_ADVANCE_KEY).
+          if (iWon) {
+            void AsyncStorage.setItem(TOURNAMENT_ADVANCE_KEY, JSON.stringify({
+              matchId: tournament.matchId, isFinal: tournament.isFinal, goldWon: payload.goldWon ?? 0,
+            })).catch(() => {})
+          }
+        }
+      }
     }
   })
 
@@ -205,11 +246,14 @@ function wireRoom(r: Room): void {
   r.onError((_code, message) => set({ status: 'disconnected', error: message ?? 'Erreur serveur.' }))
 }
 
-async function connect(factory: () => Promise<Room>, bet = 0, label = 'quick'): Promise<void> {
+async function connect(
+  factory: () => Promise<Room>, bet = 0, label = 'quick', tournament: TournamentContext | null = null,
+): Promise<void> {
   reset()
-  // bet est passé APRÈS reset() (qui remet bet à 0) pour que le montant misé
-  // survive pendant le matchmaking → remboursable si on annule avant le début.
-  set({ status: 'connecting', error: null, bet })
+  // bet (et tournament) sont passés APRÈS reset() (qui les remet à 0/null)
+  // pour survivre pendant le matchmaking → bet remboursable si on annule
+  // avant le début, tournament nécessaire pour reportMatchWin à la fin.
+  set({ status: 'connecting', error: null, bet, tournament })
   try {
     const r = await factory()
     console.log('[matchmaking] mode:', label, 'roomId:', r.roomId)
@@ -241,6 +285,18 @@ export function connectFriendHost(pseudo: string, bet = 0): Promise<void> {
 /** Rejoint une room privée Ronda par code (invité). */
 export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
   return connect(() => joinByCode(pseudo, code), bet, 'friend-guest')
+}
+/**
+ * Rejoint (ou crée) un match de tournoi : voir joinTournamentMatch pour le
+ * détail de l'appariement automatique par tournamentMatchId côté serveur.
+ */
+export function connectTournamentMatch(
+  pseudo: string, matchId: string, opponentUid: string, isFinal: boolean, uid?: string,
+): Promise<void> {
+  return connect(
+    () => joinTournamentMatch(pseudo, matchId, uid), 0, 'tournament',
+    { matchId, opponentUid, isFinal },
+  )
 }
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */
@@ -296,6 +352,7 @@ export function reset(): void {
     dealEnd: null,
     error: null,
     chatMessages: [],
+    tournament: null,
   })
 }
 

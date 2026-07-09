@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { router, useFocusEffect, type Href } from 'expo-router'
 import { useAuth } from '../firebase/auth'
 import { useProfile } from '../profile/useProfile'
 import { useI18n } from '../i18n/useI18n'
 import type { TranslationKey } from '../i18n/translations'
 import {
-  fetchCurrentTournament, registerForTournament,
-  type Tournament, type BracketMatch,
+  fetchCurrentTournament, registerForTournament, TOURNAMENT_ADVANCE_KEY,
+  type Tournament, type BracketMatch, type TournamentAdvancePending,
 } from '../online/client'
 import { AvatarDisplay } from './ProfileScreen'
 import { PlayerProfileModal } from './PlayerProfileModal'
@@ -85,6 +86,22 @@ export function TournamentScreen({ onBack }: Props) {
   const [registerError, setRegisterError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [profileTarget, setProfileTarget] = useState<{ uid: string; name: string } | null>(null)
+  const [advanceModal, setAdvanceModal] = useState<TournamentAdvancePending | null>(null)
+
+  // Notif « tu avances / tu es champion » : écrite par online/store.ts juste
+  // après un game_over gagné sur un match de tournoi. Lue une seule fois ici
+  // (à chaque focus, puisqu'on revient précisément sur cet écran après un
+  // match — voir GameScreen.tsx onMenu) puis effacée.
+  useFocusEffect(useCallback(() => {
+    void (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(TOURNAMENT_ADVANCE_KEY)
+        if (!raw) return
+        await AsyncStorage.removeItem(TOURNAMENT_ADVANCE_KEY)
+        setAdvanceModal(JSON.parse(raw) as TournamentAdvancePending)
+      } catch { /* ignore */ }
+    })()
+  }, []))
 
   const load = useCallback(async () => {
     try {
@@ -130,9 +147,17 @@ export function TournamentScreen({ onBack }: Props) {
     }
   }
 
-  const handlePlay = (m: BracketMatch) => {
-    if (!m.roomCode) return
-    router.push(`/join?code=${encodeURIComponent(m.roomCode)}` as Href)
+  // Aucun code à transmettre : l'appariement se fait automatiquement côté
+  // serveur (RondaRoom.filterBy(['tournamentMatchId']), voir online/store.ts
+  // connectTournamentMatch) — m.roomCode est purement informatif (affiché
+  // nulle part actuellement) et jamais utilisé pour rejoindre la partie.
+  const handlePlay = (m: BracketMatch, isFinal: boolean) => {
+    if (!m.player1Uid || !m.player2Uid) return
+    router.push(
+      `/online?mode=friend&tournamentMatchId=${encodeURIComponent(m.matchId)}` +
+      `&tp1=${encodeURIComponent(m.player1Uid)}&tp2=${encodeURIComponent(m.player2Uid)}` +
+      `&tFinal=${isFinal ? 1 : 0}` as Href,
+    )
   }
 
   const openProfile = (uid: string | null, name: string) => {
@@ -252,6 +277,7 @@ export function TournamentScreen({ onBack }: Props) {
                         const p2Avatar = m.player2Uid ? tournament.participantAvatars[m.player2Uid] : undefined
                         const { label, color } = matchStatusInfo(m, myUid, t)
                         const canPlay = m.status === 'ready' && isMine
+                        const isFinal = round.round === tournament.bracket.length
                         return (
                           <View key={m.matchId} style={[s.matchCard, isMine && s.matchCardMine]}>
                             <View style={s.matchPlayers}>
@@ -300,7 +326,7 @@ export function TournamentScreen({ onBack }: Props) {
                             <View style={s.matchFooter}>
                               <Text style={[s.matchStatusTxt, { color }]}>{label}</Text>
                               {canPlay && (
-                                <TouchableOpacity style={s.playBtn} onPress={() => handlePlay(m)} activeOpacity={0.85}>
+                                <TouchableOpacity style={s.playBtn} onPress={() => handlePlay(m, isFinal)} activeOpacity={0.85}>
                                   <Text style={s.playBtnTxt}>{t('playNowBtn')}</Text>
                                 </TouchableOpacity>
                               )}
@@ -323,6 +349,23 @@ export function TournamentScreen({ onBack }: Props) {
         name={profileTarget?.name}
         onClose={() => setProfileTarget(null)}
       />
+
+      <Modal visible={advanceModal !== null} transparent animationType="fade">
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalEmoji}>{advanceModal?.isFinal ? '🏆' : '🎉'}</Text>
+            <Text style={s.modalTitle}>
+              {advanceModal?.isFinal ? t('championModalTitle') : t('advanceModalTitle')}
+            </Text>
+            {!!advanceModal?.goldWon && advanceModal.goldWon > 0 && (
+              <Text style={s.modalGold}>🪙 +{advanceModal.goldWon}</Text>
+            )}
+            <TouchableOpacity style={s.btnPrimary} onPress={() => setAdvanceModal(null)} activeOpacity={0.85}>
+              <Text style={s.btnPrimaryTxt}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   )
 }
@@ -418,4 +461,16 @@ const s = StyleSheet.create({
   empty: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', marginTop: 30, lineHeight: 20 },
 
   skeletonBlock: { borderRadius: 10, backgroundColor: 'rgba(244,236,216,0.10)' },
+
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(6,26,18,0.88)', alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  modalCard: {
+    width: '100%', maxWidth: 320, backgroundColor: C.deep, borderRadius: 18, padding: 24,
+    alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+  },
+  modalEmoji: { fontSize: 44 },
+  modalTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center' },
+  modalGold: { fontFamily: 'Cairo_600SemiBold', fontSize: 20, color: C.brass },
 })

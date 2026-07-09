@@ -455,7 +455,12 @@ app.post('/notify/friend-request', async (req, res) => {
 const httpServer = http.createServer(app)
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) })
 
-gameServer.define('ronda', RondaRoom)
+// filterBy(['tournamentMatchId']) : deux joueurs qui joinOrCreate('ronda', {
+// tournamentMatchId }) avec le MÊME id sont automatiquement appariés dans la
+// même room (aucun code à échanger) — les appels sans tournamentMatchId
+// (quick match, code, ami) restent dans leur propre espace de matchmaking
+// puisque `undefined` n'égale jamais un id de match réel.
+gameServer.define('ronda', RondaRoom).filterBy(['tournamentMatchId'])
 gameServer.define('ronda2v2', LobbyRoom2v2)
 gameServer.define('dijouj', DiJoujRoom)
 gameServer.define('dijouj-lobby', DiJoujLobbyRoom)

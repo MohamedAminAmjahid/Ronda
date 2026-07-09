@@ -37,6 +37,18 @@ export async function joinByCode(pseudo: string, code: string, uid?: string): Pr
   return getClient().joinById(roomId, { pseudo, uid })
 }
 
+/**
+ * Rejoint (ou crée) la room d'un match de tournoi : les deux joueurs appellent
+ * joinOrCreate avec le MÊME tournamentMatchId, et RondaRoom.filterBy(['tournamentMatchId'])
+ * côté serveur les apparie automatiquement dans la même room — pas de code à
+ * échanger, contrairement à une partie entre amis classique. Le roomCode
+ * stocké dans le bracket (tournamentQueries.ts) est purement cosmétique et
+ * n'est jamais utilisé pour ce join.
+ */
+export function joinTournamentMatch(pseudo: string, matchId: string, uid?: string): Promise<Room> {
+  return getClient().joinOrCreate('ronda', { pseudo, uid, tournamentMatchId: matchId })
+}
+
 /** Crée un lobby 2v2 (l'hôte reçoit un code à partager). */
 export function createLobby2v2(pseudo: string): Promise<Room> {
   return getClient().create('ronda2v2', { pseudo })
@@ -154,6 +166,22 @@ export async function roomTypeByCode(
 }
 
 // ── Tournois hebdomadaires ────────────────────────────────────────────────────
+
+/**
+ * Clé AsyncStorage partagée entre online/store.ts (écrit quand un match de
+ * tournoi se termine en victoire, juste après reportMatchWin) et
+ * TournamentScreen.tsx (lu au focus pour afficher la modale « tu avances/tu
+ * es champion », puis effacé). Vit ici plutôt que dans store.ts pour que
+ * TournamentScreen.tsx (qui importe déjà ce fichier) n'ait pas besoin
+ * d'importer online/store.ts juste pour cette constante.
+ */
+export const TOURNAMENT_ADVANCE_KEY = 'ronda_tournament_advance_pending'
+
+export interface TournamentAdvancePending {
+  matchId: string
+  isFinal: boolean
+  goldWon: number
+}
 
 export type TournamentStatus = 'open' | 'registration' | 'running' | 'finished'
 export type MatchStatus = 'pending' | 'ready' | 'playing' | 'done' | 'forfeit'

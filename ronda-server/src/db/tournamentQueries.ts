@@ -442,10 +442,17 @@ export async function distributePrizes(tournamentId: string): Promise<void> {
   add(runnerUp, PRIZE_SPLIT.runnerUp)
   for (const uid of semiFinalists.slice(0, 2)) add(uid, PRIZE_SPLIT.semiFinalist)
 
+  // 'Champion Semaine 28' plutôt qu'un tag générique 'champion' : un joueur
+  // qui remporte plusieurs tournois doit pouvoir les distinguer dans son
+  // profil (users/{uid}.trophies[] est un tableau, arrayUnion ne déduplique
+  // que des chaînes strictement identiques — un tag générique aurait
+  // silencieusement fusionné plusieurs victoires en une seule entrée).
+  const trophyLabel = `Champion Semaine ${tournamentId.split('-W')[1] ?? tournamentId}`
+
   const batch = adminDb().batch()
   for (const [uid, amount] of rewards) {
     const patch: Record<string, unknown> = { gold: FieldValue.increment(amount) }
-    if (uid === champion) patch.trophies = FieldValue.arrayUnion('champion')
+    if (uid === champion) patch.trophies = FieldValue.arrayUnion(trophyLabel)
     batch.set(adminDb().collection('users').doc(uid), patch, { merge: true })
   }
   batch.set(tRef, { prizesDistributed: true }, { merge: true })

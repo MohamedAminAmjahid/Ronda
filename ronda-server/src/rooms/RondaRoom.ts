@@ -94,20 +94,31 @@ export class RondaRoom extends Room<RondaState> {
   private turnTimer:     { clear: () => void } | null = null
   private autoSkipCount: [number, number]             = [0, 0]
 
+  /** Présent seulement pour un match issu du bracket d'un tournoi hebdomadaire
+   * — voir gameServer.define('ronda', RondaRoom).filterBy(['tournamentMatchId'])
+   * dans index.ts : deux joueurs qui joinOrCreate() avec le MÊME matchId sont
+   * automatiquement appariés dans la même room (aucun code à échanger), sans
+   * quoi le roomCode purement cosmétique généré par tournamentQueries.ts
+   * (generateCode(), jamais enregistré dans le registre de rooms réel) ne
+   * correspondrait jamais à une vraie room Colyseus. */
+  private tournamentMatchId: string | null = null
+
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean; bet?: number }): void {
+  onCreate(options: { private?: boolean; bet?: number; tournamentMatchId?: string }): void {
     this.state = new RondaState()
     this.maxClients = 2
     this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
+    this.tournamentMatchId = options?.tournamentMatchId ?? null
 
     const code = generateCode()
     this.state.code = code
     this.setMetadata({ code })
     registerCode(code, this.roomId, 'ronda')
 
-    // Rooms créées par code = privées (non proposées au matchmaking rapide).
-    if (options?.private) this.setPrivate(true)
+    // Rooms créées par code, ou pour un match de tournoi = privées (non
+    // proposées au matchmaking rapide).
+    if (options?.private || this.tournamentMatchId) this.setPrivate(true)
 
     this.onMessage('play_card', (client, msg: { card: Card }) =>
       this.handleAction(client, { type: 'PLAY_CARD', playerId: 0, card: msg.card }, 'card'),

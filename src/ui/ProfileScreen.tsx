@@ -273,11 +273,20 @@ export function ProfileScreen() {
   const [linkCopied, setLinkCopied]       = useState(false)
   const referralLink = `https://ronda-virid.vercel.app?ref=${encodeURIComponent(username)}`
 
+  // ── Trophées de tournoi (ex. 'Champion Semaine 28') ────────────────────
+  // Écrits uniquement côté serveur (Admin SDK, distributePrizes) — jamais
+  // par le profil local, donc lus ici directement depuis Firestore, comme
+  // referralCount ci-dessus (même effet, pour éviter une 2e lecture du même
+  // document).
+  const [trophies, setTrophies] = useState<string[]>([])
+
   useEffect(() => {
     if (!user) return
     let cancelled = false
     void getUserById(user.uid).then((u) => {
-      if (!cancelled && u) setReferralCount(u.referralCount)
+      if (cancelled || !u) return
+      setReferralCount(u.referralCount)
+      setTrophies(u.trophies)
     })
     return () => { cancelled = true }
   }, [user])
@@ -566,6 +575,13 @@ export function ProfileScreen() {
             <Text style={s.editIcon}>✎</Text>
           </TouchableOpacity>
           {user && <Text style={s.emailText}>{user.email}</Text>}
+          {trophies.length > 0 && (
+            <View style={s.trophyRow}>
+              {trophies.map((tr) => (
+                <Text key={tr} style={s.trophyBadge}>🏆 {tr}</Text>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* ── Niveau & XP ────────────────────────────────────────── */}
@@ -890,6 +906,13 @@ const s = StyleSheet.create({
   usernameText: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone, letterSpacing: 0.3 },
   editIcon:     { fontSize: 16, color: C.boneOff },
   emailText:    { fontFamily: 'Cairo_400Regular', fontSize: 12, color: 'rgba(244,236,216,0.35)' },
+
+  trophyRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: 8 },
+  trophyBadge: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 11, color: C.brass,
+    backgroundColor: 'rgba(201,162,39,0.14)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+  },
 
   // Niveau & XP
   levelRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

@@ -52,12 +52,21 @@ interface Props {
   mode?: 'quick' | 'friend'
   /** Code pré-rempli (lien de partage /join?code=…) → connexion auto au montage. */
   initialCode?: string
+  /** Présents quand on vient du bracket d'un tournoi (TournamentScreen) plutôt
+   * que d'un lien d'invitation classique — voir tournament.tsx. */
+  tournamentMatchId?: string
+  tournamentPlayer1?: string
+  tournamentPlayer2?: string
+  tournamentIsFinal?: boolean
 }
 
 const CODE_LENGTH = 6
 const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH)
 
-export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
+export function OnlineScreen({
+  onBack, mode = 'quick', initialCode,
+  tournamentMatchId, tournamentPlayer1, tournamentPlayer2, tournamentIsFinal,
+}: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
   const { username, invisibleMode, avatarType, avatarEmoji, avatarImage, level, xp } = useProfile()
@@ -65,6 +74,13 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
   const myUid = user?.uid ?? null
   const { t: tr } = useI18n()
   const offline = useIsOffline()
+
+  // Match de tournoi : l'adversaire (son uid) est déduit des deux joueurs du
+  // match transmis par TournamentScreen — le protocole RondaRoom n'expose
+  // jamais l'uid de l'adversaire pendant la partie (seulement son pseudo).
+  const tournamentOpponentUid = tournamentMatchId
+    ? (tournamentPlayer1 === myUid ? tournamentPlayer2 : tournamentPlayer1)
+    : undefined
 
   const avatar = { avatarType, avatarEmoji, avatarImage, level, xp }
 
@@ -101,8 +117,22 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
     return () => { if (myUid) void updateGameStatus(myUid, null) }
   }, [myUid])
 
-  // Détection auto du type de room dès que le code est complet (6 caractères).
+  // Match de tournoi : pas de code à échanger — appariement automatique côté
+  // serveur (RondaRoom.filterBy(['tournamentMatchId']), voir online/client.ts
+  // joinTournamentMatch) dès que les deux joueurs appellent connectTournamentMatch
+  // avec le même matchId. Bypass complet du flux code/roomTypeByCode ci-dessous.
+  const tournamentJoinedRef = useRef(false)
   useEffect(() => {
+    if (!tournamentMatchId || !tournamentOpponentUid || tournamentJoinedRef.current) return
+    tournamentJoinedRef.current = true
+    void game.connectTournamentMatch(username, tournamentMatchId, tournamentOpponentUid, !!tournamentIsFinal, myUid ?? undefined)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentMatchId, tournamentOpponentUid, username, myUid, tournamentIsFinal])
+
+  // Détection auto du type de room dès que le code est complet (6 caractères).
+  // Sans objet pour un match de tournoi (pas de code) — voir effet ci-dessus.
+  useEffect(() => {
+    if (tournamentMatchId) return
     if (codeInput.length !== CODE_LENGTH) {
       setLookupError(null)
       resolvedRef.current = null
@@ -123,7 +153,7 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
         resolvedRef.current = null
       })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeInput, username])
+  }, [codeInput, username, tournamentMatchId])
 
   // Invitation générique : partage le lien de téléchargement de l'app (sans room).
   const inviteFriend = async () => {
@@ -144,7 +174,13 @@ export function OnlineScreen({ onBack, mode = 'quick', initialCode }: Props) {
           opponentName={game.opponentName ?? undefined}
           online
           forfeitReason={game.gameOver?.reason}
+          tournamentMatchId={tournamentMatchId}
         />
+        {!!tournamentMatchId && (
+          <View style={s.tournamentBadge} pointerEvents="none">
+            <Text style={s.tournamentBadgeTxt}>🏆 {tr('tournamentMatchBadge')}</Text>
+          </View>
+        )}
         {opponentDisconnected && (
           <View style={s.discOverlay} pointerEvents="none">
             <Text style={s.discTitle}>Adversaire déconnecté</Text>
@@ -525,4 +561,11 @@ const s = StyleSheet.create({
   },
   discTitle: { fontFamily: 'Cairo_600SemiBold', fontSize: 22, color: C.bone },
   discSub: { fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff },
+
+  tournamentBadge: {
+    position: 'absolute', top: 8, alignSelf: 'center', zIndex: 997,
+    backgroundColor: 'rgba(201,162,39,0.92)', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 6,
+  },
+  tournamentBadgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.ink, letterSpacing: 0.3 },
 })

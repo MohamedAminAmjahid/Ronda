@@ -149,6 +149,9 @@ export const translations = {
     noLeaderboardPlayers: 'لا لاعبين في هذه الرابطة هذا الأسبوع.',
     // ── Tournoi hebdomadaire ──
     tournamentTab: 'البطولة',
+    tournamentMatchBadge: 'مباراة البطولة',
+    advanceModalTitle: '🎉 تأهلت للدور القادم!',
+    championModalTitle: '🏆 أنت البطل!',
     tournamentTitle: 'بطولة الأسبوع',
     tournamentSubtitle: 'روندا · الأسبوع {n}',
     prizePoolLabel: 'مجموع الجوائز',
@@ -641,6 +644,9 @@ export const translations = {
     noLeaderboardPlayers: 'Aucun joueur dans cette ligue cette semaine.',
     // ── Tournoi hebdomadaire ──
     tournamentTab: 'Tournoi',
+    tournamentMatchBadge: 'Match de tournoi',
+    advanceModalTitle: '🎉 Tu passes au tour suivant !',
+    championModalTitle: '🏆 Tu es le CHAMPION !',
     tournamentTitle: 'Tournoi de la semaine',
     tournamentSubtitle: 'Ronda · Semaine {n}',
     prizePoolLabel: 'Prize Pool',
@@ -1133,6 +1139,9 @@ export const translations = {
     noLeaderboardPlayers: 'No players in this league this week.',
     // ── Weekly tournament ──
     tournamentTab: 'Tournament',
+    tournamentMatchBadge: 'Tournament match',
+    advanceModalTitle: "🎉 You're through to the next round!",
+    championModalTitle: '🏆 You are the CHAMPION!',
     tournamentTitle: 'Tournament of the week',
     tournamentSubtitle: 'Ronda · Week {n}',
     prizePoolLabel: 'Prize Pool',
