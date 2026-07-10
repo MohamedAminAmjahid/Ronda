@@ -324,6 +324,8 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       if (won && stakeBet > 0 && botName) {
         void recordLeaderboardScore(username, stakeBet, 'dijouj', myUid ?? undefined)
         invalidateLeaderboard() // force un refetch au prochain affichage
+        // Le bot perd sa mise (symétrique à l'appel côté défaite ci-dessous).
+        void updateBotStats(botName, 'dijouj', stakeBet, false, isOnlineGame)
       }
       const after = getProfile()
       setXpInfo({ xpGained, oldXp: before.xp, oldLevel: before.level, newXp: after.xp, newLevel: after.level })
@@ -332,7 +334,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       else {
         playLoseSound()
         // Le bot gagne la mise → met à jour son profil fantôme Firestore.
-        if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
+        if (stakeBet > 0 && botName) void updateBotStats(botName, 'dijouj', stakeBet, true, isOnlineGame)
         // Partie perçue comme en ligne : le bot doit apparaître au classement
         // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
         // (symétrique à l'appel côté victoire du joueur, ligne ~293).
@@ -427,7 +429,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
     // recevoir le même traitement qu'une défaite normale (updateBotStats +
     // classement hebdo), ce qui manquait totalement sur ce chemin.
     if (stakeBet > 0 && botName) {
-      void updateBotStats(botName, 'dijouj', stakeBet, isOnlineGame)
+      void updateBotStats(botName, 'dijouj', stakeBet, true, isOnlineGame)
       if (isOnlineGame) { void recordLeaderboardScore(botName, stakeBet, 'dijouj'); invalidateLeaderboard() }
     }
     setTimeout(() => router.replace('/' as Href), 2000)

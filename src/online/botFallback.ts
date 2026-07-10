@@ -250,29 +250,56 @@ export async function getOrCreateBotProfile(name: string, idx: number, female: b
 }
 
 /**
- * Met à jour les stats du bot dans Firestore quand il gagne une partie misée
- * (le joueur perd) : +1 partie jouée (globale + par jeu), +1 victoire (globale
- * + par jeu), et le gold misé lui revient. Si la partie venait du matchmaking
- * en ligne (repli bot), incrémente aussi onlineGamesPlayed — miroir du bonus
- * XP online crédité au joueur humain via recordResult(..., { online: true }).
- * Utilise increment() pour éviter toute lecture préalable (fonctionne même si
- * le champ n'existe pas encore sur le document) ; best-effort — ne bloque
- * jamais le jeu.
+ * Met à jour les stats du bot dans Firestore après une partie misée, qu'il la
+ * gagne ou la perde (`botWon`) : +1 partie jouée (globale + par jeu), +1
+ * victoire (globale + par jeu) uniquement s'il gagne, gold net ±mise (comme
+ * un vrai joueur : removeGold au pari + addGold(mise*2) à la victoire →
+ * +mise net pour le gagnant, −mise pour le perdant), et XP/niveau — miroir de
+ * recordResult()/addXP() (profile.ts) : +40 (Di Jouj) ou +50 (Ronda 1v1, les
+ * bots ne jouent jamais en 2v2) en cas de victoire, +10 en cas de défaite,
+ * +15 si la partie venait du matchmaking en ligne (repli bot), palier de
+ * niveau à xp >= level*100 avec bonus d'or newLevel*50 par palier franchi.
+ * Une lecture préalable du doc est nécessaire (contrairement à l'ancienne
+ * version increment()-only) pour calculer XP/niveau/or de façon cohérente
+ * (paliers multiples possibles, gold jamais négatif) ; best-effort — ne
+ * bloque jamais le jeu.
  */
 export async function updateBotStats(
-  name: string, game: 'ronda' | 'dijouj', stakeBet: number, online = false,
+  name: string, game: 'ronda' | 'dijouj', stakeBet: number, botWon: boolean, online = false,
 ): Promise<void> {
   try {
     const ref = doc(db(), 'users', botUid(name))
+    const snap = await getDoc(ref)
+    const data = snap.data() ?? {}
+    const currentGold  = typeof data.gold === 'number'  ? data.gold  : 0
+    const currentXp    = typeof data.xp === 'number'    ? data.xp    : 0
+    const currentLevel = typeof data.level === 'number' ? data.level : 1
+
+    const stake = Math.max(0, stakeBet)
+    let newGold = Math.max(0, currentGold + (botWon ? stake : -stake))
+
+    const xpGain = (botWon ? (game === 'dijouj' ? 40 : 50) : 10) + (online ? 15 : 0)
+    let newXp = currentXp + xpGain
+    let newLevel = currentLevel
+    while (newXp >= newLevel * 100) {
+      newXp -= newLevel * 100
+      newLevel++
+      newGold += newLevel * 50
+    }
+
     const playedField = game === 'ronda' ? 'rondaPlayed' : 'dijoujPlayed'
     const wonField     = game === 'ronda' ? 'rondaWon'    : 'dijoujWon'
-    const patch: Record<string, ReturnType<typeof increment> | ReturnType<typeof serverTimestamp>> = {
+    const patch: Record<string, unknown> = {
       gamesPlayed: increment(1),
-      gamesWon:    increment(1),
       [playedField]: increment(1),
-      [wonField]:    increment(1),
-      gold:        increment(Math.max(0, stakeBet)),
-      lastSeen:    serverTimestamp(),
+      gold:  newGold,
+      xp:    newXp,
+      level: newLevel,
+      lastSeen: serverTimestamp(),
+    }
+    if (botWon) {
+      patch.gamesWon = increment(1)
+      patch[wonField] = increment(1)
     }
     if (online) patch.onlineGamesPlayed = increment(1)
     await updateDoc(ref, patch)

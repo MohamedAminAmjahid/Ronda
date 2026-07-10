@@ -678,6 +678,8 @@ export function GameScreen({
         if (won && stakeBet > 0 && rawBotName) {
           void recordLeaderboardScore(username, stakeBet, 'ronda', myUid ?? undefined)
           invalidateLeaderboard() // force un refetch au prochain affichage
+          // Le bot perd sa mise (symétrique à l'appel côté défaite ci-dessous).
+          void updateBotStats(rawBotName, 'ronda', stakeBet, false, isOnlineGame)
         }
         setWinReward(goldReward)
         const after = getProfile()
@@ -687,7 +689,7 @@ export function GameScreen({
         else {
           playLoseSound()
           // Le bot gagne la mise → met à jour son profil fantôme Firestore.
-          if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
+          if (stakeBet > 0 && rawBotName) void updateBotStats(rawBotName, 'ronda', stakeBet, true, isOnlineGame)
           // Partie perçue comme en ligne : le bot doit apparaître au classement
           // hebdomadaire comme n'importe quel adversaire en ligne qui gagnerait
           // (symétrique à l'appel côté victoire du joueur, ligne ~605).
@@ -1079,7 +1081,7 @@ export function GameScreen({
                   if (stakeBet > 0) {
                     recordResult(false, 'ronda', { online: isOnlineGame })
                     if (rawBotName) {
-                      void updateBotStats(rawBotName, 'ronda', stakeBet, isOnlineGame)
+                      void updateBotStats(rawBotName, 'ronda', stakeBet, true, isOnlineGame)
                       if (isOnlineGame) { void recordLeaderboardScore(rawBotName, stakeBet, 'ronda'); invalidateLeaderboard() }
                     }
                     router.replace('/' as Href)
