@@ -417,19 +417,30 @@ export class RondaRoom extends Room<RondaState> {
   /** (Re)démarre le minuteur d'inactivité pour le joueur dont c'est le tour. */
   private armTurnTimer(): void {
     this.clearTurnTimer()
-    if (this.state.phase !== 'PLAYING') return
+    if (this.state.phase !== 'PLAYING') {
+      console.log('⏱️ [RondaRoom] armTurnTimer: phase non PLAYING (', this.state.phase, ') → pas de timer')
+      return
+    }
 
     const seat = this.engine.currentPlayer
     const sessionId = this.sessionBySeat[seat]
-    if (sessionId === null) return                              // siège vide
+    console.log('⏱️ [RondaRoom] armTurnTimer appelé pour seat:', seat, 'phase:', this.state.phase, 'sessionId:', sessionId)
+    if (sessionId === null) {                                   // siège vide
+      console.log('⏱️ [RondaRoom] armTurnTimer: siège', seat, 'vide → pas de timer')
+      return
+    }
     // Joueur déconnecté : la logique de reconnexion (onLeave) s'en charge —
     // armTurnTimer() est réappelé explicitement après une reconnexion réussie.
-    if (this.state.players.get(sessionId)?.connected === false) return
+    if (this.state.players.get(sessionId)?.connected === false) {
+      console.log('⏱️ [RondaRoom] armTurnTimer: joueur seat', seat, 'déconnecté → pas de timer')
+      return
+    }
 
     this.turnTimer = this.clock.setTimeout(
       () => this.onTurnTimeout(seat),
       RondaRoom.TURN_SECONDS * 1000,
     )
+    console.log('⏱️ [RondaRoom] timer armé pour seat', seat, '—', RondaRoom.TURN_SECONDS, 's')
   }
 
   private clearTurnTimer(): void {
@@ -445,6 +456,7 @@ export class RondaRoom extends Room<RondaState> {
    * résultat naturel prévaut sur le forfait).
    */
   private onTurnTimeout(seat: PlayerId): void {
+    console.log('⏱️ [RondaRoom] onTurnTimeout déclenché pour seat:', seat, 'phase:', this.state.phase, 'currentPlayer:', this.engine?.currentPlayer)
     if (this.state.phase !== 'PLAYING') return
     if (this.engine.currentPlayer !== seat) return
 
