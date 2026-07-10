@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { subscribePendingCount, subscribeTotalUnread } from '../firebase/firestore'
+import { subscribePendingCount, subscribeTotalUnread, subscribeGlobalChatLatest } from '../firebase/firestore'
 import { fetchCurrentTournament } from '../online/client'
+import { loadLastSeenGlobalChat, getLastSeenGlobalChat, subscribeGlobalChatSeen } from '../online/globalChatCache'
 
 const TOURNAMENT_POLL_MS = 5 * 60 * 1000 // 5 min
 
@@ -10,11 +11,15 @@ const TOURNAMENT_POLL_MS = 5 * 60 * 1000 // 5 min
  * - `unread`   : messages non lus (tous chats)
  * - `total`    : somme, utilisé pour le badge BottomNav
  * - `tournamentBadge` : 1 si un match de tournoi ('ready') attend ce joueur
+ * - `globalChatBadge` : 1 si un message mondial est arrivé depuis la dernière
+ *   visite de l'onglet Chat mondial (GlobalChatSlide.tsx)
  */
 export function useNotifBadges(myUid: string | null) {
   const [pending, setPending] = useState(0)
   const [unread, setUnread] = useState(0)
   const [tournamentBadge, setTournamentBadge] = useState(0)
+  const [globalChatBadge, setGlobalChatBadge] = useState(0)
+  const [latestGlobalMsg, setLatestGlobalMsg] = useState<{ uid: string; atMs: number } | null>(null)
 
   useEffect(() => {
     if (!myUid) { setPending(0); setUnread(0); return }
@@ -22,6 +27,26 @@ export function useNotifBadges(myUid: string | null) {
     const u2 = subscribeTotalUnread(myUid, setUnread)
     return () => { u1(); u2() }
   }, [myUid])
+
+  useEffect(() => { void loadLastSeenGlobalChat() }, [])
+
+  useEffect(() => {
+    if (!myUid) { setLatestGlobalMsg(null); return }
+    return subscribeGlobalChatLatest(setLatestGlobalMsg)
+  }, [myUid])
+
+  // Recalculé à chaque nouveau message ET à chaque fois que GlobalChatSlide
+  // marque le chat comme vu (subscribeGlobalChatSeen) — sans ça, ouvrir
+  // l'onglet ne ferait disparaître le badge qu'au prochain nouveau message.
+  useEffect(() => {
+    if (!myUid || !latestGlobalMsg) { setGlobalChatBadge(0); return }
+    const recompute = () => {
+      const isNew = latestGlobalMsg.atMs > getLastSeenGlobalChat() && latestGlobalMsg.uid !== myUid
+      setGlobalChatBadge(isNew ? 1 : 0)
+    }
+    recompute()
+    return subscribeGlobalChatSeen(recompute)
+  }, [myUid, latestGlobalMsg])
 
   // Pas de listener temps réel possible ici : le tournoi vit sur le serveur
   // Railway (fetchCurrentTournament), pas dans Firestore côté client — poll
@@ -46,5 +71,5 @@ export function useNotifBadges(myUid: string | null) {
     return () => { cancelled = true; clearInterval(id) }
   }, [myUid])
 
-  return { pending, unread, total: pending + unread, tournamentBadge }
+  return { pending, unread, total: pending + unread, tournamentBadge, globalChatBadge }
 }

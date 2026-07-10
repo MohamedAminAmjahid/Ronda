@@ -15,6 +15,7 @@ import {
   checkForfaits, distributePrizes, recordMatchWinner, getCurrentTournament,
   type Tournament, type BracketRound, type BracketMatch,
 } from './db/tournamentQueries'
+import { cleanupGlobalChat } from './db/globalChat'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { DiJoujRoom } from './rooms/DiJoujRoom'
@@ -582,6 +583,14 @@ cron.schedule('0 * * * *', async () => {
   } catch (e) {
     console.error('[cron] Erreur checkForfaits:', e)
   }
+})
+
+// Toutes les 10 minutes → purge le chat mondial au-delà des 200 derniers
+// messages (voir globalChat.ts — nettoyage nécessairement côté serveur,
+// la règle de suppression Firestore ne permettant à personne d'effacer les
+// messages d'un autre auteur).
+cron.schedule('*/10 * * * *', () => {
+  void cleanupGlobalChat()
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────

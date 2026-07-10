@@ -75,7 +75,7 @@ export function BottomNav() {
   const pathname  = usePathname()
   const insets    = useSafeAreaInsets()
   const { user }  = useAuth()
-  const { pending, unread, tournamentBadge } = useNotifBadges(user?.uid ?? null)
+  const { pending, unread, tournamentBadge, globalChatBadge } = useNotifBadges(user?.uid ?? null)
 
   // Badge Quêtes : nombre de récompenses accomplies mais pas encore réclamées
   // (missions + streak de connexion du jour).
@@ -103,7 +103,7 @@ export function BottomNav() {
         const badge = tab.href === '/friends'
           ? pending
           : tab.href === '/messages'
-            ? unread
+            ? unread + globalChatBadge
             : tab.href === '/daily-quests'
               ? questBadge
               : tab.href === '/tournament'

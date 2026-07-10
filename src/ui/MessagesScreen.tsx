@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Animated, Modal, useWindowDimensions,
+  type NativeSyntheticEvent, type NativeScrollEvent,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
+import { GlobalChatSlide } from './GlobalChatSlide'
 import { useAuth } from '../firebase/auth'
 import { deleteChat, type ChatPreview } from '../firebase/firestore'
 import { getCachedProfile, isProfileStale, refreshProfile, subscribeProfile } from '../online/profileCache'
@@ -43,12 +45,28 @@ function shortTime(d: Date | null): string {
 export function MessagesScreen({ onBack }: Props) {
   const { t }    = useI18n()
   const { user } = useAuth()
+  const { width } = useWindowDimensions()
+  const pagerRef = useRef<ScrollView>(null)
 
   // Affichage instantané depuis le cache (skeleton seulement s'il n'y a rien).
   const [chats, setChats]     = useState<ChatPreview[]>(() => getCachedConversations() ?? [])
   const [loading, setLoading] = useState(() => getCachedConversations() === null)
   const [toDelete, setToDelete] = useState<ChatPreview | null>(null)
   const [, forceRender]       = useState(0)
+
+  // Pagination des 2 slides (Amis / Chat mondial) — `activeSlide` piloté à la
+  // fois par le swipe (onMomentumScrollEnd) et par le tap sur un onglet
+  // (scrollTo). `active` sur GlobalChatSlide sert à ne marquer le chat mondial
+  // comme vu (badge BottomNav) que pendant qu'il est réellement affiché.
+  const [activeSlide, setActiveSlide] = useState<0 | 1>(0)
+  const goToSlide = (i: 0 | 1) => {
+    setActiveSlide(i)
+    pagerRef.current?.scrollTo({ x: i * width, animated: true })
+  }
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const i = Math.round(e.nativeEvent.contentOffset.x / width) === 1 ? 1 : 0
+    setActiveSlide(i)
+  }
 
   // Précharge les profils des interlocuteurs d'une liste de conversations.
   const warmProfiles = useCallback((list: ChatPreview[]) => {
@@ -107,64 +125,97 @@ export function MessagesScreen({ onBack }: Props) {
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
-      <View style={s.column}>
-        <View style={s.header}>
-          <TouchableOpacity onPress={onBack} style={s.backBtn}>
-            <Text style={s.backTxt}>{t('back')}</Text>
-          </TouchableOpacity>
-          <Text style={s.title}>💬 {t('messagesTitle')}</Text>
+      <View style={s.headerWrap}>
+        <View style={s.headerInner}>
+          <View style={s.header}>
+            <TouchableOpacity onPress={onBack} style={s.backBtn}>
+              <Text style={s.backTxt}>{t('back')}</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>💬 {t('messagesTitle')}</Text>
+          </View>
+
+          <View style={s.tabsRow}>
+            <TouchableOpacity style={[s.tab, activeSlide === 0 && s.tabActive]} onPress={() => goToSlide(0)}>
+              <Text style={[s.tabTxt, activeSlide === 0 && s.tabTxtActive]}>💬 {t('friendsChatTab')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.tab, activeSlide === 1 && s.tabActive]} onPress={() => goToSlide(1)}>
+              <Text style={[s.tabTxt, activeSlide === 1 && s.tabTxtActive]}>🌍 {t('globalChatTab')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+
+      <ScrollView
+        ref={pagerRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onMomentumScrollEnd}
+        scrollEventThrottle={16}
+        style={s.pager}
+      >
+        {/* ── Slide 1 : conversations amis (existant) ──────────────────── */}
+        <View style={{ width, height: '100%', alignItems: 'center' }}>
+          <View style={s.column}>
+            {loading ? (
+              <View style={s.list}><MessageSkeletonRows count={6} /></View>
+            ) : chats.length === 0 ? (
+              <Text style={s.empty}>{t('messagesEmpty')}</Text>
+            ) : (
+              <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
+                {chats.map((c) => {
+                  const other = user ? c.participants.find((p) => p !== user.uid) : undefined
+                  const prof  = other ? getCachedProfile(other) : null
+                  const name  = prof?.username ?? 'Joueur'
+                  const initial = name[0]?.toUpperCase() ?? '?'
+                  return (
+                    <View key={c.chatId} style={s.row}>
+                      <TouchableOpacity style={s.rowMain} onPress={() => openChat(c)} activeOpacity={0.75}>
+                        <AvatarDisplay
+                          type={(prof?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
+                          initial={initial}
+                          emoji={prof?.avatarEmoji ?? ''}
+                          image={prof?.avatarImage ?? ''}
+                          size={46}
+                        />
+                        <View style={s.rowBody}>
+                          <View style={s.rowTop}>
+                            <Text style={s.rowName} numberOfLines={1}>{name}</Text>
+                            <Text style={s.rowTime}>{shortTime(c.updatedAt)}</Text>
+                          </View>
+                          <View style={s.rowBottom}>
+                            <Text
+                              style={[s.rowMsg, c.unreadCount > 0 && s.rowMsgUnread]}
+                              numberOfLines={1}
+                            >
+                              {c.lastMessage || '—'}
+                            </Text>
+                            {c.unreadCount > 0 && (
+                              <View style={s.unreadBadge}>
+                                <Text style={s.unreadTxt}>{c.unreadCount > 9 ? '9+' : c.unreadCount}</Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.trashBtn} onPress={() => setToDelete(c)} hitSlop={8} activeOpacity={0.7}>
+                        <Text style={s.trashTxt}>🗑️</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                })}
+              </ScrollView>
+            )}
+          </View>
         </View>
 
-        {loading ? (
-          <View style={s.list}><MessageSkeletonRows count={6} /></View>
-        ) : chats.length === 0 ? (
-          <Text style={s.empty}>{t('messagesEmpty')}</Text>
-        ) : (
-          <ScrollView contentContainerStyle={s.list} showsVerticalScrollIndicator={false}>
-            {chats.map((c) => {
-              const other = user ? c.participants.find((p) => p !== user.uid) : undefined
-              const prof  = other ? getCachedProfile(other) : null
-              const name  = prof?.username ?? 'Joueur'
-              const initial = name[0]?.toUpperCase() ?? '?'
-              return (
-                <View key={c.chatId} style={s.row}>
-                  <TouchableOpacity style={s.rowMain} onPress={() => openChat(c)} activeOpacity={0.75}>
-                    <AvatarDisplay
-                      type={(prof?.avatarType ?? 'initial') as 'initial' | 'emoji' | 'image'}
-                      initial={initial}
-                      emoji={prof?.avatarEmoji ?? ''}
-                      image={prof?.avatarImage ?? ''}
-                      size={46}
-                    />
-                    <View style={s.rowBody}>
-                      <View style={s.rowTop}>
-                        <Text style={s.rowName} numberOfLines={1}>{name}</Text>
-                        <Text style={s.rowTime}>{shortTime(c.updatedAt)}</Text>
-                      </View>
-                      <View style={s.rowBottom}>
-                        <Text
-                          style={[s.rowMsg, c.unreadCount > 0 && s.rowMsgUnread]}
-                          numberOfLines={1}
-                        >
-                          {c.lastMessage || '—'}
-                        </Text>
-                        {c.unreadCount > 0 && (
-                          <View style={s.unreadBadge}>
-                            <Text style={s.unreadTxt}>{c.unreadCount > 9 ? '9+' : c.unreadCount}</Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.trashBtn} onPress={() => setToDelete(c)} hitSlop={8} activeOpacity={0.7}>
-                    <Text style={s.trashTxt}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-              )
-            })}
-          </ScrollView>
-        )}
-      </View>
+        {/* ── Slide 2 : chat mondial en temps réel ──────────────────────── */}
+        <View style={{ width, height: '100%', alignItems: 'center' }}>
+          <View style={[s.column, { flex: 1 }]}>
+            <GlobalChatSlide active={activeSlide === 1} />
+          </View>
+        </View>
+      </ScrollView>
 
       {/* Confirmation de suppression */}
       <Modal visible={toDelete !== null} transparent animationType="fade" onRequestClose={() => setToDelete(null)}>
@@ -217,6 +268,17 @@ function MessageSkeletonRows({ count }: { count: number }) {
 const s = StyleSheet.create({
   root:   { flex: 1, backgroundColor: C.table, alignItems: 'center' },
   column: { flex: 1, width: '100%', maxWidth: 460, paddingHorizontal: 18 },
+  headerWrap:  { width: '100%', alignItems: 'center' },
+  headerInner: { width: '100%', maxWidth: 460, paddingHorizontal: 18 },
+  pager: { flex: 1, width: '100%' },
+  tabsRow: { flexDirection: 'row', gap: 8, paddingBottom: 10 },
+  tab: {
+    flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.2)', borderWidth: 1, borderColor: 'rgba(244,236,216,0.12)',
+  },
+  tabActive: { backgroundColor: C.brass, borderColor: C.brass },
+  tabTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
+  tabTxtActive: { color: '#1C2622' },
   skeletonAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(244,236,216,0.12)' },
   skeletonLine:   { height: 12, borderRadius: 6, backgroundColor: 'rgba(244,236,216,0.12)', width: '75%' },
 

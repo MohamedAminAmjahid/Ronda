@@ -1147,6 +1147,106 @@ export function subscribeTotalUnread(
   )
 }
 
+// ── Chat mondial (global_chat) ──────────────────────────────────────────────
+//
+// Contrairement au chat privé ci-dessus, aucune route serveur ni règle de
+// sécurité versionnée n'existe dans ce dépôt (ni firestore.rules, ni
+// firebase.json — confirmé par recherche exhaustive, comme pour les autres
+// collections Firestore de ce projet) : les règles doivent être configurées
+// manuellement dans la Console Firebase, avec exactement les contraintes
+// suivantes (lecture authentifiée, écriture uid == auth.uid + texte ≤ 200
+// caractères, suppression limitée à l'auteur du message) :
+//   match /global_chat/{msgId} {
+//     allow read: if request.auth != null;
+//     allow create: if request.auth != null
+//       && request.resource.data.uid == request.auth.uid
+//       && request.resource.data.text.size() <= 200;
+//     allow delete: if request.auth.uid == resource.data.uid;
+//   }
+// Nettoyage des messages au-delà des 200 derniers : ronda-server/src/db/
+// globalChat.ts (cron Admin SDK) — impossible à faire depuis le client avec
+// la règle delete ci-dessus, qui n'autorise chacun qu'à supprimer SES PROPRES
+// messages, jamais les plus anciens d'un autre auteur.
+
+const GLOBAL_CHAT_FETCH_LIMIT = 100
+
+export interface GlobalMessageDoc {
+  id:          string
+  uid:         string
+  username:    string
+  avatarType:  string
+  avatarEmoji: string
+  avatarImage: string
+  text:        string
+  /** Code pays (voir src/data/countries.ts) — figé au moment de l'envoi,
+   * pour l'affichage du drapeau et le filtre par pays côté écran. */
+  country:     string
+  createdAt:   Date | null
+}
+
+function toGlobalMessage(d: { id: string; data: () => Record<string, unknown> }): GlobalMessageDoc {
+  const data = d.data()
+  return {
+    id: d.id,
+    uid: data.uid as string,
+    username: (data.username as string) ?? 'Joueur',
+    avatarType: (data.avatarType as string) ?? 'initial',
+    avatarEmoji: (data.avatarEmoji as string) ?? '',
+    avatarImage: (data.avatarImage as string) ?? '',
+    text: (data.text as string) ?? '',
+    country: (data.country as string) ?? '',
+    createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+  }
+}
+
+/** Envoie un message dans le chat mondial. Le texte est tronqué à 200
+ * caractères côté client (miroir de la contrainte de la règle Firestore),
+ * mais celle-ci reste la seule barrière faisant réellement autorité. */
+export async function sendGlobalMessage(
+  uid: string, username: string,
+  avatarType: string, avatarEmoji: string, avatarImage: string,
+  text: string, country: string,
+): Promise<void> {
+  const clean = text.trim().slice(0, 200)
+  if (!clean) return
+  await addDoc(collection(db, 'global_chat'), {
+    uid, username, avatarType, avatarEmoji, avatarImage,
+    text: clean, country,
+    createdAt: serverTimestamp(),
+  })
+}
+
+/** Écoute les N derniers messages du chat mondial en temps réel, renvoyés
+ * triés chronologiquement croissant (le plus récent en dernier). */
+export function subscribeGlobalChat(
+  callback: (messages: GlobalMessageDoc[]) => void,
+): () => void {
+  const q = query(collection(db, 'global_chat'), orderBy('createdAt', 'desc'), limit(GLOBAL_CHAT_FETCH_LIMIT))
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map(toGlobalMessage).reverse()),
+    () => callback([]),
+  )
+}
+
+/** Écoute uniquement le tout dernier message (uid + horodatage) — pour le
+ * badge « nouveau message » du BottomNav, sans charger les 100 derniers. */
+export function subscribeGlobalChatLatest(
+  callback: (latest: { uid: string; atMs: number } | null) => void,
+): () => void {
+  const q = query(collection(db, 'global_chat'), orderBy('createdAt', 'desc'), limit(1))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const d = snap.docs[0]
+      if (!d) { callback(null); return }
+      const msg = toGlobalMessage(d)
+      callback({ uid: msg.uid, atMs: msg.createdAt?.getTime() ?? Date.now() })
+    },
+    () => callback(null),
+  )
+}
+
 // ── Invitations de partie (entre amis) ────────────────────────────────────────
 
 export interface GameInviteDoc {
