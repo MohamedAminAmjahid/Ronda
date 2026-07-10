@@ -323,12 +323,12 @@ export async function generateBracket(tournamentId: string): Promise<void> {
     { ...(data.participantAvatars ?? {}) }
 
   // Complète avec des bots aléatoires jusqu'à la prochaine puissance de 2 —
-  // seulement si au moins 2 humains sont déjà inscrits (sinon même un seul
-  // bot ne suffirait pas à constituer un vrai match, et 0 inscrit ne doit pas
-  // se transformer en "tournoi 100% bots").
+  // dès qu'au moins 1 humain est inscrit (1 humain → bracket à 2, contre un
+  // seul bot ; ça reste un vrai match). 0 inscrit ne doit en revanche jamais
+  // se transformer en "tournoi 100% bots" — exclu par le seuil ci-dessous.
   const participants = [...humanParticipants]
   const addedBots: BotIdentity[] = []
-  if (participants.length >= 2) {
+  if (participants.length >= 1) {
     const targetSize = nextPowerOf2(participants.length)
     const availableBots = shuffle(ALL_BOTS.filter((b) => !participants.includes(b.uid)))
     while (participants.length < targetSize && availableBots.length > 0) {
@@ -342,8 +342,9 @@ export async function generateBracket(tournamentId: string): Promise<void> {
   }
   // Minimum absolu : même complété de TOUS les bots disponibles (plus de 60
   // au total, jamais atteint en pratique), impossible de constituer un
-  // bracket à au moins 2 joueurs → seul cas où l'erreur est encore renvoyée.
-  if (participants.length < 2) throw new Error('not_enough_players')
+  // bracket à au moins 1 joueur humain → seul cas où l'erreur est encore
+  // renvoyée (0 inscrit).
+  if (participants.length < 1) throw new Error('not_enough_players')
 
   const shuffled = shuffle(participants)
 
