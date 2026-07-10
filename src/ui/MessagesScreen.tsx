@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, type Href } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { GlobalChatSlide } from './GlobalChatSlide'
 import { useAuth } from '../firebase/auth'
 import { deleteChat, type ChatPreview } from '../firebase/firestore'
@@ -53,6 +54,9 @@ export function MessagesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(() => getCachedConversations() === null)
   const [toDelete, setToDelete] = useState<ChatPreview | null>(null)
   const [, forceRender]       = useState(0)
+  // Profil de l'interlocuteur (tap sur son avatar).
+  const [selectedUid, setSelectedUid]   = useState<string | null>(null)
+  const [selectedName, setSelectedName] = useState<string | null>(null)
 
   // Pagination des 2 slides (Amis / Chat mondial) — `activeSlide` piloté à la
   // fois par le swipe (onMomentumScrollEnd) et par le tap sur un onglet
@@ -177,6 +181,7 @@ export function MessagesScreen({ onBack }: Props) {
                           emoji={prof?.avatarEmoji ?? ''}
                           image={prof?.avatarImage ?? ''}
                           size={46}
+                          onPress={other ? () => { setSelectedUid(other); setSelectedName(name) } : undefined}
                         />
                         <View style={s.rowBody}>
                           <View style={s.rowTop}>
@@ -233,6 +238,13 @@ export function MessagesScreen({ onBack }: Props) {
           </View>
         </View>
       </Modal>
+
+      <PlayerProfileModal
+        visible={selectedUid !== null}
+        uid={selectedUid ?? undefined}
+        name={selectedName ?? undefined}
+        onClose={() => { setSelectedUid(null); setSelectedName(null) }}
+      />
     </SafeAreaView>
   )
 }

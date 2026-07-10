@@ -19,6 +19,7 @@ import { getCachedFriends, isFriendsStale, refreshFriends, subscribeFriends } fr
 import { joinChallengeMatch } from '../online/challenges'
 import { useI18n } from '../i18n/useI18n'
 import { InviteToPlayModal } from './InviteToPlayModal'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { PresenceDot, presenceLabel } from './PresenceDot'
 
 const C = {
@@ -58,6 +59,11 @@ export function FriendsScreen({ onBack }: Props) {
   const [friends, setFriends] = useState<FriendDoc[]>([])
   const [requests, setRequests] = useState<FriendDoc[]>([])
   const [loading, setLoading] = useState(false)
+
+  // Profil d'un joueur (tap sur son avatar).
+  const [profileUid, setProfileUid]   = useState<string | null>(null)
+  const [profileName, setProfileName] = useState<string | null>(null)
+  const openProfile = (uid: string, name: string) => { setProfileUid(uid); setProfileName(name) }
 
   // Badges temps réel
   const [pendingCount, setPendingCount] = useState(0)
@@ -317,6 +323,7 @@ export function FriendsScreen({ onBack }: Props) {
                           size={40}
                           level={f.level}
                           xp={f.xp} xpMax={xpRequired(f.level ?? 1)}
+                          onPress={() => openProfile(f.uid, f.username)}
                         />
                         <PresenceDot info={info} ring={C.table} />
                       </View>
@@ -378,6 +385,7 @@ export function FriendsScreen({ onBack }: Props) {
                       size={40}
                       level={r.level}
                       xp={r.xp} xpMax={xpRequired(r.level ?? 1)}
+                      onPress={() => openProfile(r.uid, r.username)}
                     />
                     <Text style={s.rowName} numberOfLines={1}>{r.username}</Text>
                     <View style={s.rowActions}>
@@ -493,6 +501,7 @@ export function FriendsScreen({ onBack }: Props) {
                     size={40}
                     level={result.level}
                     xp={result.xp} xpMax={xpRequired(result.level)}
+                    onPress={() => openProfile(result.uid, result.username)}
                   />
                   <Text style={s.rowName} numberOfLines={1}>{result.username}</Text>
                   <TouchableOpacity style={s.btnSmall} onPress={() => add(result)}>
@@ -541,6 +550,13 @@ export function FriendsScreen({ onBack }: Props) {
         visible={inviteFriend !== null}
         friend={inviteFriend}
         onClose={() => setInviteFriend(null)}
+      />
+
+      <PlayerProfileModal
+        visible={profileUid !== null}
+        uid={profileUid ?? undefined}
+        name={profileName ?? undefined}
+        onClose={() => { setProfileUid(null); setProfileName(null) }}
       />
 
     </SafeAreaView>

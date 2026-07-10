@@ -13,6 +13,7 @@ import {
 import { getCachedMessages, setCachedMessages } from '../online/messagesCache'
 import { useI18n } from '../i18n/useI18n'
 import { AvatarDisplay } from './ProfileScreen'
+import { PlayerProfileModal } from './PlayerProfileModal'
 import { xpRequired } from '../profile/profile'
 import { PresenceDot, presenceLabel } from './PresenceDot'
 
@@ -48,6 +49,7 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [inputFocused, setInputFocused] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   // Avatar + niveau de l'ami, chargés depuis Firestore
   const [friendAvatar, setFriendAvatar] = useState<{
@@ -120,6 +122,7 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
             level={friendLevel}
             xp={friendXp}
             xpMax={friendLevel !== undefined ? xpRequired(friendLevel) : undefined}
+            onPress={() => setShowProfile(true)}
           />
           <PresenceDot info={presence} ring={C.bg} />
         </View>
@@ -191,6 +194,13 @@ export function ChatScreen({ friendUid, friendName, onBack }: Props) {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <PlayerProfileModal
+        visible={showProfile}
+        uid={friendUid}
+        name={friendName}
+        onClose={() => setShowProfile(false)}
+      />
     </SafeAreaView>
   )
 }

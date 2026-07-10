@@ -70,6 +70,8 @@ interface AvatarDisplayProps {
   xp?: number
   /** XP requis pour le prochain niveau (xpRequired(level)). */
   xpMax?: number
+  /** Si défini → l'avatar devient cliquable (ex. ouvre le profil du joueur). */
+  onPress?: () => void
 }
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle)
@@ -92,7 +94,7 @@ function resolveBotAvatarImage(image: string): string {
   return list[idx] ?? list[0] ?? image
 }
 
-export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level, xp, xpMax }: AvatarDisplayProps) {
+export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 'none', level, xp, xpMax, onPress }: AvatarDisplayProps) {
   const radius   = size / 2
   const fontSize = type === 'emoji' ? size * 0.48 : size * 0.45
 
@@ -140,9 +142,15 @@ export function AvatarDisplay({ type, initial, emoji, image, size = 80, frame = 
 
   const avatar = frame === 'none' ? inner : <FramedAvatar frame={frame} size={size}>{inner}</FramedAvatar>
 
-  if (level === undefined && !hasXp) return avatar
+  // Enveloppe cliquable optionnelle (ouvre le profil du joueur là où c'est câblé).
+  const wrap = (node: ReactNode) =>
+    onPress
+      ? <TouchableOpacity onPress={onPress} activeOpacity={0.8}>{node}</TouchableOpacity>
+      : node
 
-  return (
+  if (level === undefined && !hasXp) return wrap(avatar)
+
+  return wrap(
     <View style={av.withLevel}>
       {avatar}
 
