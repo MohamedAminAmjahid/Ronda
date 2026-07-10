@@ -233,10 +233,12 @@ export function TournamentScreen({ onBack }: Props) {
                       .replace('{max}', String(tournament.maxPlayers))}
                   </Text>
                 </View>
-                {tournament.status === 'open' && (
+                {(tournament.status === 'open' || tournament.status === 'registration') && (
                   <View style={s.infoRow}>
                     <Text style={s.infoLabel}>⏳ {t('registrationCloses')}</Text>
-                    <Text style={s.countdown}>{formatCountdown(countdownMs)}</Text>
+                    <Text style={s.countdown}>
+                      {countdownMs <= 0 ? t('registrationInProgress') : formatCountdown(countdownMs)}
+                    </Text>
                   </View>
                 )}
                 {tournament.status === 'finished' && tournament.champion && (

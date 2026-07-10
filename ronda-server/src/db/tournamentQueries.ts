@@ -129,10 +129,29 @@ export function currentTournamentId(): string {
 }
 
 /**
+ * Vendredi 00:00:00 UTC le plus proche dans le futur : ce vendredi si on est
+ * avant vendredi, sinon le vendredi suivant. Le cron hebdomadaire ne déclenche
+ * createWeeklyTournament() que le lundi (donc "ce vendredi" normalement), mais
+ * /tournament/admin/create peut être appelé n'importe quel jour (tests,
+ * rattrapage manuel) — sans ce calcul, un appel un jeudi ou plus tard produit
+ * une registrationDeadline déjà passée.
+ */
+function nextFriday(): Date {
+  const now = new Date()
+  const day = now.getUTCDay() // 0=dim, 1=lun, ..., 5=ven, 6=sam
+  const daysUntilFriday = (5 - day + 7) % 7 || 7
+  return new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysUntilFriday,
+    0, 0, 0, 0,
+  ))
+}
+
+/**
  * Crée le tournoi de la semaine courante (idempotent — renvoie l'id existant
  * si déjà créé). weekId (doc ID) au format ISO '2026-W28'.
- * registrationDeadline = jeudi 23:59:59, startAt = vendredi 00:00:00,
- * finishAt = dimanche 23:59:59 (UTC, semaine courante).
+ * registrationDeadline = startAt = prochain vendredi 00:00:00, finishAt =
+ * dimanche suivant 23:59:59 (UTC) — ancrés sur nextFriday() plutôt que sur
+ * currentWeekStart() pour rester toujours dans le futur (voir nextFriday).
  */
 export async function createWeeklyTournament(): Promise<string> {
   if (!firebaseReady()) throw new Error('firebase_unavailable')
@@ -142,10 +161,8 @@ export async function createWeeklyTournament(): Promise<string> {
   const snap = await ref.get()
   if (snap.exists) return weekId
 
-  const mondayDate = new Date(`${monday}T00:00:00Z`)
-  const thu = new Date(mondayDate); thu.setUTCDate(mondayDate.getUTCDate() + 3); thu.setUTCHours(23, 59, 59, 999)
-  const fri = new Date(mondayDate); fri.setUTCDate(mondayDate.getUTCDate() + 4); fri.setUTCHours(0, 0, 0, 0)
-  const sun = new Date(mondayDate); sun.setUTCDate(mondayDate.getUTCDate() + 6); sun.setUTCHours(23, 59, 59, 999)
+  const fri = nextFriday()
+  const sun = new Date(fri); sun.setUTCDate(fri.getUTCDate() + 2); sun.setUTCHours(23, 59, 59, 999)
 
   await ref.set({
     weekId, game: 'ronda', status: 'open',
@@ -153,7 +170,7 @@ export async function createWeeklyTournament(): Promise<string> {
     participants: [], participantNames: {}, participantAvatars: {},
     bracket: [], champion: null,
     createdAt: FieldValue.serverTimestamp(),
-    registrationDeadline: Timestamp.fromDate(thu),
+    registrationDeadline: Timestamp.fromDate(fri),
     startAt: Timestamp.fromDate(fri),
     finishAt: Timestamp.fromDate(sun),
   })
