@@ -300,6 +300,30 @@ app.post('/tournament/admin/distribute-prizes', adminGuard, async (req, res) => 
   }
 })
 
+// Supprime un tournoi (doc + tous ses matches) — admin uniquement. Outil de
+// réinitialisation manuelle (ex. tournoi créé par erreur, bracket corrompu à
+// régénérer de zéro) : ne vérifie volontairement pas le statut, l'admin est
+// seul juge de l'opportunité de supprimer un tournoi 'running'/'finished'.
+app.delete('/tournament/admin/reset', adminGuard, async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { tournamentId } = (req.body ?? {}) as { tournamentId?: string }
+  if (typeof tournamentId !== 'string') return res.status(400).json({ error: 'bad_params' })
+  try {
+    const matches = await adminDb()
+      .collection('tournament_matches')
+      .where('tournamentId', '==', tournamentId)
+      .get()
+    const batch = adminDb().batch()
+    matches.docs.forEach((d) => batch.delete(d.ref))
+    batch.delete(adminDb().collection('tournaments').doc(tournamentId))
+    await batch.commit()
+    return res.json({ ok: true, deleted: matches.size + 1 })
+  } catch (e) {
+    console.error('[/tournament/admin/reset] erreur:', e)
+    return res.status(500).json({ error: (e as Error).message })
+  }
+})
+
 // ── Gold : cadeaux & transferts (serveur autoritaire) ──────────────────────────
 
 const DAILY_TRANSFER_LIMIT = 200
