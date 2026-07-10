@@ -293,9 +293,18 @@ export function FriendsScreen({ onBack }: Props) {
                           </View>
                         )}
                       </TouchableOpacity>
-                      <TouchableOpacity style={s.btnSmall} onPress={() => setInviteFriend(f)}>
-                        <Text style={s.btnSmallTxt}>🎮 {t('inviteToPlay')}</Text>
-                      </TouchableOpacity>
+                      {info?.gameStatus === 'playing_online' && info?.currentRoomCode ? (
+                        <TouchableOpacity
+                          style={s.btnWatch}
+                          onPress={() => router.push(`/spectate?code=${info.currentRoomCode}` as never)}
+                        >
+                          <Text style={s.btnWatchTxt}>👁️ Regarder</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity style={s.btnSmall} onPress={() => setInviteFriend(f)}>
+                          <Text style={s.btnSmallTxt}>🎮 {t('inviteToPlay')}</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity style={s.btnRemove} onPress={() => setRemoveTarget(f)}>
                         <Text style={s.btnRemoveTxt}>✕</Text>
                       </TouchableOpacity>
@@ -501,6 +510,11 @@ const s = StyleSheet.create({
 
   btnSmall: { backgroundColor: C.brass, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 },
   btnSmallTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.ink },
+  btnWatch: {
+    backgroundColor: 'rgba(201,162,39,0.14)', borderRadius: 9, paddingVertical: 8, paddingHorizontal: 12,
+    borderWidth: 1, borderColor: C.brass,
+  },
+  btnWatchTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
   btnAccept: { backgroundColor: C.brass, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 },
   btnAcceptTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.ink },
   btnDecline: { borderRadius: 9, paddingVertical: 8, paddingHorizontal: 12, borderWidth: 1.5, borderColor: C.clay },

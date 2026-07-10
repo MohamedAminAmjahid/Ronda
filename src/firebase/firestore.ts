@@ -775,6 +775,8 @@ export interface PresenceInfo {
   isOnline:    boolean
   lastSeen:    Date | null
   gameStatus?: GameStatus
+  /** Code de la partie en cours — permet aux amis de rejoindre en spectateur. */
+  currentRoomCode?: string | null
 }
 
 function toDate(ts: unknown): Date | null {
@@ -797,10 +799,15 @@ export async function setOnlineStatus(uid: string, online: boolean): Promise<voi
 }
 
 /** Met à jour ce que fait le joueur en ce moment (matchmaking/en partie/…),
- * ou l'efface (null → deleteField) quand il quitte l'écran/la partie. */
-export async function updateGameStatus(uid: string, status: GameStatus): Promise<void> {
+ * ou l'efface (null → deleteField) quand il quitte l'écran/la partie.
+ * `roomCode` (optionnel) publie le code de la partie en cours pour permettre
+ * aux amis de rejoindre en spectateur ; effacé si absent. */
+export async function updateGameStatus(uid: string, status: GameStatus, roomCode?: string | null): Promise<void> {
   try {
-    await updateDoc(userRef(uid), { gameStatus: status ?? deleteField() })
+    await updateDoc(userRef(uid), {
+      gameStatus: status ?? deleteField(),
+      currentRoomCode: roomCode ? roomCode : deleteField(),
+    })
   } catch {
     // hors-ligne / règles — sans effet, jamais bloquant pour le jeu
   }
@@ -812,8 +819,12 @@ export function subscribeOnlineStatus(uid: string, cb: (info: PresenceInfo) => v
     userRef(uid),
     (snap) => {
       const d = snap.data() ?? {}
-      if (d.invisibleMode === true) { cb({ isOnline: false, lastSeen: null, gameStatus: null }); return }
-      cb({ isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen), gameStatus: toGameStatus(d.gameStatus) })
+      if (d.invisibleMode === true) { cb({ isOnline: false, lastSeen: null, gameStatus: null, currentRoomCode: null }); return }
+      cb({
+        isOnline: d.isOnline === true, lastSeen: toDate(d.lastSeen),
+        gameStatus: toGameStatus(d.gameStatus),
+        currentRoomCode: (d.currentRoomCode as string) ?? null,
+      })
     },
     () => cb({ isOnline: false, lastSeen: null, gameStatus: null }),
   )
@@ -839,11 +850,12 @@ export function subscribeOnlineStatuses(
         snap.forEach((d) => {
           const data = d.data()
           acc[d.id] = data.invisibleMode === true
-            ? { isOnline: false, lastSeen: null, gameStatus: null }
+            ? { isOnline: false, lastSeen: null, gameStatus: null, currentRoomCode: null }
             : {
                 isOnline: data.isOnline === true,
                 lastSeen: toDate(data.lastSeen),
                 gameStatus: toGameStatus(data.gameStatus),
+                currentRoomCode: (data.currentRoomCode as string) ?? null,
               }
         })
         cb({ ...acc })
@@ -1076,6 +1088,52 @@ export function markChatRead(chatId: string, myUid: string): Promise<void> {
   return updateDoc(doc(db, 'chats', chatId), {
     [`unread_${myUid}`]: 0,
   }).catch(() => {})
+}
+
+// ── Chat des spectateurs (rooms/{code}/spectatorChat) ──────────────────────────
+
+export interface SpectatorMessage {
+  id: string
+  fromName: string
+  text: string
+  createdAt: Date | null
+}
+
+/** Envoie un message dans le chat spectateur d'une partie. */
+export async function sendSpectatorMessage(
+  code: string, fromName: string, text: string,
+): Promise<void> {
+  const clean = text.trim().slice(0, 200)
+  if (!clean) return
+  await addDoc(collection(db, 'rooms', code, 'spectatorChat'), {
+    fromName: fromName.slice(0, 24),
+    text: clean,
+    createdAt: serverTimestamp(),
+  })
+}
+
+/** Écoute en temps réel le chat spectateur (50 derniers messages, chronologique). */
+export function subscribeSpectatorChat(
+  code: string, cb: (messages: SpectatorMessage[]) => void,
+): () => void {
+  const q = query(
+    collection(db, 'rooms', code, 'spectatorChat'),
+    orderBy('createdAt', 'asc'),
+    limit(50),
+  )
+  return onSnapshot(
+    q,
+    (snap) => cb(snap.docs.map((d) => {
+      const data = d.data()
+      return {
+        id: d.id,
+        fromName: (data.fromName as string) ?? '—',
+        text: (data.text as string) ?? '',
+        createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+      }
+    })),
+    () => cb([]),
+  )
 }
 
 /** Aperçu d'une conversation pour l'écran Messages. */

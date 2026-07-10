@@ -37,6 +37,16 @@ export async function joinByCode(pseudo: string, code: string, uid?: string): Pr
   return getClient().joinById(roomId, { pseudo, uid })
 }
 
+/** Rejoint une partie en cours en tant que SPECTATEUR (lecture seule). Résout le
+ * code via /room/:code (même endpoint que joinByCode) puis joinById avec le flag
+ * spectate → RondaRoom.onJoin place le client comme spectateur (aucun siège). */
+export async function spectateByCode(code: string, pseudo = 'Spectateur'): Promise<Room> {
+  const res = await fetch(`${httpBase()}/room/${encodeURIComponent(code.trim().toUpperCase())}`)
+  if (!res.ok) throw new Error('Partie introuvable.')
+  const { roomId } = (await res.json()) as { roomId: string }
+  return getClient().joinById(roomId, { pseudo, spectate: true })
+}
+
 /**
  * Rejoint la room d'un match de tournoi par son roomCode (assigné par
  * generateBracket, tournamentQueries.ts). `asCreator` (déterministe : le

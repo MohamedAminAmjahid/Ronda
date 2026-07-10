@@ -73,10 +73,12 @@ const isWin = (scores: [number, number]): boolean => scores[0] >= 41 || scores[1
 // ── Room 1v1 ─────────────────────────────────────────────────────────────────
 
 export class RondaRoom extends Room<RondaState> {
-  maxClients = 2
+  maxClients = 10  // 2 joueurs + 8 spectateurs max
 
   /** État autoritaire (moteur pur). Le client ne le modifie jamais. */
   private engine!: GameState
+  /** sessionId des spectateurs (aucun siège) — lecture seule de l'état public. */
+  private spectators = new Set<string>()
   /** sessionId du client occupant chaque siège (null si libre / déconnecté). */
   private sessionBySeat: [string | null, string | null] = [null, null]
   private pseudoBySeat: [string, string] = ['', '']
@@ -109,7 +111,7 @@ export class RondaRoom extends Room<RondaState> {
 
   onCreate(options: { private?: boolean; bet?: number; tournamentMatchId?: string; code?: string }): void {
     this.state = new RondaState()
-    this.maxClients = 2
+    this.maxClients = 10  // 2 joueurs + jusqu'à 8 spectateurs
     this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
     this.tournamentMatchId = options?.tournamentMatchId ?? null
 
@@ -156,12 +158,29 @@ export class RondaRoom extends Room<RondaState> {
     this.onMessage('voice_signal', (client, data) => {
       this.broadcast('voice_signal', data, { except: client })
     })
+
+    // Soutien d'un spectateur : relaie une animation emoji à tous (joueurs +
+    // spectateurs). msg = { emoji, targetSeat }.
+    this.onMessage('cheer', (_client, msg: { emoji?: string; targetSeat?: number }) => {
+      const emoji = String(msg?.emoji ?? '👏').slice(0, 8)
+      const targetSeat = msg?.targetSeat === 1 ? 1 : 0
+      this.broadcast('cheer', { emoji, targetSeat })
+    })
   }
 
-  onJoin(client: Client, options: { pseudo: string; bet?: number; uid?: string }): void {
-    if (this.state.phase !== 'WAITING') {
-      throw new Error('La partie a déjà commencé.')
+  onJoin(client: Client, options: { pseudo: string; bet?: number; uid?: string; spectate?: boolean }): void {
+    const seatFree = this.sessionBySeat[0] === null || this.sessionBySeat[1] === null
+
+    // Spectateur : partie déjà pleine/commencée, ou jonction explicite en mode
+    // spectateur. Il reçoit l'état public (via la synchro Colyseus de this.state)
+    // mais ne prend aucun siège et ne peut pas jouer.
+    if (options?.spectate || this.state.phase !== 'WAITING' || !seatFree) {
+      this.spectators.add(client.sessionId)
+      client.send('spectator_joined', { roomCode: this.state.code })
+      this.broadcastSpectatorCount()
+      return
     }
+
     const seat = (this.sessionBySeat[0] === null ? 0 : 1) as PlayerId
     const pseudo = (options?.pseudo ?? 'Joueur').slice(0, 24)
 
@@ -196,6 +215,13 @@ export class RondaRoom extends Room<RondaState> {
   }
 
   async onLeave(client: Client, consented: boolean): Promise<void> {
+    // Spectateur qui part : simple mise à jour du compteur, aucune incidence jeu.
+    if (this.spectators.has(client.sessionId)) {
+      this.spectators.delete(client.sessionId)
+      this.broadcastSpectatorCount()
+      return
+    }
+
     const seat = this.seatOf(client.sessionId)
     if (seat === null) return
 
@@ -259,9 +285,17 @@ export class RondaRoom extends Room<RondaState> {
     this.engine = createInitialState(makeRng(Date.now()), firstDealer)
     this.startedAt = Date.now()
     this.state.phase = 'PLAYING'
+    // Verrouille contre le matchmaking (joinOrCreate) : une fois les 2 sièges
+    // pris, plus personne ne doit être routé ici comme joueur. Les spectateurs
+    // rejoignent explicitement par roomId (joinById), non affecté par le lock.
+    void this.lock()
     this.syncPublic()
     this.sendPrivateStateToAll()
     this.armTurnTimer()
+  }
+
+  private broadcastSpectatorCount(): void {
+    this.broadcast('spectator_count', { count: this.spectators.size })
   }
 
   // ── Handlers de messages ──────────────────────────────────────────────────

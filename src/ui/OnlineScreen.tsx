@@ -108,8 +108,11 @@ export function OnlineScreen({
       if (connectionStatus === 'waiting') status = 'matchmaking'
       else if (connectionStatus === 'playing') status = mode === 'friend' ? 'playing_friend' : 'playing_online'
     }
-    void updateGameStatus(myUid, status)
-  }, [myUid, connectionStatus, mode, invisibleMode])
+    // Publie le code de la partie pendant qu'on joue en ligne → les amis
+    // peuvent rejoindre en spectateur (voir FriendsScreen « Regarder »).
+    const roomForSpectators = connectionStatus === 'playing' ? roomCode : null
+    void updateGameStatus(myUid, status, roomForSpectators)
+  }, [myUid, connectionStatus, mode, invisibleMode, roomCode])
 
   // Toujours effacer au démontage, même si l'effet ci-dessus n'a pas eu
   // l'occasion de tourner une dernière fois (navigation brutale).
