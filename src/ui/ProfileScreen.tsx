@@ -333,6 +333,14 @@ export function ProfileScreen() {
     } catch { /* partage annulé */ }
   }
 
+  const shareProfile = async () => {
+    try {
+      await Share.share({
+        message: `Regarde mon profil Dar Lwar9a TM ! 🎴\nronda-virid.vercel.app/profil/${encodeURIComponent(username)}`,
+      })
+    } catch { /* partage annulé */ }
+  }
+
   const isFreeChange  = usernameChanges === 0
   const canAfford     = isFreeChange || gold >= USERNAME_CHANGE_COST
   const initial       = username ? username[0]?.toUpperCase() : '?'
@@ -622,6 +630,9 @@ export function ProfileScreen() {
               ))}
             </View>
           )}
+          <TouchableOpacity style={s.shareProfileBtn} onPress={() => { void shareProfile() }} activeOpacity={0.85}>
+            <Text style={s.shareProfileTxt}>📤 Partager mon profil</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Niveau & XP ────────────────────────────────────────── */}
@@ -1044,6 +1055,11 @@ const s = StyleSheet.create({
   },
   referralShareTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
   referralCount: { fontFamily: 'Cairo_400Regular', fontSize: 12, color: C.boneOff, textAlign: 'center', marginTop: 2 },
+  shareProfileBtn: {
+    marginTop: 12, alignSelf: 'center', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 20,
+    backgroundColor: 'rgba(201,162,39,0.14)', borderWidth: 1, borderColor: 'rgba(201,162,39,0.35)',
+  },
+  shareProfileTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
   referralViewBtn: { paddingVertical: 8, alignItems: 'center' },
   referralViewTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass, textDecorationLine: 'underline' },
   referralModalCard: { maxHeight: '82%' },
