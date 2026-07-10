@@ -9,7 +9,7 @@ import {
   connectQuick,
   connectCreate,
   connectByCode,
-  connectTournamentMatch,
+  connectTournamentRoom,
   sendChat,
   send,
   leave,
@@ -116,8 +116,8 @@ export interface OnlineExtras {
   connectQuick: (pseudo: string) => Promise<void>
   connectCreate: (pseudo: string) => Promise<void>
   connectByCode: (pseudo: string, code: string) => Promise<void>
-  connectTournamentMatch: (
-    pseudo: string, matchId: string, opponentUid: string, isFinal: boolean, uid?: string,
+  connectTournamentRoom: (
+    pseudo: string, code: string, matchId: string, asCreator: boolean, isFinal: boolean, uid?: string,
   ) => Promise<void>
 }
 
@@ -207,6 +207,6 @@ export function useOnlineGame() {
     connectQuick,
     connectCreate,
     connectByCode,
-    connectTournamentMatch,
+    connectTournamentRoom,
   }
 }

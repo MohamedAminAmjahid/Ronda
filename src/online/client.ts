@@ -38,15 +38,34 @@ export async function joinByCode(pseudo: string, code: string, uid?: string): Pr
 }
 
 /**
- * Rejoint (ou crée) la room d'un match de tournoi : les deux joueurs appellent
- * joinOrCreate avec le MÊME tournamentMatchId, et RondaRoom.filterBy(['tournamentMatchId'])
- * côté serveur les apparie automatiquement dans la même room — pas de code à
- * échanger, contrairement à une partie entre amis classique. Le roomCode
- * stocké dans le bracket (tournamentQueries.ts) est purement cosmétique et
- * n'est jamais utilisé pour ce join.
+ * Rejoint la room d'un match de tournoi par son roomCode (assigné par
+ * generateBracket, tournamentQueries.ts). `asCreator` (déterministe : le
+ * player1Uid du match crée toujours, voir TournamentScreen.tsx handlePlay)
+ * réclame directement ce code précis + le tournamentMatchId (RondaRoom.onCreate,
+ * options.code) ; l'autre joueur rejoint dessus, avec quelques tentatives
+ * espacées le temps que le créateur ouvre son écran, avant de créer lui-même
+ * en dernier recours (ex. si le créateur n'ouvre jamais l'écran). Sans ce
+ * rôle assigné à l'avance, les deux clients pourraient échouer leur
+ * joinByCode EN MÊME TEMPS (room pas encore créée par l'autre) et créer
+ * chacun leur propre room sous le même code — un pur essai symétrique
+ * "join, sinon create" est donc insuffisant ici, contrairement à un lien
+ * d'invitation classique (où un seul côté crée jamais en pratique).
  */
-export function joinTournamentMatch(pseudo: string, matchId: string, uid?: string): Promise<Room> {
-  return getClient().joinOrCreate('ronda', { pseudo, uid, tournamentMatchId: matchId })
+export async function joinTournamentRoom(
+  pseudo: string, code: string, matchId: string, asCreator: boolean, uid?: string,
+): Promise<Room> {
+  if (asCreator) {
+    return getClient().create('ronda', { pseudo, uid, private: true, code, tournamentMatchId: matchId })
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await joinByCode(pseudo, code, uid)
+    } catch {
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  // Dernier recours : le créateur désigné n'a jamais ouvert son écran.
+  return getClient().create('ronda', { pseudo, uid, private: true, code, tournamentMatchId: matchId })
 }
 
 /** Crée un lobby 2v2 (l'hôte reçoit un code à partager). */
@@ -168,12 +187,13 @@ export async function roomTypeByCode(
 // ── Tournois hebdomadaires ────────────────────────────────────────────────────
 
 /**
- * Clé AsyncStorage partagée entre online/store.ts (écrit quand un match de
- * tournoi se termine en victoire, juste après reportMatchWin) et
- * TournamentScreen.tsx (lu au focus pour afficher la modale « tu avances/tu
- * es champion », puis effacé). Vit ici plutôt que dans store.ts pour que
- * TournamentScreen.tsx (qui importe déjà ce fichier) n'ait pas besoin
- * d'importer online/store.ts juste pour cette constante.
+ * Clé AsyncStorage partagée entre online/store.ts (écrit dès qu'un match de
+ * tournoi se termine en victoire — le serveur a déjà tranché via
+ * RondaRoom.finishGame → recordMatchWinner, le client n'a plus qu'à
+ * l'afficher) et TournamentScreen.tsx (lu au focus pour la modale « tu
+ * avances/tu es champion », puis effacé). Vit ici plutôt que dans store.ts
+ * pour que TournamentScreen.tsx (qui importe déjà ce fichier) n'ait pas
+ * besoin d'importer online/store.ts juste pour cette constante.
  */
 export const TOURNAMENT_ADVANCE_KEY = 'ronda_tournament_advance_pending'
 
@@ -266,22 +286,39 @@ export async function registerForTournament(_uid: string, username: string): Pro
 }
 
 /**
- * Déclare le vainqueur d'un match de tournoi tel que vu par l'utilisateur
- * courant (double-confirmation côté serveur : n'avance le bracket que quand
- * les DEUX joueurs rapportent le même vainqueur). `loserUid` n'est pas
- * envoyé — le serveur déduit l'autre joueur depuis le match lui-même —
- * gardé dans la signature pour matcher l'API demandée.
+ * Le joueur présent dans le lobby (room rejointe, 10 min d'attente écoulées
+ * sans que l'adversaire n'apparaisse) déclare forfait de l'absent — il gagne
+ * le match. uid dérivé du token côté serveur (jamais envoyé ici).
  */
-export async function reportMatchWin(matchId: string, winnerUid: string, _loserUid: string): Promise<void> {
+export async function forfeitAbsent(matchId: string): Promise<void> {
   const fromToken = await idToken()
   if (!fromToken) throw new Error('unauthorized')
-  const res = await fetch(`${httpBase()}/tournament/report-win`, {
+  const res = await fetch(`${httpBase()}/tournament/forfeit-absent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ fromToken, matchId, winnerUid }),
+    body: JSON.stringify({ fromToken, matchId }),
   })
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new Error(body.error ?? 'report_failed')
+    throw new Error(body.error ?? 'forfeit_failed')
+  }
+}
+
+/**
+ * Le joueur présent renonce lui-même au match ("Annuler et perdre le
+ * match") — l'adversaire est déclaré vainqueur (déduit du match côté
+ * serveur, jamais transmis par le client).
+ */
+export async function forfeitSelf(matchId: string): Promise<void> {
+  const fromToken = await idToken()
+  if (!fromToken) throw new Error('unauthorized')
+  const res = await fetch(`${httpBase()}/tournament/forfeit-self`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromToken, matchId }),
+  })
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(body.error ?? 'forfeit_failed')
   }
 }

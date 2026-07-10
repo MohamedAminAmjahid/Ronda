@@ -12,7 +12,7 @@ import {
 } from './db/queries'
 import {
   createWeeklyTournament, registerPlayer, generateBracket,
-  checkForfaits, distributePrizes, reportMatchResult, getCurrentTournament,
+  checkForfaits, distributePrizes, recordMatchWinner, getCurrentTournament,
   type Tournament, type BracketRound, type BracketMatch,
 } from './db/tournamentQueries'
 import { RondaRoom } from './rooms/RondaRoom'
@@ -226,26 +226,62 @@ app.post('/tournament/register', async (req, res) => {
   }
 })
 
-// Déclare le résultat d'un match (déclencheur : un des deux joueurs, identifié
-// par son token — jamais winnerUid/loserUid bruts sans vérification). N'avance
-// le bracket QUE quand les deux joueurs ont rapporté le MÊME vainqueur
-// (reportMatchResult) — anti-triche demandé, implémenté via double-confirmation
-// plutôt qu'un unique appel non vérifié à recordMatchWinner.
-app.post('/tournament/report-win', async (req, res) => {
+/** Lit un match de tournoi et vérifie que `uid` en est bien l'un des deux
+ * joueurs — garde commune à forfeit-absent/forfeit-self, pour ne jamais
+ * laisser un utilisateur authentifié déclencher un forfait sur un match
+ * auquel il ne participe pas. */
+async function loadMatchAsPlayer(
+  matchId: string, uid: string,
+): Promise<{ player1Uid: string; player2Uid: string; status: string } | null> {
+  const snap = await adminDb().collection('tournament_matches').doc(matchId).get()
+  if (!snap.exists) return null
+  const m = snap.data() as { player1Uid: string; player2Uid: string; status: string }
+  if (uid !== m.player1Uid && uid !== m.player2Uid) return null
+  return m
+}
+
+// Le joueur PRÉSENT dans le lobby (room Colyseus rejointe, en attente depuis
+// 10 min) déclare que son adversaire ne s'est jamais présenté → il gagne par
+// forfait. uid dérivé du token (jamais du body brut comme le suggérait
+// { matchId, presentUid } — n'importe qui aurait pu forcer une victoire sur
+// le match de quelqu'un d'autre), et vérifié comme participant réel du match.
+app.post('/tournament/forfeit-absent', async (req, res) => {
   if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
-  const { fromToken, matchId, winnerUid } = (req.body ?? {}) as {
-    fromToken?: string; matchId?: string; winnerUid?: string
-  }
-  const reporterUid = await uidFromToken(fromToken)
-  if (!reporterUid) return res.status(401).json({ error: 'unauthorized' })
-  if (typeof matchId !== 'string' || typeof winnerUid !== 'string') {
-    return res.status(400).json({ error: 'bad_params' })
-  }
+  const { fromToken, matchId } = (req.body ?? {}) as { fromToken?: string; matchId?: string }
+  const presentUid = await uidFromToken(fromToken)
+  if (!presentUid) return res.status(401).json({ error: 'unauthorized' })
+  if (typeof matchId !== 'string') return res.status(400).json({ error: 'bad_params' })
   try {
-    const result = await reportMatchResult(matchId, reporterUid, winnerUid)
-    return res.json({ ok: true, result })
+    const match = await loadMatchAsPlayer(matchId, presentUid)
+    if (!match) return res.status(403).json({ error: 'not_a_player' })
+    if (match.status === 'done' || match.status === 'forfeit') return res.json({ ok: true }) // déjà tranché
+    await recordMatchWinner(matchId, presentUid, true)
+    return res.json({ ok: true })
   } catch (e) {
-    console.error('[/tournament/report-win] erreur:', e)
+    console.error('[/tournament/forfeit-absent] erreur:', e)
+    return res.status(400).json({ error: (e as Error).message })
+  }
+})
+
+// Le joueur présent renonce lui-même (bouton "Annuler et perdre le match") —
+// l'AUTRE joueur du match est déclaré vainqueur. uid dérivé du token, comme
+// forfeit-absent ; l'adversaire est déduit du match (le client n'a plus
+// besoin de connaître son uid, contrairement à l'ancien système filterBy).
+app.post('/tournament/forfeit-self', async (req, res) => {
+  if (!firebaseReady()) return res.status(503).json({ error: 'firebase_unavailable' })
+  const { fromToken, matchId } = (req.body ?? {}) as { fromToken?: string; matchId?: string }
+  const selfUid = await uidFromToken(fromToken)
+  if (!selfUid) return res.status(401).json({ error: 'unauthorized' })
+  if (typeof matchId !== 'string') return res.status(400).json({ error: 'bad_params' })
+  try {
+    const match = await loadMatchAsPlayer(matchId, selfUid)
+    if (!match) return res.status(403).json({ error: 'not_a_player' })
+    if (match.status === 'done' || match.status === 'forfeit') return res.json({ ok: true })
+    const opponentUid = selfUid === match.player1Uid ? match.player2Uid : match.player1Uid
+    await recordMatchWinner(matchId, opponentUid, true)
+    return res.json({ ok: true })
+  } catch (e) {
+    console.error('[/tournament/forfeit-self] erreur:', e)
     return res.status(400).json({ error: (e as Error).message })
   }
 })
@@ -529,16 +565,24 @@ cron.schedule('0 23 * * 0', async () => {
   }
 })
 
+// Toutes les heures → vérifie les matches dont la fenêtre fixe (voir
+// matchDeadline, tournamentQueries.ts) est dépassée sans vainqueur déclaré.
+cron.schedule('0 * * * *', async () => {
+  try {
+    const t = await getCurrentTournament()
+    if (t && t.status === 'running') {
+      await checkForfaits(t.weekId)
+    }
+  } catch (e) {
+    console.error('[cron] Erreur checkForfaits:', e)
+  }
+})
+
 // ── Colyseus ─────────────────────────────────────────────────────────────────
 const httpServer = http.createServer(app)
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) })
 
-// filterBy(['tournamentMatchId']) : deux joueurs qui joinOrCreate('ronda', {
-// tournamentMatchId }) avec le MÊME id sont automatiquement appariés dans la
-// même room (aucun code à échanger) — les appels sans tournamentMatchId
-// (quick match, code, ami) restent dans leur propre espace de matchmaking
-// puisque `undefined` n'égale jamais un id de match réel.
-gameServer.define('ronda', RondaRoom).filterBy(['tournamentMatchId'])
+gameServer.define('ronda', RondaRoom)
 gameServer.define('ronda2v2', LobbyRoom2v2)
 gameServer.define('dijouj', DiJoujRoom)
 gameServer.define('dijouj-lobby', DiJoujLobbyRoom)

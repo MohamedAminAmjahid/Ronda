@@ -150,6 +150,9 @@ export const translations = {
     // ── Tournoi hebdomadaire ──
     tournamentTab: 'البطولة',
     tournamentMatchBadge: 'مباراة البطولة',
+    tournamentLobbyTitle: 'مباراة البطولة — في انتظار خصمك',
+    tournamentLobbySub: 'إذا لم ينضم الخصم ← فوز تلقائي!',
+    tournamentCancelLose: 'إلغاء وخسارة المباراة',
     advanceModalTitle: '🎉 تأهلت للدور القادم!',
     championModalTitle: '🏆 أنت البطل!',
     tournamentTitle: 'بطولة الأسبوع',
@@ -647,6 +650,9 @@ export const translations = {
     // ── Tournoi hebdomadaire ──
     tournamentTab: 'Tournoi',
     tournamentMatchBadge: 'Match de tournoi',
+    tournamentLobbyTitle: 'Match de tournoi — En attente de ton adversaire',
+    tournamentLobbySub: "Si l'adversaire ne rejoint pas → victoire automatique !",
+    tournamentCancelLose: 'Annuler et perdre le match',
     advanceModalTitle: '🎉 Tu passes au tour suivant !',
     championModalTitle: '🏆 Tu es le CHAMPION !',
     tournamentTitle: 'Tournoi de la semaine',
@@ -1144,6 +1150,9 @@ export const translations = {
     // ── Weekly tournament ──
     tournamentTab: 'Tournament',
     tournamentMatchBadge: 'Tournament match',
+    tournamentLobbyTitle: 'Tournament match — Waiting for your opponent',
+    tournamentLobbySub: 'If your opponent never joins → automatic win!',
+    tournamentCancelLose: 'Cancel and forfeit the match',
     advanceModalTitle: "🎉 You're through to the next round!",
     championModalTitle: '🏆 You are the CHAMPION!',
     tournamentTitle: 'Tournament of the week',

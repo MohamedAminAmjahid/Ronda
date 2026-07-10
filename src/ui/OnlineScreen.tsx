@@ -13,7 +13,8 @@ import { useProfile } from '../profile/useProfile'
 import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
 import { updateGameStatus, type GameStatus } from '../firebase/firestore'
-import { roomTypeByCode } from '../online/client'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { roomTypeByCode, forfeitAbsent, forfeitSelf, TOURNAMENT_ADVANCE_KEY } from '../online/client'
 import { getBotWaitSecs, pickBot, getOrCreateBotProfile } from '../online/botFallback'
 import { useI18n } from '../i18n/useI18n'
 import { useIsOffline } from '../net/useOnlineStatus'
@@ -50,22 +51,28 @@ interface Props {
   onBack: () => void
   /** 'friend' : n'affiche que « Créer une partie » + « Rejoindre avec un code ». */
   mode?: 'quick' | 'friend'
-  /** Code pré-rempli (lien de partage /join?code=…) → connexion auto au montage. */
+  /** Code pré-rempli (lien de partage /join?code=…, OU roomCode assigné par
+   * generateBracket pour un match de tournoi) → connexion auto au montage. */
   initialCode?: string
-  /** Présents quand on vient du bracket d'un tournoi (TournamentScreen) plutôt
-   * que d'un lien d'invitation classique — voir tournament.tsx. */
+  /** Présent quand on vient du bracket d'un tournoi (TournamentScreen) plutôt
+   * que d'un lien d'invitation classique — voir tournament.tsx. Déclenche le
+   * lobby d'attente à durée limitée (10 min) au lieu de l'écran "partage ce
+   * code" habituel. */
   tournamentMatchId?: string
-  tournamentPlayer1?: string
-  tournamentPlayer2?: string
+  /** true si je suis le player1Uid du match — décide qui crée la room
+   * (déterministe) et qui la rejoint, pour éviter que les deux clients ne
+   * tentent de créer en même temps (voir joinTournamentRoom, online/client.ts). */
+  tournamentAsCreator?: boolean
+  /** Uniquement pour la modale « tu avances/tu es champion » côté client. */
   tournamentIsFinal?: boolean
 }
 
 const CODE_LENGTH = 6
 const normalizeCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LENGTH)
+const TOURNAMENT_LOBBY_SECS = 10 * 60 // 10 minutes d'attente avant forfait auto de l'absent
 
 export function OnlineScreen({
-  onBack, mode = 'quick', initialCode,
-  tournamentMatchId, tournamentPlayer1, tournamentPlayer2, tournamentIsFinal,
+  onBack, mode = 'quick', initialCode, tournamentMatchId, tournamentAsCreator, tournamentIsFinal,
 }: Props) {
   const game = useOnlineGame()
   const { connectionStatus, roomCode, opponentDisconnected, error } = game
@@ -74,13 +81,6 @@ export function OnlineScreen({
   const myUid = user?.uid ?? null
   const { t: tr } = useI18n()
   const offline = useIsOffline()
-
-  // Match de tournoi : l'adversaire (son uid) est déduit des deux joueurs du
-  // match transmis par TournamentScreen — le protocole RondaRoom n'expose
-  // jamais l'uid de l'adversaire pendant la partie (seulement son pseudo).
-  const tournamentOpponentUid = tournamentMatchId
-    ? (tournamentPlayer1 === myUid ? tournamentPlayer2 : tournamentPlayer1)
-    : undefined
 
   const avatar = { avatarType, avatarEmoji, avatarImage, level, xp }
 
@@ -117,20 +117,26 @@ export function OnlineScreen({
     return () => { if (myUid) void updateGameStatus(myUid, null) }
   }, [myUid])
 
-  // Match de tournoi : pas de code à échanger — appariement automatique côté
-  // serveur (RondaRoom.filterBy(['tournamentMatchId']), voir online/client.ts
-  // joinTournamentMatch) dès que les deux joueurs appellent connectTournamentMatch
-  // avec le même matchId. Bypass complet du flux code/roomTypeByCode ci-dessous.
+  // Match de tournoi : le roomCode assigné par generateBracket arrive via
+  // initialCode (donc déjà dans codeInput) — connectTournamentRoom rejoint la
+  // room si l'autre joueur l'a déjà créée sous ce code, sinon la crée en le
+  // réclamant (voir online/client.ts joinTournamentRoom). Aucun lookup
+  // roomTypeByCode ici : une room de tournoi n'existe peut-être pas encore
+  // (roomTypeByCode échouerait avant que quiconque ne l'ait créée), et son
+  // type est de toute façon toujours 'ronda'.
   const tournamentJoinedRef = useRef(false)
   useEffect(() => {
-    if (!tournamentMatchId || !tournamentOpponentUid || tournamentJoinedRef.current) return
+    if (!tournamentMatchId || !codeInput || tournamentJoinedRef.current) return
     tournamentJoinedRef.current = true
-    void game.connectTournamentMatch(username, tournamentMatchId, tournamentOpponentUid, !!tournamentIsFinal, myUid ?? undefined)
+    void game.connectTournamentRoom(
+      username, codeInput, tournamentMatchId, !!tournamentAsCreator, !!tournamentIsFinal, myUid ?? undefined,
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tournamentMatchId, tournamentOpponentUid, username, myUid, tournamentIsFinal])
+  }, [tournamentMatchId, codeInput, username, myUid, tournamentAsCreator, tournamentIsFinal])
 
   // Détection auto du type de room dès que le code est complet (6 caractères).
-  // Sans objet pour un match de tournoi (pas de code) — voir effet ci-dessus.
+  // Sans objet pour un match de tournoi (voir effet ci-dessus, qui gère son
+  // propre flux create-ou-join sans passer par roomTypeByCode).
   useEffect(() => {
     if (tournamentMatchId) return
     if (codeInput.length !== CODE_LENGTH) {
@@ -196,6 +202,21 @@ export function OnlineScreen({
           isGameOver={game.view.isGameOver}
         />
       </View>
+    )
+  }
+
+  // ── En attente, match de tournoi : lobby 10 min + forfait auto de l'absent ──
+  // Jamais l'écran "partage ce code" habituel : le code d'un match de
+  // tournoi est déjà assigné aux deux joueurs precis du bracket, le partager
+  // à un tiers serait un problème d'équité, pas juste hors-sujet.
+  if (tournamentMatchId && (connectionStatus === 'connecting' || connectionStatus === 'waiting')) {
+    return (
+      <TournamentWaitingScreen
+        matchId={tournamentMatchId}
+        isFinal={!!tournamentIsFinal}
+        waiting={connectionStatus === 'waiting'}
+        onLeave={() => { game.newGame(); router.replace('/tournament' as Href) }}
+      />
     )
   }
 
@@ -464,6 +485,76 @@ function WaitingScreen({
   )
 }
 
+// ── Lobby d'un match de tournoi : 10 min d'attente, forfait auto de l'absent ──
+
+function formatLobbyTime(sec: number): string {
+  const clamped = Math.max(0, sec)
+  return `${Math.floor(clamped / 60)}:${String(clamped % 60).padStart(2, '0')}`
+}
+
+function TournamentWaitingScreen({
+  matchId, isFinal, waiting, onLeave,
+}: {
+  matchId: string
+  isFinal: boolean
+  /** true tant que connectionStatus === 'waiting' (l'adversaire n'a pas
+   * encore rejoint) — false pendant 'connecting' (bref, avant même d'avoir
+   * rejoint SA PROPRE room). Le compte à rebours ne tourne que si true. */
+  waiting: boolean
+  onLeave: () => void
+}) {
+  const { t: tr } = useI18n()
+  const [remaining, setRemaining] = useState(TOURNAMENT_LOBBY_SECS)
+  const settledRef = useRef(false) // évite un double appel forfeit (auto + bouton)
+
+  useEffect(() => {
+    if (!waiting || settledRef.current) return
+    const id = setInterval(() => setRemaining((s) => Math.max(0, s - 1)), 1000)
+    return () => clearInterval(id)
+  }, [waiting])
+
+  useEffect(() => {
+    if (!waiting || remaining > 0 || settledRef.current) return
+    settledRef.current = true
+    void forfeitAbsent(matchId)
+      .catch((e) => console.error('[tournament] forfeitAbsent:', e))
+      .then(() => {
+        void AsyncStorage.setItem(TOURNAMENT_ADVANCE_KEY, JSON.stringify({
+          matchId, isFinal, goldWon: 0,
+        })).catch(() => {})
+        onLeave()
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waiting, remaining])
+
+  const cancelAndLose = async () => {
+    if (settledRef.current) return
+    settledRef.current = true
+    try { await forfeitSelf(matchId) } catch (e) { console.error('[tournament] forfeitSelf:', e) }
+    onLeave()
+  }
+
+  return (
+    <LinearGradient colors={[C.gradTop, C.gradBot]} style={s.root}>
+      <SafeAreaView style={s.safe} edges={['top', 'bottom']}>
+        <View style={s.header}>
+          <Text style={s.title}>RONDA</Text>
+        </View>
+
+        <View style={s.center}>
+          <Text style={s.tournamentLobbyTitle}>🏆 {tr('tournamentLobbyTitle')}</Text>
+          <Text style={s.tournamentLobbyCountdown}>{formatLobbyTime(remaining)}</Text>
+          <Text style={s.tournamentLobbySub}>{tr('tournamentLobbySub')}</Text>
+        </View>
+
+        <TouchableOpacity style={s.btnCancel} onPress={() => { void cancelAndLose() }} activeOpacity={0.8}>
+          <Text style={s.btnCancelTxt}>{tr('tournamentCancelLose')}</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </LinearGradient>
+  )
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
@@ -568,4 +659,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 6,
   },
   tournamentBadgeTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 12, color: C.ink, letterSpacing: 0.3 },
+
+  tournamentLobbyTitle: {
+    fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.bone, textAlign: 'center', paddingHorizontal: 20,
+  },
+  tournamentLobbyCountdown: { fontFamily: 'Cairo_600SemiBold', fontSize: 52, color: C.brass, letterSpacing: 2 },
+  tournamentLobbySub: {
+    fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.boneOff, textAlign: 'center', paddingHorizontal: 28,
+  },
 })

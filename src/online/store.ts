@@ -1,20 +1,23 @@
 import type { Room } from 'colyseus.js'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getAuth } from 'firebase/auth'
-import { firebaseApp } from '../firebase/config'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
 import {
-  joinOrCreate, createPrivate, joinByCode, joinTournamentMatch, getClient,
-  reportMatchWin, TOURNAMENT_ADVANCE_KEY,
+  joinOrCreate, createPrivate, joinByCode, joinTournamentRoom, getClient,
+  TOURNAMENT_ADVANCE_KEY,
 } from './client'
 import { invalidateLeaderboard } from './leaderboardCache'
 import { setActiveRoom, clearActiveRoom, addGold } from '../profile/profile'
 
-/** Contexte transmis par TournamentScreen.tsx (via OnlineScreen) quand la
- * partie qu'on rejoint est un match de bracket, pas une invitation classique. */
+/**
+ * Contexte transmis par TournamentScreen.tsx (via OnlineScreen) quand la
+ * partie qu'on rejoint est un match de bracket, pas une invitation classique.
+ * Uniquement pour la modale « tu avances/tu es champion » côté client — le
+ * résultat lui-même (qui gagne) est désormais tranché par le serveur
+ * (RondaRoom.finishGame → recordMatchWinner), plus besoin de connaître
+ * l'uid de l'adversaire ici.
+ */
 export interface TournamentContext {
   matchId: string
-  opponentUid: string
   isFinal: boolean
 }
 
@@ -199,28 +202,17 @@ function wireRoom(r: Room): void {
       // être crédité) → invalide pour forcer un refetch au prochain affichage.
       if (snapshot.bet > 0) invalidateLeaderboard()
 
-      // Match de tournoi : rapporte le résultat vu de mon côté (double-
-      // confirmation côté serveur — l'autre joueur fait le même appel du
-      // sien ; le bracket n'avance que si les deux concordent).
+      // Match de tournoi : le serveur a déjà tranché le résultat lui-même
+      // (RondaRoom.finishGame → recordMatchWinner, autoritaire, aucune
+      // confirmation client nécessaire) — on se contente ici de préparer la
+      // notif « tu avances / tu es champion » affichée par TournamentScreen
+      // au prochain focus (lue puis effacée là-bas, voir TOURNAMENT_ADVANCE_KEY).
       const tournament = snapshot.tournament
-      if (tournament && payload.winnerSeat != null) {
-        const myUid = getAuth(firebaseApp).currentUser?.uid ?? null
-        const mySeat = snapshot.mySeat
-        if (myUid && mySeat !== null) {
-          const iWon = payload.winnerSeat === mySeat
-          const winnerUid = iWon ? myUid : tournament.opponentUid
-          const loserUid = iWon ? tournament.opponentUid : myUid
-          void reportMatchWin(tournament.matchId, winnerUid, loserUid).catch((e) => {
-            console.error('[tournament] reportMatchWin:', e)
-          })
-          // Notif « tu avances / tu es champion » affichée par TournamentScreen
-          // au prochain focus — lu puis effacé là-bas (voir TOURNAMENT_ADVANCE_KEY).
-          if (iWon) {
-            void AsyncStorage.setItem(TOURNAMENT_ADVANCE_KEY, JSON.stringify({
-              matchId: tournament.matchId, isFinal: tournament.isFinal, goldWon: payload.goldWon ?? 0,
-            })).catch(() => {})
-          }
-        }
+      const mySeat = snapshot.mySeat
+      if (tournament && payload.winnerSeat != null && mySeat !== null && payload.winnerSeat === mySeat) {
+        void AsyncStorage.setItem(TOURNAMENT_ADVANCE_KEY, JSON.stringify({
+          matchId: tournament.matchId, isFinal: tournament.isFinal, goldWon: payload.goldWon ?? 0,
+        })).catch(() => {})
       }
     }
   })
@@ -286,16 +278,14 @@ export function connectFriendGuest(pseudo: string, code: string, bet = 0): Promi
   return connect(() => joinByCode(pseudo, code), bet)
 }
 /**
- * Rejoint (ou crée) un match de tournoi : voir joinTournamentMatch pour le
- * détail de l'appariement automatique par tournamentMatchId côté serveur.
+ * Rejoint (ou crée) la room d'un match de tournoi par son code — voir
+ * joinTournamentRoom pour le détail (rôle créateur/joiner assigné à l'avance
+ * via `asCreator`, pas un essai symétrique).
  */
-export function connectTournamentMatch(
-  pseudo: string, matchId: string, opponentUid: string, isFinal: boolean, uid?: string,
+export function connectTournamentRoom(
+  pseudo: string, code: string, matchId: string, asCreator: boolean, isFinal: boolean, uid?: string,
 ): Promise<void> {
-  return connect(
-    () => joinTournamentMatch(pseudo, matchId, uid), 0,
-    { matchId, opponentUid, isFinal },
-  )
+  return connect(() => joinTournamentRoom(pseudo, code, matchId, asCreator, uid), 0, { matchId, isFinal })
 }
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */

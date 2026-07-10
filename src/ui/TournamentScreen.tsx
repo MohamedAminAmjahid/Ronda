@@ -147,16 +147,17 @@ export function TournamentScreen({ onBack }: Props) {
     }
   }
 
-  // Aucun code à transmettre : l'appariement se fait automatiquement côté
-  // serveur (RondaRoom.filterBy(['tournamentMatchId']), voir online/store.ts
-  // connectTournamentMatch) — m.roomCode est purement informatif (affiché
-  // nulle part actuellement) et jamais utilisé pour rejoindre la partie.
+  // Le roomCode assigné par generateBracket est un vrai code de room. Le rôle
+  // créateur/joiner est assigné à l'avance (player1Uid crée toujours) plutôt
+  // que décidé par qui ouvre l'écran en premier — voir joinTournamentRoom
+  // (online/client.ts) pour la course évitée par ce choix déterministe.
   const handlePlay = (m: BracketMatch, isFinal: boolean) => {
-    if (!m.player1Uid || !m.player2Uid) return
+    if (!m.roomCode) return
+    const asCreator = m.player1Uid === myUid
     router.push(
-      `/online?mode=friend&tournamentMatchId=${encodeURIComponent(m.matchId)}` +
-      `&tp1=${encodeURIComponent(m.player1Uid)}&tp2=${encodeURIComponent(m.player2Uid)}` +
-      `&tFinal=${isFinal ? 1 : 0}` as Href,
+      `/online?code=${encodeURIComponent(m.roomCode)}&mode=friend` +
+      `&tournamentMatchId=${encodeURIComponent(m.matchId)}` +
+      `&tCreator=${asCreator ? 1 : 0}&tFinal=${isFinal ? 1 : 0}` as Href,
     )
   }
 

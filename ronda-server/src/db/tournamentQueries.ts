@@ -66,23 +66,43 @@ export interface TournamentMatch {
   status: MatchStatus
   deadline: Timestamp
   createdAt: Timestamp
-  /**
-   * Rapports de résultat par joueur (uid → uid du vainqueur qu'il déclare) —
-   * anti-triche : le match n'avance QUE quand les deux joueurs sont
-   * d'accord (voir reportMatchResult). Champ interne, hors de l'interface
-   * demandée mais nécessaire pour la double-confirmation de /report-win.
-   */
-  reports?: Record<string, string>
 }
 
 const MAX_PLAYERS = 16
-/** Durée accordée à un tour une fois les deux joueurs connus (v1 : fenêtre
- * fixe, pas de répartition fine sur le week-end vendredi→dimanche — à
- * affiner si besoin dans une prochaine itération du bracket). */
-const ROUND_DURATION_MS = 24 * 60 * 60 * 1000
 
 /** Répartition du prizePool : champion, finaliste, 2× demi-finalistes. */
 const PRIZE_SPLIT = { champion: 0.60, runnerUp: 0.25, semiFinalist: 0.075 }
+
+/**
+ * Fenêtres de match fixes du week-end (UTC), ancrées sur le lundi de la
+ * semaine courante (currentWeekStart()) — remplace l'ancienne fenêtre
+ * glissante de 24h "à partir de maintenant" par des horaires calendaires
+ * identiques pour tous les matches d'un même tour :
+ *   Round 1 (tous les tours SAUF les 2 derniers) : vendredi 20h → samedi 20h
+ *   Round 2 (avant-dernier tour)                  : samedi 20h → dimanche 20h
+ *   Finale (dernier tour)                          : dimanche 20h → 23h
+ * `roundNumber`/`totalRounds` déterminent la fenêtre par DISTANCE À LA
+ * FINALE plutôt qu'un round↔fenêtre fixe : un bracket à moins de 4 tours
+ * (effectif réduit) saute simplement les fenêtres les plus anciennes plutôt
+ * que de déborder sur une 4e fenêtre inexistante.
+ */
+function matchDeadline(totalRounds: number, roundNumber: number): Timestamp {
+  const monday = new Date(`${currentWeekStart()}T00:00:00Z`)
+  const at = (dayOffset: number, hour: number) => {
+    const d = new Date(monday)
+    d.setUTCDate(monday.getUTCDate() + dayOffset)
+    d.setUTCHours(hour, 0, 0, 0)
+    return d
+  }
+  const sat20 = at(5, 20) // samedi 20h UTC
+  const sun20 = at(6, 20) // dimanche 20h UTC
+  const sun23 = at(6, 23) // dimanche 23h UTC
+
+  const distanceFromFinal = totalRounds - roundNumber // 0 = finale, 1 = avant-dernier tour, 2+ = round 1
+  if (distanceFromFinal === 0) return Timestamp.fromDate(sun23)
+  if (distanceFromFinal === 1) return Timestamp.fromDate(sun20)
+  return Timestamp.fromDate(sat20)
+}
 
 function tournamentsCol() {
   return adminDb().collection('tournaments')
@@ -240,10 +260,10 @@ async function ensureBotProfile(bot: BotIdentity): Promise<void> {
 /**
  * Résout immédiatement tout match 'ready' opposant deux bots : aucun des deux
  * ne rejoindra jamais une vraie Room pour "jouer" — sans ce court-circuit, un
- * tel match resterait bloqué jusqu'au prochain passage de checkForfaits (24h,
- * voir ROUND_DURATION_MS). Cascade bornée au nombre de tours max (16 joueurs
- * → 4 tours) : résoudre un bot-vs-bot peut faire apparaître un AUTRE
- * bot-vs-bot au tour suivant.
+ * tel match resterait bloqué jusqu'à la fenêtre fixe du tour (voir
+ * matchDeadline) puis le prochain passage de checkForfaits. Cascade bornée au
+ * nombre de tours max (16 joueurs → 4 tours) : résoudre un bot-vs-bot peut
+ * faire apparaître un AUTRE bot-vs-bot au tour suivant.
  */
 async function resolveBotVsBotMatches(tournamentId: string): Promise<void> {
   for (let iter = 0; iter < 4; iter++) {
@@ -354,7 +374,7 @@ export async function generateBracket(tournamentId: string): Promise<void> {
       if (m.status === 'pending' && m.player1Uid && m.player2Uid) {
         m.status = 'ready'
         m.roomCode = generateCode()
-        m.deadline = Timestamp.fromMillis(Date.now() + ROUND_DURATION_MS)
+        m.deadline = matchDeadline(bracket.length, round.round)
       }
     }
   }
@@ -464,7 +484,7 @@ export async function recordMatchWinner(
       if (next.player1Uid && next.player2Uid) {
         next.status = 'ready'
         next.roomCode = generateCode()
-        next.deadline = Timestamp.fromMillis(Date.now() + ROUND_DURATION_MS)
+        next.deadline = matchDeadline(bracket.length, bracket[nextRoundIdx].round)
         tx.set(matchesCol().doc(next.matchId), {
           tournamentId, round: bracket[nextRoundIdx].round,
           player1Uid: next.player1Uid, player2Uid: next.player2Uid,
@@ -489,58 +509,40 @@ export async function recordMatchWinner(
     return { readyNext, participantNames: tData.participantNames ?? {} }
   })
 
-  // Notification best-effort, APRÈS le commit de la transaction — jamais À
-  // L'INTÉRIEUR : un retry de transaction (contention) renverrait sinon le
-  // même push plusieurs fois. Pas explicitement demandé pour les tours 2+
-  // (seul generateBracket → round 1 l'est), mais l'omettre laisserait les
-  // joueurs sans notification à partir des quarts de finale.
-  if (result.readyNext) {
+  // Le prochain match peut être bot-vs-bot (ex. deux forfaits d'humains
+  // absents dans des branches différentes du bracket) — résolu tout de suite,
+  // sinon bloqué jusqu'à la fenêtre fixe du tour puis checkForfaits.
+  if (result.readyNext && isBotUid(result.readyNext.player1Uid) && isBotUid(result.readyNext.player2Uid)) {
+    await resolveBotVsBotMatches(tournamentId)
+  } else if (result.readyNext) {
+    // Notification best-effort, APRÈS le commit de la transaction — jamais À
+    // L'INTÉRIEUR : un retry de transaction (contention) renverrait sinon le
+    // même push plusieurs fois. Pas explicitement demandé pour les tours 2+
+    // (seul generateBracket → round 1 l'est), mais l'omettre laisserait les
+    // joueurs sans notification à partir des quarts de finale. Un bot n'a ni
+    // compte ni appareil : jamais notifié.
     const { player1Uid, player2Uid, deadline } = result.readyNext
     const names = result.participantNames
     const d = deadline.toDate()
-    void notifyYourTurn(player1Uid, names[player2Uid] ?? 'Joueur', d)
-      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
-    void notifyYourTurn(player2Uid, names[player1Uid] ?? 'Joueur', d)
-      .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    if (!isBotUid(player1Uid)) {
+      void notifyYourTurn(player1Uid, names[player2Uid] ?? 'Joueur', d)
+        .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    }
+    if (!isBotUid(player2Uid)) {
+      void notifyYourTurn(player2Uid, names[player1Uid] ?? 'Joueur', d)
+        .catch((e) => console.error('[tournament] notifyYourTurn:', e))
+    }
   }
 }
 
-/**
- * Rapport de résultat par un des deux joueurs d'un match (anti-triche : le
- * match n'avance que quand les deux joueurs rapportent le MÊME vainqueur).
- * `reporterUid` doit être l'un des deux joueurs du match. En cas de désaccord
- * entre les deux rapports, le match reste en l'état (litige — hors scope de
- * cette itération : nécessiterait un arbitrage admin).
- */
-export async function reportMatchResult(
-  matchId: string, reporterUid: string, winnerUid: string,
-): Promise<'recorded' | 'waiting_opponent' | 'disputed'> {
-  if (!firebaseReady()) throw new Error('firebase_unavailable')
-  const matchRef = matchesCol().doc(matchId)
-  const snap = await matchRef.get()
-  if (!snap.exists) throw new Error('match_not_found')
-  const match = snap.data() as TournamentMatch
-  if (reporterUid !== match.player1Uid && reporterUid !== match.player2Uid) throw new Error('not_a_player')
-  if (winnerUid !== match.player1Uid && winnerUid !== match.player2Uid) throw new Error('invalid_winner')
-  if (match.status === 'done' || match.status === 'forfeit') return 'recorded' // déjà tranché
-
-  const reports = { ...(match.reports ?? {}), [reporterUid]: winnerUid }
-  await matchRef.set({ reports, status: 'playing' }, { merge: true })
-
-  const otherUid = reporterUid === match.player1Uid ? match.player2Uid : match.player1Uid
-  const otherReport = reports[otherUid]
-  if (!otherReport) return 'waiting_opponent'
-  if (otherReport !== winnerUid) return 'disputed'
-
-  await recordMatchWinner(matchId, winnerUid)
-  return 'recorded'
-}
 
 /**
  * Vérifie les matches 'ready' dont le deadline est dépassé sans vainqueur
  * déclaré : aucun signal de présence par match n'existe à ce stade (v1) pour
- * départager objectivement qui a fait forfait → tirage au sort du vainqueur
- * entre les deux joueurs plutôt que de bloquer le bracket indéfiniment.
+ * départager objectivement qui a fait forfait entre deux HUMAINS → tirage au
+ * sort. Si un seul des deux est un bot, l'humain gagne automatiquement (un
+ * bot ne peut jamais "se présenter" pour jouer, ce n'est donc jamais lui qui
+ * a fait défaut).
  */
 export async function checkForfaits(tournamentId: string): Promise<void> {
   if (!firebaseReady()) throw new Error('firebase_unavailable')
@@ -556,7 +558,11 @@ export async function checkForfaits(tournamentId: string): Promise<void> {
     if (m.status !== 'ready' && m.status !== 'playing') continue
     const deadlineMs = m.deadline?.toMillis?.() ?? 0
     if (!deadlineMs || deadlineMs > now) continue
-    const winnerUid = Math.random() < 0.5 ? m.player1Uid : m.player2Uid
+    const p1Bot = isBotUid(m.player1Uid)
+    const p2Bot = isBotUid(m.player2Uid)
+    const winnerUid = p1Bot === p2Bot
+      ? (Math.random() < 0.5 ? m.player1Uid : m.player2Uid) // deux humains OU deux bots → tirage au sort
+      : (p1Bot ? m.player2Uid : m.player1Uid) // un seul bot → l'humain gagne
     await recordMatchWinner(doc.id, winnerUid, true)
   }
 }

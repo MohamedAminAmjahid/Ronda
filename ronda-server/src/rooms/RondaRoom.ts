@@ -15,7 +15,8 @@ import type {
   Value,
 } from '../engine/types'
 import { recordGame, touchPlayer, getStats, addWageredGold } from '../db/queries'
-import { generateCode, registerCode, unregisterCode } from './registry'
+import { recordMatchWinner } from '../db/tournamentQueries'
+import { generateCode, registerCode, unregisterCode, resolveCode } from './registry'
 
 // ── Schéma Colyseus (état PUBLIC, identique aux deux joueurs) ─────────────────
 
@@ -79,6 +80,10 @@ export class RondaRoom extends Room<RondaState> {
   /** sessionId du client occupant chaque siège (null si libre / déconnecté). */
   private sessionBySeat: [string | null, string | null] = [null, null]
   private pseudoBySeat: [string, string] = ['', '']
+  /** uid Firebase par siège (vide si invité non connecté) — nécessaire pour
+   * recordMatchWinner (match de tournoi), qui a besoin d'un uid, pas d'un
+   * pseudo. Absent des parties non-tournoi (jamais lu dans ce cas). */
+  private uidBySeat: [string, string] = ['', '']
   private dealConfirmed: [boolean, boolean] = [false, false]
   private startedAt = 0
   private recorded = false
@@ -95,23 +100,27 @@ export class RondaRoom extends Room<RondaState> {
   private autoSkipCount: [number, number]             = [0, 0]
 
   /** Présent seulement pour un match issu du bracket d'un tournoi hebdomadaire
-   * — voir gameServer.define('ronda', RondaRoom).filterBy(['tournamentMatchId'])
-   * dans index.ts : deux joueurs qui joinOrCreate() avec le MÊME matchId sont
-   * automatiquement appariés dans la même room (aucun code à échanger), sans
-   * quoi le roomCode purement cosmétique généré par tournamentQueries.ts
-   * (generateCode(), jamais enregistré dans le registre de rooms réel) ne
-   * correspondrait jamais à une vraie room Colyseus. */
+   * (voir tournamentQueries.ts) — permet à finishGame() de rapporter le
+   * résultat via recordMatchWinner() dès que la partie se termine, sans
+   * confirmation côté client (le serveur Colyseus est déjà autoritaire). */
   private tournamentMatchId: string | null = null
 
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean; bet?: number; tournamentMatchId?: string }): void {
+  onCreate(options: { private?: boolean; bet?: number; tournamentMatchId?: string; code?: string }): void {
     this.state = new RondaState()
     this.maxClients = 2
     this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
     this.tournamentMatchId = options?.tournamentMatchId ?? null
 
-    const code = generateCode()
+    // Match de tournoi : le premier joueur à ouvrir l'écran crée la room et
+    // "réclame" le roomCode déjà assigné au match par generateBracket() (au
+    // lieu d'un code aléatoire) — le second le rejoint via ce même code
+    // (joinByCode échoue d'abord côté client, qui bascule alors sur create).
+    // resolveCode() protège contre une collision improbable avec un code déjà
+    // pris (retombe sur generateCode() dans ce cas).
+    const desired = options?.code?.trim().toUpperCase()
+    const code = desired && !resolveCode(desired) ? desired : generateCode()
     this.state.code = code
     this.setMetadata({ code })
     registerCode(code, this.roomId, 'ronda')
@@ -149,7 +158,7 @@ export class RondaRoom extends Room<RondaState> {
     })
   }
 
-  onJoin(client: Client, options: { pseudo: string; bet?: number }): void {
+  onJoin(client: Client, options: { pseudo: string; bet?: number; uid?: string }): void {
     if (this.state.phase !== 'WAITING') {
       throw new Error('La partie a déjà commencé.')
     }
@@ -168,6 +177,7 @@ export class RondaRoom extends Room<RondaState> {
 
     this.sessionBySeat[seat] = client.sessionId
     this.pseudoBySeat[seat] = pseudo
+    this.uidBySeat[seat] = options?.uid ?? ''
     touchPlayer(pseudo)
 
     const ps = new PlayerSchema()
@@ -454,6 +464,17 @@ export class RondaRoom extends Room<RondaState> {
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'ronda' })
       void addWageredGold(winnerPseudo, this.bet, 'ronda').catch((e) =>
         console.error('[leaderboard] addWageredGold error:', e))
+    }
+
+    // Match de tournoi : le serveur est déjà autoritaire sur le résultat —
+    // rapporte directement le vainqueur (uid, pas pseudo) au bracket, sans
+    // confirmation client (contrairement à l'ancien reportMatchWin, supprimé).
+    if (this.tournamentMatchId && winnerSeat !== null) {
+      const winnerUid = this.uidBySeat[winnerSeat]
+      if (winnerUid) {
+        void recordMatchWinner(this.tournamentMatchId, winnerUid).catch((e) =>
+          console.error('[tournament] recordMatchWinner:', e))
+      }
     }
 
     this.broadcast('game_over', {
