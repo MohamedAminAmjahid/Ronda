@@ -9,6 +9,7 @@ import {
   type MetricKey, type TrophyEntry, type TrophiesData,
 } from '../online/trophiesCache'
 import { getUserById } from '../firebase/firestore'
+import { countryLabel } from '../data/countries'
 import { useI18n } from '../i18n/useI18n'
 
 const C = {
@@ -29,7 +30,10 @@ interface CardData {
   meOutsideTop: Entry | null   // « moi », uniquement si absent du top (scope global)
 }
 
-const EMPTY_DATA: TrophiesData = { global: emptyTrophyEntries(), friends: emptyTrophyEntries(), hasFriends: false }
+const EMPTY_DATA: TrophiesData = {
+  global: emptyTrophyEntries(), friends: emptyTrophyEntries(), hasFriends: false,
+  cityTop: [], countryTop: [], myCity: '', myCountry: '',
+}
 
 interface Props {
   onBack: () => void
@@ -44,6 +48,7 @@ export function TrophiesScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<TrophiesData>(EMPTY_DATA)
   const [seeAll, setSeeAll] = useState<MetricKey | null>(null)
+  const [seeAllGeo, setSeeAllGeo] = useState<'city' | 'country' | null>(null)
   const [selectedUid, setSelectedUid] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string | null>(null)
 
@@ -97,6 +102,13 @@ export function TrophiesScreen({ onBack }: Props) {
     const meEntry = !inList ? data.friends[metric].find((e) => e.uid === myUid) ?? null : null
     return { entries, meOutsideTop: meEntry }
   }
+
+  // Cartes géo (« Meilleur de ma ville/mon pays ») — pas de variante « amis »
+  // (portée toujours globale), donc en dehors du mécanisme dataFor/MetricKey.
+  const geoFormat = (n: number): string => t('trophyGoldValue').replace('{n}', String(n))
+  const geoDataFor = (metric: 'city' | 'country'): CardData => ({
+    entries: metric === 'city' ? data.cityTop : data.countryTop, meOutsideTop: null,
+  })
 
   const openProfile = (uid: string, username: string) => {
     setSelectedUid(uid)
@@ -162,6 +174,29 @@ export function TrophiesScreen({ onBack }: Props) {
               />
             ))}
 
+            {/* ── Meilleur de ma ville / mon pays (or) ─────────────────── */}
+            {/* Portée toujours globale (pas de variante « amis », voir
+                trophiesCache.ts) — masquées en scope 'friends' pour ne pas
+                afficher des données globales sous un onglet « Amis ». */}
+            {scope === 'global' && !!data.myCity && (
+              <SummaryCard
+                icon="🗺️"
+                title={t('trophyCityBest').replace('{place}', data.myCity)}
+                data={geoDataFor('city')}
+                format={geoFormat}
+                onPress={() => setSeeAllGeo('city')}
+              />
+            )}
+            {scope === 'global' && !!data.myCountry && (
+              <SummaryCard
+                icon="🌍"
+                title={t('trophyCountryBest').replace('{place}', countryLabel(data.myCountry))}
+                data={geoDataFor('country')}
+                format={geoFormat}
+                onPress={() => setSeeAllGeo('country')}
+              />
+            )}
+
             {/* ── Mes tournois (hebdomadaires) ─────────────────────────── */}
             <View style={s.tournamentSection}>
               <Text style={s.tournamentSectionTitle}>{t('myTournaments')}</Text>
@@ -195,6 +230,19 @@ export function TrophiesScreen({ onBack }: Props) {
           />
         )
       })()}
+
+      {seeAllGeo && (
+        <SeeAllModal
+          title={seeAllGeo === 'city'
+            ? `🗺️ ${t('trophyCityBest').replace('{place}', data.myCity)}`
+            : `🌍 ${t('trophyCountryBest').replace('{place}', countryLabel(data.myCountry))}`}
+          data={geoDataFor(seeAllGeo)}
+          format={geoFormat}
+          myUid={myUid}
+          onPressRow={openProfile}
+          onClose={() => setSeeAllGeo(null)}
+        />
+      )}
 
       <PlayerProfileModal
         visible={selectedUid !== null}

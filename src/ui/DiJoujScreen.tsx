@@ -322,7 +322,7 @@ function LocalGame({ onBack }: { onBack: () => void }) {
       // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
       // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
       if (won && stakeBet > 0 && botName) {
-        void recordLeaderboardScore(username, stakeBet, 'dijouj')
+        void recordLeaderboardScore(username, stakeBet, 'dijouj', myUid ?? undefined)
         invalidateLeaderboard() // force un refetch au prochain affichage
       }
       const after = getProfile()

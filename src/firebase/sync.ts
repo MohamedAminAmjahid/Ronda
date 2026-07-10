@@ -9,6 +9,7 @@ import { preloadConversations } from '../online/messagesCache'
 import {
   getProfile, loadProfile, setUsername, setGold, setUsernameChanges, setGoldHistoryPublicLocal,
   setStatsPublicLocal, setInvisibleModeLocal, setStatsLocal, setCosmeticsLocal, setXpLevelLocal, setAvatarLocal,
+  setCountryLocal, setCityLocal,
 } from '../profile/profile'
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
@@ -50,7 +51,7 @@ export function useFirebaseProfileSync(): void {
           username, gold, usernameChanges, goldHistoryPublic, statsPublic, invisibleMode,
           table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames,
           avatarType, avatarEmoji, avatarImage,
-          xp, level,
+          xp, level, country, city,
           gamesPlayed, gamesWon, rondaPlayed, rondaWon, dijoujPlayed, dijoujWon,
         } = await createOrUpdateUser(user, {
           username: p.username,
@@ -74,6 +75,8 @@ export function useFirebaseProfileSync(): void {
           avatarImage: p.avatarImage,
           xp: p.xp,
           level: p.level,
+          country: p.country,
+          city: p.city,
         })
         if (!cancelled) {
           // Firestore fait autorité : on n'écrase le local QUE si la valeur diffère.
@@ -88,6 +91,8 @@ export function useFirebaseProfileSync(): void {
           setCosmeticsLocal({ table, ownedTables, cardBack, ownedBacks, avatarFrame, ownedFrames })
           setAvatarLocal(avatarType, avatarEmoji, avatarImage)
           setXpLevelLocal(xp, level)
+          setCountryLocal(country)
+          setCityLocal(city)
         }
 
         // Préchauffe le cache du classement hebdo de la ligue du joueur, en

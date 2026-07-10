@@ -11,6 +11,7 @@ import {
   updateInvisibleMode as firestoreUpdateInvisibleMode,
   updateCosmetics as firestoreUpdateCosmetics,
   updateXpLevel as firestoreUpdateXpLevel,
+  updateLocation as firestoreUpdateLocation,
   applyReferral, REFERRAL_REWARD,
 } from '../firebase/firestore'
 import { apiGift, apiTransfer, notifyGold } from '../online/serverApi'
@@ -74,6 +75,10 @@ export interface Profile {
   ownedFrames: string[]
   xp: number
   level: number
+  /** Code pays (voir src/data/countries.ts, ex. 'MA') — classement géographique. */
+  country: string
+  /** Ville en texte libre — classement géographique. */
+  city: string
 }
 
 /** Partie en ligne en cours, persistée pour permettre la reconnexion. */
@@ -113,6 +118,8 @@ let profile: Profile = {
   ownedFrames: [DEFAULT_FRAME],
   xp: 0,
   level: 1,
+  country: '',
+  city: '',
 }
 let loaded = false
 let loadingPromise: Promise<Profile> | null = null
@@ -177,6 +184,8 @@ export function loadProfile(): Promise<Profile> {
           ownedFrames: Array.isArray(parsed.ownedFrames) ? parsed.ownedFrames : [DEFAULT_FRAME],
           xp:    typeof parsed.xp === 'number' ? parsed.xp : 0,
           level: typeof parsed.level === 'number' ? parsed.level : 1,
+          country: typeof parsed.country === 'string' ? parsed.country : '',
+          city:    typeof parsed.city === 'string'    ? parsed.city    : '',
         }
       } else {
         profile = {
@@ -192,6 +201,7 @@ export function loadProfile(): Promise<Profile> {
           table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
           avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
           xp: 0, level: 1,
+          country: '', city: '',
         }
       }
     } catch {
@@ -208,6 +218,7 @@ export function loadProfile(): Promise<Profile> {
         table: DEFAULT_TABLE, ownedTables: [DEFAULT_TABLE], cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
         avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
         xp: 0, level: 1,
+        country: '', city: '',
       }
     }
     loaded = true
@@ -448,6 +459,43 @@ export function setStatsPublic(value: boolean): void {
   void persist()
   const uid = getAuth(firebaseApp).currentUser?.uid
   if (uid) void firestoreUpdateStatsPublic(uid, value).catch(() => {})
+  emit()
+}
+
+/** Change le pays (local + Firestore). Ville remise à vide si le pays change
+ * (une ville ne veut plus rien dire pour un autre pays qu'avant). */
+export function setCountry(value: string): void {
+  if (value === profile.country) return
+  profile = { ...profile, country: value, city: '' }
+  void persist()
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (uid) void firestoreUpdateLocation(uid, value, '').catch(() => {})
+  emit()
+}
+
+/** Applique le pays Firebase au login (local uniquement, sans ré-écriture). */
+export function setCountryLocal(value: string): void {
+  if (value === profile.country) return
+  profile = { ...profile, country: value }
+  void persist()
+  emit()
+}
+
+/** Change la ville (local + Firestore). */
+export function setCity(value: string): void {
+  if (value === profile.city) return
+  profile = { ...profile, city: value }
+  void persist()
+  const uid = getAuth(firebaseApp).currentUser?.uid
+  if (uid) void firestoreUpdateLocation(uid, profile.country, value).catch(() => {})
+  emit()
+}
+
+/** Applique la ville Firebase au login (local uniquement, sans ré-écriture). */
+export function setCityLocal(value: string): void {
+  if (value === profile.city) return
+  profile = { ...profile, city: value }
+  void persist()
   emit()
 }
 
@@ -753,6 +801,7 @@ export async function resetProfile(): Promise<void> {
     cardBack: DEFAULT_BACK, ownedBacks: [DEFAULT_BACK],
     avatarFrame: DEFAULT_FRAME, ownedFrames: [DEFAULT_FRAME],
     xp: 0, level: 1,
+    country: '', city: '',
   }
   // Réinitialise les flags de chargement pour que loadProfile() fonctionne proprement
   // si l'utilisateur se reconnecte dans la même session.

@@ -676,7 +676,7 @@ export function GameScreen({
         // Partie misée vs bot (hors-ligne, aucune Room côté serveur) : sans cet
         // appel, la victoire ne contribuerait jamais au classement hebdomadaire.
         if (won && stakeBet > 0 && rawBotName) {
-          void recordLeaderboardScore(username, stakeBet, 'ronda')
+          void recordLeaderboardScore(username, stakeBet, 'ronda', myUid ?? undefined)
           invalidateLeaderboard() // force un refetch au prochain affichage
         }
         setWinReward(goldReward)

@@ -153,6 +153,35 @@ export function getUserLeague(username: string): League {
   return (LEAGUES as readonly string[]).includes(league ?? '') ? (league as League) : 'Bronze'
 }
 
+interface UserGeo { country: string; city: string }
+
+/**
+ * Pays/ville d'un joueur (Admin SDK, users/{uid}), pour dénormalisation dans
+ * weekly_scores. Préfère l'uid (lecture directe par id) ; à défaut (repli
+ * bot/offline, voir /leaderboard/record), cherche par usernameLower — best
+ * effort, ne lève jamais (une leaderboard sans filtre géo reste fonctionnelle).
+ */
+async function getUserGeo(uid?: string, username?: string): Promise<UserGeo> {
+  const empty: UserGeo = { country: '', city: '' }
+  if (!firebaseReady()) return empty
+  try {
+    if (uid) {
+      const snap = await adminDb().collection('users').doc(uid).get()
+      const d = snap.data()
+      return { country: (d?.country as string) ?? '', city: (d?.city as string) ?? '' }
+    }
+    if (username) {
+      const snap = await adminDb().collection('users')
+        .where('usernameLower', '==', username.toLowerCase()).limit(1).get()
+      const d = snap.docs[0]?.data()
+      return { country: (d?.country as string) ?? '', city: (d?.city as string) ?? '' }
+    }
+  } catch (e) {
+    console.error('[leaderboard] getUserGeo error:', e)
+  }
+  return empty
+}
+
 /**
  * Incrémente l'or misé d'un joueur pour la semaine courante, dans Firestore
  * (SQLite sur Railway n'a pas de volume persistant → table vidée à chaque
@@ -161,14 +190,17 @@ export function getUserLeague(username: string): League {
  * perdrait la répartition par jeu (un des deux champs `game`/`gold` écraserait
  * l'autre), qui alimente rondaGold/dijoujGold affichés dans le classement.
  * league reste lu depuis SQLite (league_history, inchangé).
+ * `uid` (optionnel — les Rooms Colyseus le connaissent, /leaderboard/record
+ * pour les parties bot/offline non) sert à dénormaliser country/city sur le
+ * doc, pour le filtrage géographique du classement (getWeeklyLeaderboard).
  */
 export async function addWageredGold(
-  username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda',
+  username: string, amount: number, game: 'ronda' | 'dijouj' = 'ronda', uid?: string,
 ): Promise<void> {
   const week = currentWeekStart()
   // Log très visible en tête de fonction — tire à CHAQUE appel, avant tout
   // check, pour distinguer "jamais appelée" de "appelée mais no-op".
-  console.log('🏆 [leaderboard] addWageredGold APPELÉ:', { username, amount, game, week })
+  console.log('🏆 [leaderboard] addWageredGold APPELÉ:', { username, amount, game, week, uid })
   if (!firebaseReady()) {
     // Firestore Admin non initialisé (credentials absents) → no-op silencieux
     // sans ce log, ce qui ressemble exactement à "le classement ne se met
@@ -178,13 +210,15 @@ export async function addWageredGold(
   }
   if (amount <= 0) return
   const league = getUserLeague(username)
-  console.log('[leaderboard] addWageredGold:', { username, week, game, amount, league })
+  const geo = await getUserGeo(uid, username)
+  console.log('[leaderboard] addWageredGold:', { username, week, game, amount, league, geo })
   const docId = `${week}_${username}_${game}`
   try {
     // set({merge:true}) + increment() en un seul appel atomique — crée le doc
     // s'il n'existe pas encore, sinon incrémente `gold` sans écraser le reste.
     await adminDb().collection('weekly_scores').doc(docId).set({
       username, week, game, league,
+      country: geo.country, city: geo.city,
       updatedAt: FieldValue.serverTimestamp(),
       gold: FieldValue.increment(amount),
     }, { merge: true })
@@ -193,11 +227,17 @@ export async function addWageredGold(
   }
 }
 
-interface WeeklyScoreDoc { username: string; week: string; game: string; gold?: number; league: string }
+interface WeeklyScoreDoc {
+  username: string; week: string; game: string; gold?: number; league: string
+  country?: string; city?: string
+}
+
+export interface GeoFilter { country?: string; city?: string }
 
 /**
  * Classement hebdomadaire agrégé (Ronda + Di Jouj) pour une ligue, depuis
- * Firestore.
+ * Firestore, avec filtre géographique optionnel (pays et/ou ville — voir
+ * GeoFilter).
  *
  * On NE filtre PAS la requête Firestore sur le champ `league` du doc : ce
  * champ est figé au moment du pari (addWageredGold ne le met à jour qu'à
@@ -207,25 +247,34 @@ interface WeeklyScoreDoc { username: string; week: string; game: string; gold?: 
  * C'est le même bug que l'ancienne requête SQL corrigeait déjà via un JOIN
  * sur league_history — on reproduit la même correction ici : on récupère tous
  * les docs de la semaine, on agrège par joueur, puis on filtre sur la ligue
- * COURANTE (getUserLeague, toujours en SQLite).
+ * COURANTE (getUserLeague, toujours en SQLite). Le filtre géo suit la même
+ * logique (filtré en mémoire après agrégation, pas via where() Firestore) :
+ * ni composite index à créer (aucun firestore.indexes.json dans ce repo, les
+ * règles/index sont gérés hors-dépôt via la Console Firebase), ni risque
+ * d'incohérence si country/city diffère entre le doc ronda et dijouj d'un
+ * même joueur (cas rarissime : changement de ville en cours de semaine).
  */
-export async function getWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
+export async function getWeeklyLeaderboard(league: string, geo?: GeoFilter): Promise<WeeklyEntry[]> {
   if (!firebaseReady()) return []
   const week = currentWeekStart()
   const snap = await adminDb().collection('weekly_scores').where('week', '==', week).get()
 
-  const totals = new Map<string, { rondaGold: number; dijoujGold: number }>()
+  const totals = new Map<string, { rondaGold: number; dijoujGold: number; country: string; city: string }>()
   for (const doc of snap.docs) {
     const d = doc.data() as WeeklyScoreDoc
-    const acc = totals.get(d.username) ?? { rondaGold: 0, dijoujGold: 0 }
+    const acc = totals.get(d.username) ?? { rondaGold: 0, dijoujGold: 0, country: '', city: '' }
     if (d.game === 'ronda') acc.rondaGold += d.gold ?? 0
     else if (d.game === 'dijouj') acc.dijoujGold += d.gold ?? 0
+    if (d.country) acc.country = d.country
+    if (d.city) acc.city = d.city
     totals.set(d.username, acc)
   }
 
   const entries: WeeklyEntry[] = []
   for (const [username, g] of totals) {
     if (getUserLeague(username) !== league) continue
+    if (geo?.country && g.country !== geo.country) continue
+    if (geo?.city && g.city !== geo.city) continue
     entries.push({
       username, week_start: week,
       totalGold: g.rondaGold + g.dijoujGold,

@@ -20,6 +20,7 @@ import {
   incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
 } from '../profile/profile'
 import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
+import { COUNTRIES, countryFlag, countryLabel } from '../data/countries'
 import { Svg, Circle } from 'react-native-svg'
 
 // ── Palette ───────────────────────────────────────────────────────────────────
@@ -250,10 +251,11 @@ export function ProfileScreen() {
     usernameChanges,
     avatarType, avatarEmoji, avatarImage,
     goldHistoryPublic, statsPublic, invisibleMode, avatarFrame,
-    xp, level,
+    xp, level, country, city,
     setUsername, removeGold,
     setAvatarEmoji, setAvatarImage, clearAvatar,
     setGoldHistoryPublic, setStatsPublic, setInvisibleMode,
+    setCountry, setCity,
   } = useProfile()
   const { user }   = useAuth()
   const { t }      = useI18n()
@@ -267,6 +269,8 @@ export function ProfileScreen() {
   const [avatarModal, setAvatarModal]           = useState(false)
   const [avatarTab, setAvatarTab]               = useState<'emoji' | 'photo'>('emoji')
   const [photoLoading, setPhotoLoading]         = useState(false)
+  const [countryModal, setCountryModal]         = useState(false)
+  const [cityDraft, setCityDraft]               = useState(city)
 
   // ── Parrainage ──────────────────────────────────────────────────────────
   const [referralCount, setReferralCount] = useState(0)
@@ -290,6 +294,17 @@ export function ProfileScreen() {
     })
     return () => { cancelled = true }
   }, [user])
+
+  // Le brouillon de ville n'est resynchronisé depuis le profil que lorsqu'il
+  // change hors saisie (ex. chargé depuis Firestore après le montage) — setCity
+  // n'est appelé qu'au blur (voir saveCity), jamais à chaque frappe.
+  useEffect(() => { setCityDraft(city) }, [city])
+
+  const saveCity = () => {
+    const clean = cityDraft.trim().slice(0, 40)
+    setCityDraft(clean)
+    if (clean !== city) setCity(clean)
+  }
 
   const [showReferrals, setShowReferrals] = useState(false)
   const [refData, setRefData] = useState<{ completed: ReferralEntry[]; pending: ReferralEntry[] }>({ completed: [], pending: [] })
@@ -462,6 +477,31 @@ export function ProfileScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal sélecteur de pays ────────────────────────────── */}
+      <Modal visible={countryModal} transparent animationType="fade" onRequestClose={() => setCountryModal(false)}>
+        <View style={s.backdrop}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>{t('countryLabel')}</Text>
+            <ScrollView style={s.countryList}>
+              {COUNTRIES.map((c) => (
+                <TouchableOpacity
+                  key={c.code}
+                  style={[s.countryRow, c.code === country && s.countryRowActive]}
+                  onPress={() => { setCountry(c.code); setCountryModal(false) }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={s.countryFlag}>{c.flag}</Text>
+                  <Text style={s.countryRowTxt}>{c.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={s.modalCancel} onPress={() => setCountryModal(false)}>
+              <Text style={s.modalCancelTxt}>{t('cancel')}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -724,6 +764,34 @@ export function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Localisation (classement géographique) ─────────────── */}
+        <View style={s.card}>
+          <Text style={s.cardLabel}>{t('locationLabel')}</Text>
+          <TouchableOpacity style={s.locationRow} onPress={() => setCountryModal(true)} activeOpacity={0.8}>
+            <Text style={s.toggleLabel}>{t('countryLabel')}</Text>
+            <View style={s.locationValue}>
+              <Text style={s.locationValueTxt}>
+                {country ? `${countryFlag(country)} ${countryLabel(country)}` : t('countryNotSet')}
+              </Text>
+              <Text style={s.chevron}>›</Text>
+            </View>
+          </TouchableOpacity>
+          <View style={s.cityRow}>
+            <Text style={s.toggleLabel}>{t('cityLabel')}</Text>
+            <TextInput
+              style={s.cityInput}
+              value={cityDraft}
+              onChangeText={setCityDraft}
+              onEndEditing={saveCity}
+              onBlur={saveCity}
+              placeholder={t('cityPlaceholder')}
+              placeholderTextColor={C.boneOff}
+              maxLength={40}
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+
         {/* ── Compte ────────────────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>Compte</Text>
@@ -938,6 +1006,24 @@ const s = StyleSheet.create({
   toggleLabel: { flex: 1, fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.bone, paddingRight: 12 },
   toggleDesc: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff, marginTop: 2 },
   toggleHint: { fontFamily: 'Cairo_600SemiBold', fontSize: 16, color: C.boneOff },
+  locationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  locationValue: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  locationValueTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.brass },
+  chevron: { fontFamily: 'Cairo_600SemiBold', fontSize: 18, color: C.boneOff },
+  cityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, gap: 12 },
+  cityInput: {
+    flex: 1, textAlign: 'right', backgroundColor: 'rgba(0,0,0,0.22)', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8, fontFamily: 'Cairo_400Regular', fontSize: 14, color: C.bone,
+    borderWidth: 1, borderColor: 'rgba(201,162,39,0.20)',
+  },
+  countryList: { maxHeight: 320 },
+  countryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: C.ghost,
+  },
+  countryRowActive: { backgroundColor: 'rgba(201,162,39,0.10)', borderRadius: 8 },
+  countryFlag: { fontSize: 22 },
+  countryRowTxt: { fontFamily: 'Cairo_400Regular', fontSize: 15, color: C.bone },
   shopBtn:    {
     backgroundColor: C.brassDim, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10,
     borderWidth: 1, borderColor: C.brassBorder,

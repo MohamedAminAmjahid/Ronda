@@ -375,8 +375,9 @@ export class DiJoujRoom extends Room<DiJoujState> {
     // bet = mise misée PAR JOUEUR (pas le pot total — goldWon reste this.bet * 2,
     // c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
+      const winnerUid = winnerSeat !== undefined ? this.uidBySeat[winnerSeat] : ''
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'dijouj' })
-      void addWageredGold(winnerPseudo, this.bet, 'dijouj').catch((e) =>
+      void addWageredGold(winnerPseudo, this.bet, 'dijouj', winnerUid || undefined).catch((e) =>
         console.error('[leaderboard] addWageredGold error:', e))
     }
 

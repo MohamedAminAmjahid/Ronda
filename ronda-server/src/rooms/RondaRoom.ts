@@ -461,8 +461,9 @@ export class RondaRoom extends Room<RondaState> {
     // bet = mise misée PAR JOUEUR (pas le pot total — goldWon ci-dessous reste
     // this.bet * 2, c'est bien le gain réel crédité côté client).
     if (this.bet > 0 && winnerPseudo) {
+      const winnerUid = winnerSeat !== null ? this.uidBySeat[winnerSeat] : ''
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'ronda' })
-      void addWageredGold(winnerPseudo, this.bet, 'ronda').catch((e) =>
+      void addWageredGold(winnerPseudo, this.bet, 'ronda', winnerUid || undefined).catch((e) =>
         console.error('[leaderboard] addWageredGold error:', e))
     }
 

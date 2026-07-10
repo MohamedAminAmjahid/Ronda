@@ -18,6 +18,15 @@ const MIN_GAMES_FOR_WINRATE = 10
 // approximation assumée, pas un vrai top exhaustif.
 const WINRATE_POOL_SIZE = 200
 
+// Même approximation pour « Meilleur de ma ville/mon pays » : filtré parmi le
+// top 200 (or) plutôt qu'un vrai scan where(city==)+orderBy(gold) — une telle
+// requête combinerait égalité sur un champ et tri sur un autre, ce qui exige
+// un index composite Firestore ; ce repo ne contient ni firestore.rules ni
+// firestore.indexes.json (règles/index gérés hors-dépôt, Console Firebase),
+// donc pas de moyen de garantir qu'un tel index existe. Un joueur au-dessus
+// du reste de sa ville/pays mais hors du top 200 global ne sera pas détecté.
+const GEO_POOL_SIZE = 200
+
 export type MetricKey =
   | 'level' | 'gold' | 'gamesWon' | 'currentStreak'
   | 'gamesPlayed' | 'winRate' | 'weeklyWagered' | 'friendCount'
@@ -35,6 +44,11 @@ export interface TrophiesData {
   global:     Record<MetricKey, TrophyEntry[]>
   friends:    Record<MetricKey, TrophyEntry[]>
   hasFriends: boolean
+  /** Classement (or) filtré à ma ville/mon pays — vide si non renseigné. */
+  cityTop:    TrophyEntry[]
+  countryTop: TrophyEntry[]
+  myCity:     string
+  myCountry:  string
 }
 
 interface StatShape {
@@ -91,7 +105,7 @@ function emptyEntries(): Record<MetricKey, TrophyEntry[]> {
 }
 
 async function fetchTrophiesData(myUid: string | null): Promise<TrophiesData> {
-  const [level, gold, gamesWon, currentStreak, gamesPlayedPool, friendCount, weeklyTop, mine, friends] =
+  const [level, gold, gamesWon, currentStreak, gamesPlayedPool, friendCount, geoPool, weeklyTop, mine, friends] =
     await Promise.all([
       getTopUsers('level'),
       getTopUsers('gold'),
@@ -99,6 +113,7 @@ async function fetchTrophiesData(myUid: string | null): Promise<TrophiesData> {
       getTopUsers('currentStreak'),
       getTopUsers('gamesPlayed', WINRATE_POOL_SIZE),
       getTopUsers('friendCount'),
+      getTopUsers('gold', GEO_POOL_SIZE),
       getWeeklyWageredLeaderboard(50),
       myUid ? getUserById(myUid) : Promise.resolve(null),
       myUid ? getFriends(myUid) : Promise.resolve<FriendDoc[]>([]),
@@ -149,7 +164,22 @@ async function fetchTrophiesData(myUid: string | null): Promise<TrophiesData> {
     friendsOut[metric] = list
   }
 
-  return { global, friends: friendsOut, hasFriends: friends.length > 0 }
+  // Classement géo (or), filtré à ma ville/pays parmi le top 200 global — voir
+  // GEO_POOL_SIZE. Déjà trié par gold décroissant (orderBy Firestore), le
+  // filtre préserve cet ordre.
+  const myCity = mine?.city ?? ''
+  const myCountry = mine?.country ?? ''
+  const cityTop = myCity
+    ? geoPool.filter((u) => u.city === myCity).map((u) => toEntry(u, u.gold))
+    : []
+  const countryTop = myCountry
+    ? geoPool.filter((u) => u.country === myCountry).map((u) => toEntry(u, u.gold))
+    : []
+
+  return {
+    global, friends: friendsOut, hasFriends: friends.length > 0,
+    cityTop, countryTop, myCity, myCountry,
+  }
 }
 
 // ── Store ─────────────────────────────────────────────────────────────────────

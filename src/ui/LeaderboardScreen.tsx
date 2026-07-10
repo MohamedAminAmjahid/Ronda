@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import { useProfile } from '../profile/useProfile'
 import { useAuth } from '../firebase/auth'
-import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry } from '../online/client'
+import { fetchWeeklyLeaderboard, fetchUserLeague, type WeeklyEntry, type GeoFilter } from '../online/client'
 import { getCachedLeaderboard, isStale, refreshLeaderboard, subscribeLeaderboard } from '../online/leaderboardCache'
 import { searchUserByUsername } from '../firebase/firestore'
 import { PlayerProfileModal } from './PlayerProfileModal'
@@ -31,6 +31,17 @@ const C = {
 // Ligues par ordre croissant (doit correspondre au serveur).
 const LEAGUES = ['Bronze', 'Argent', 'Or', 'Platine', 'Diamond', 'Master', 'Légende'] as const
 const TOP_N = 3 // promotion / relégation
+
+/** Onglet géographique — composé avec la ligue sélectionnée (filtre ET, pas
+ * un remplacement) : 'global' = comportement existant, sans filtre géo. */
+type GeoScope = 'global' | 'MA' | 'FR' | 'city'
+
+function geoFilterFor(scope: GeoScope, myCity: string): GeoFilter | undefined {
+  if (scope === 'MA') return { country: 'MA' }
+  if (scope === 'FR') return { country: 'FR' }
+  if (scope === 'city') return myCity ? { city: myCity } : undefined
+  return undefined
+}
 
 const MEDALS = ['🥇', '🥈', '🥉']
 
@@ -61,13 +72,17 @@ interface Props {
 }
 
 export function LeaderboardScreen({ onBack }: Props) {
-  const { username, avatarType: myAvatarType, avatarEmoji: myAvatarEmoji, avatarImage: myAvatarImage } = useProfile()
+  const {
+    username, avatarType: myAvatarType, avatarEmoji: myAvatarEmoji, avatarImage: myAvatarImage, city: myCity,
+  } = useProfile()
   const { user } = useAuth()
   const myUid = user?.uid ?? null
   const { t } = useI18n()
 
   const [userLeague, setUserLeague] = useState<string>('Bronze')
   const [selected, setSelected] = useState<string>('Bronze')
+  const [geoScope, setGeoScope] = useState<GeoScope>('global')
+  const geoFilter = geoFilterFor(geoScope, myCity)
   const [entries, setEntries] = useState<WeeklyEntry[]>([])
   const [myEntries, setMyEntries] = useState<WeeklyEntry[]>([])
   const [loading, setLoading] = useState(true)
@@ -128,20 +143,20 @@ export function LeaderboardScreen({ onBack }: Props) {
   useEffect(() => {
     let cancelled = false
     setError(null)
-    const cached = getCachedLeaderboard(selected)
+    const cached = getCachedLeaderboard(selected, geoFilter)
     if (cached) {
       setEntries(cached)
       setLoading(false)
     }
 
-    if (isStale(selected)) {
+    if (isStale(selected, geoFilter)) {
       if (!cached) setLoading(true)
-      void refreshLeaderboard(selected).then(() => {
-        // `selected` a pu changer pendant le fetch (l'utilisateur a basculé
-        // d'onglet) — ne pas écraser la ligue affichée avec des données
-        // périmées pour une AUTRE ligue.
+      void refreshLeaderboard(selected, geoFilter).then(() => {
+        // `selected`/`geoFilter` a pu changer pendant le fetch (l'utilisateur a
+        // basculé d'onglet) — ne pas écraser l'affichage avec des données
+        // périmées pour une AUTRE ligue/portée géographique.
         if (cancelled) return
-        const fresh = getCachedLeaderboard(selected)
+        const fresh = getCachedLeaderboard(selected, geoFilter)
         if (fresh) {
           setEntries(fresh)
           setLoading(false)
@@ -153,16 +168,16 @@ export function LeaderboardScreen({ onBack }: Props) {
       })
     }
     return () => { cancelled = true }
-  }, [selected, refreshKey])
+  }, [selected, geoScope, myCity, refreshKey])
 
   // Un refresh déclenché ailleurs (ex. preload au login, ou un autre écran
   // qui partage ce cache) doit aussi mettre à jour cet affichage.
   useEffect(() => {
     return subscribeLeaderboard(() => {
-      const data = getCachedLeaderboard(selected)
+      const data = getCachedLeaderboard(selected, geoFilter)
       if (data) setEntries(data)
     })
-  }, [selected])
+  }, [selected, geoScope, myCity])
 
   // Ma propre ligne : utilise directement le profil local (useProfile),
   // jamais une recherche Firestore par username. searchUserByUsername cherche
@@ -273,6 +288,34 @@ export function LeaderboardScreen({ onBack }: Props) {
                   onPress={() => setSelected(lg)}
                 >
                   <Text style={[s.tabTxt, (active || isMine) && s.tabTxtHi]}>{lg}</Text>
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Sélecteur géographique — filtre composé avec la ligue ci-dessus
+            (pas un remplacement : 'Global' = comportement existant). */}
+        <View style={s.tabsWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tabs}>
+            {(
+              [
+                { key: 'global', label: `🌍 ${t('geoGlobal')}` },
+                { key: 'MA', label: '🇲🇦 Maroc' },
+                { key: 'FR', label: '🇫🇷 France' },
+                { key: 'city', label: `📍 ${t('geoMyCity')}` },
+              ] as { key: GeoScope; label: string }[]
+            ).map((tab) => {
+              const active = tab.key === geoScope
+              const disabled = tab.key === 'city' && !myCity
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[s.tab, active && s.tabActive, disabled && s.tabDisabled]}
+                  onPress={() => { if (!disabled) setGeoScope(tab.key) }}
+                  disabled={disabled}
+                >
+                  <Text style={[s.tabTxt, active && s.tabTxtHi]}>{tab.label}</Text>
                 </TouchableOpacity>
               )
             })}
@@ -417,6 +460,7 @@ const s = StyleSheet.create({
   },
   tabActive: { backgroundColor: C.brass, borderColor: C.brass },
   tabMine: { borderColor: C.brass },
+  tabDisabled: { opacity: 0.4 },
   tabTxt: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.boneOff },
   tabTxtHi: { color: C.ink },
 

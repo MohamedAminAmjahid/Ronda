@@ -63,6 +63,10 @@ export interface UserDoc {
    * uniquement côté serveur via Admin SDK (distributePrizes), jamais par le
    * client. Absent → tableau vide (aucun tournoi remporté). */
   trophies: string[]
+  /** Code pays (voir src/data/countries.ts, ex. 'MA') — classement géographique. */
+  country: string
+  /** Ville en texte libre (ex. 'Casablanca') — classement géographique. */
+  city: string
 }
 
 /** Cosmétiques synchronisés vers Firestore. */
@@ -137,6 +141,8 @@ export interface LocalProfileSeed {
   avatarImage?: string
   xp?: number
   level?: number
+  country?: string
+  city?: string
 }
 
 function userRef(uid: string) {
@@ -176,6 +182,7 @@ interface CreateOrUpdateUserResult {
   gamesPlayed: number; gamesWon: number
   rondaPlayed: number; rondaWon: number
   dijoujPlayed: number; dijoujWon: number
+  country: string; city: string
 }
 
 /**
@@ -260,6 +267,8 @@ async function createOrUpdateUserInner(
       referralCount: 0,
       xp: local.xp ?? 0,
       level: local.level ?? 1,
+      country: local.country ?? '',
+      city: local.city ?? '',
       email: user.email ?? null,
       createdAt: serverTimestamp(),
       lastSeen: serverTimestamp(),
@@ -279,6 +288,7 @@ async function createOrUpdateUserInner(
       gamesPlayed: local.gamesPlayed, gamesWon: local.gamesWon,
       rondaPlayed: local.rondaPlayed, rondaWon: local.rondaWon,
       dijoujPlayed: local.dijoujPlayed, dijoujWon: local.dijoujWon,
+      country: local.country ?? '', city: local.city ?? '',
     }
   }
 
@@ -324,6 +334,8 @@ async function createOrUpdateUserInner(
     rondaWon:     typeof data.rondaWon === 'number'     ? (data.rondaWon as number)     : local.rondaWon,
     dijoujPlayed: typeof data.dijoujPlayed === 'number' ? (data.dijoujPlayed as number) : local.dijoujPlayed,
     dijoujWon:    typeof data.dijoujWon === 'number'    ? (data.dijoujWon as number)    : local.dijoujWon,
+    country: (data.country as string) ?? local.country ?? '',
+    city:    (data.city as string)    ?? local.city    ?? '',
   }
 }
 
@@ -345,6 +357,11 @@ export async function updateUsername(uid: string, username: string): Promise<voi
 /** Met à jour le gold dans Firestore. */
 export async function updateGold(uid: string, gold: number): Promise<void> {
   await updateDoc(userRef(uid), { gold })
+}
+
+/** Met à jour le pays/ville dans Firestore (classement géographique). */
+export async function updateLocation(uid: string, country: string, city: string): Promise<void> {
+  await updateDoc(userRef(uid), { country, city })
 }
 
 /** Met à jour le compteur de changements de pseudo dans Firestore. */
@@ -420,6 +437,8 @@ function toUserDoc(id: string, data: Record<string, unknown>): UserDoc {
     currentStreak: (data.currentStreak as number) ?? 0,
     friendCount: (data.friendCount as number) ?? 0,
     trophies: Array.isArray(data.trophies) ? (data.trophies as string[]) : [],
+    country: (data.country as string) ?? '',
+    city: (data.city as string) ?? '',
   }
 }
 

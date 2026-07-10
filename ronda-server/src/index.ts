@@ -98,11 +98,15 @@ app.get('/room/:code/type', (req, res) => {
 
 // ── Ligues & classement hebdomadaire ───────────────────────────────────────────
 
-// Classement de la semaine courante pour une ligue.
+// Classement de la semaine courante pour une ligue, avec filtre géographique
+// optionnel (pays et/ou ville — onglets Global/Maroc/France/Ma ville de
+// LeaderboardScreen.tsx).
 app.get('/leaderboard/weekly', async (req, res) => {
   const league = typeof req.query.league === 'string' ? req.query.league : 'Bronze'
-  const result = await getWeeklyLeaderboard(league)
-  console.log('[leaderboard] GET /leaderboard/weekly:', { league, entries: result.length })
+  const country = typeof req.query.country === 'string' ? req.query.country : undefined
+  const city = typeof req.query.city === 'string' ? req.query.city : undefined
+  const result = await getWeeklyLeaderboard(league, { country, city })
+  console.log('[leaderboard] GET /leaderboard/weekly:', { league, country, city, entries: result.length })
   return res.json(result)
 })
 
@@ -115,11 +119,13 @@ app.get('/leaderboard/weekly/stats/:username', async (req, res) => {
 // vs bot (repli matchmaking, hors-ligne) qui ne passent par aucune Room et où
 // addWageredGold n'est donc jamais appelé côté Room.
 app.post('/leaderboard/record', async (req, res) => {
-  const { username, amount, game } = req.body as { username?: string; amount?: number; game?: string }
+  const { username, amount, game, uid } = req.body as {
+    username?: string; amount?: number; game?: string; uid?: string
+  }
   if (!username || !amount || (game !== 'ronda' && game !== 'dijouj')) {
     return res.status(400).json({ error: 'Paramètres manquants' })
   }
-  await addWageredGold(username, Number(amount), game)
+  await addWageredGold(username, Number(amount), game, uid)
   return res.json({ ok: true })
 })
 

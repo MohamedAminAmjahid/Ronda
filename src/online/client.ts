@@ -105,15 +105,25 @@ export interface WeeklyStats {
 
 const LEADERBOARD_TIMEOUT_MS = 5000
 
-/** Classement hebdomadaire agrégé (Ronda + Di Jouj) d'une ligue.
- * Abandonne après 5 s (Railway qui met du temps à se réveiller à froid, etc.)
- * plutôt que de laisser l'écran tourner indéfiniment. */
-export async function fetchWeeklyLeaderboard(league: string): Promise<WeeklyEntry[]> {
+/** Filtre géographique optionnel du classement (onglets Global/Maroc/France/Ma
+ * ville de LeaderboardScreen.tsx) — composé avec le filtre de ligue existant. */
+export interface GeoFilter {
+  country?: string
+  city?: string
+}
+
+/** Classement hebdomadaire agrégé (Ronda + Di Jouj) d'une ligue, avec filtre
+ * géographique optionnel. Abandonne après 5 s (Railway qui met du temps à se
+ * réveiller à froid, etc.) plutôt que de laisser l'écran tourner indéfiniment. */
+export async function fetchWeeklyLeaderboard(league: string, geo?: GeoFilter): Promise<WeeklyEntry[]> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), LEADERBOARD_TIMEOUT_MS)
   try {
+    const params = new URLSearchParams({ league })
+    if (geo?.country) params.set('country', geo.country)
+    if (geo?.city) params.set('city', geo.city)
     const res = await fetch(
-      `${httpBase()}/leaderboard/weekly?league=${encodeURIComponent(league)}`,
+      `${httpBase()}/leaderboard/weekly?${params.toString()}`,
       { signal: controller.signal },
     )
     if (!res.ok) throw new Error('Classement indisponible.')
@@ -156,14 +166,14 @@ export async function fetchUserLeagueByUsername(username: string): Promise<strin
  * appel explicite. Best-effort — ne bloque jamais l'écran de fin de partie.
  */
 export async function recordLeaderboardScore(
-  username: string, amount: number, game: 'ronda' | 'dijouj',
+  username: string, amount: number, game: 'ronda' | 'dijouj', uid?: string,
 ): Promise<void> {
-  console.log('📊 [leaderboard] recordLeaderboardScore appelé:', { username, amount, game })
+  console.log('📊 [leaderboard] recordLeaderboardScore appelé:', { username, amount, game, uid })
   try {
     const res = await fetch(`${httpBase()}/leaderboard/record`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, amount, game }),
+      body: JSON.stringify({ username, amount, game, uid }),
     })
     console.log('📊 [leaderboard] réponse:', res.status, await res.text())
   } catch (e) {
