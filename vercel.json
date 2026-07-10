@@ -4,6 +4,18 @@
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
   "rewrites": [
+    {
+      "source": "/profil/:username",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|facebookexternalhit|twitterbot|googlebot|linkedinbot|slackbot|discordbot|telegrambot).*"
+        }
+      ],
+      "destination": "/api/profil/:username"
+    },
+    { "source": "/api/profil/:username", "destination": "/api/profil/[username]" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
