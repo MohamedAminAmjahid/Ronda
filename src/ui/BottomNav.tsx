@@ -31,7 +31,7 @@ const HIDDEN_PREFIXES = [
   '/dijouj-online', '/dijouj-lobby', '/lobby2v2',
   '/auth', '/lang-picker', '/bet', '/join',
   '/rules', '/credits', '/gold-shop', '/chat',
-  '/privacy', '/terms', '/about', '/spectate',
+  '/privacy', '/terms', '/about', '/spectate', '/onboarding',
 ]
 
 function TabItem({

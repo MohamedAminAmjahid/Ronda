@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { router, type Href } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useAuth } from './auth'
 import { createOrUpdateUser, registerPendingReferral, migrateFriendCounts } from './firestore'
@@ -14,6 +15,7 @@ import {
 
 const REFERRAL_CODE_KEY = 'ronda_referral_code'
 const FRIENDCOUNT_MIGRATED_KEY = 'ronda_friendcount_migrated'
+const ONBOARDING_KEY = 'ronda_onboarding_done'
 
 // Anti-rafale : onAuthStateChanged peut réémettre pour le même uid bien après
 // que le 1er appel a fini (ex. refresh de token ~1h, ou revalidation réseau),
@@ -93,6 +95,15 @@ export function useFirebaseProfileSync(): void {
           setXpLevelLocal(xp, level)
           setCountryLocal(country)
           setCityLocal(city)
+        }
+
+        // Nouveau joueur (jamais joué ni changé de pseudo) → tutoriel interactif,
+        // une seule fois (flag AsyncStorage). Best-effort, ne bloque pas le login.
+        if (!cancelled && usernameChanges === 0 && gamesPlayed === 0) {
+          try {
+            const done = await AsyncStorage.getItem(ONBOARDING_KEY)
+            if (!done && !cancelled) router.replace('/onboarding' as Href)
+          } catch { /* stockage indisponible */ }
         }
 
         // Préchauffe le cache du classement hebdo de la ligue du joueur, en
