@@ -4,8 +4,9 @@ import { createInitialState } from '../engine-dijouj/deal'
 import { applyPlayCard, applyDraw } from '../engine-dijouj/game'
 import type { GameState, Card, Suit } from '../engine-dijouj/types'
 import { botPlay } from '../ai-dijouj/bot'
-import { generateCode, registerCode, unregisterCode } from './registry'
+import { generateCode, registerCode, unregisterCode, resolveCode } from './registry'
 import { addWageredGold } from '../db/queries'
+import { completeChallenge } from '../db/challengeQueries'
 import { resolveAutoSkips } from './autoSkip'
 import { getPublicProfile, firebaseReady } from '../firebaseAdmin'
 
@@ -63,6 +64,10 @@ export class DiJoujRoom extends Room<DiJoujState> {
   private reconnectSeconds = Number(process.env.RECONNECT_SECONDS ?? 60)
   private finished = false
   private bet = 0
+  /** Présent seulement pour une partie issue d'un défi entre amis (voir
+   * challengeQueries.ts, RondaRoom.ts pour l'équivalent Ronda) — permet à
+   * finishGame() de rapporter le vainqueur via completeChallenge(). */
+  private challengeId: string | null = null
 
   // ── Anti-inactivité : auto-skip après 7 s, forfait après 3 auto-skips ────────
   private static readonly TURN_SECONDS   = 7
@@ -72,17 +77,24 @@ export class DiJoujRoom extends Room<DiJoujState> {
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean; withBot?: boolean; bet?: number }): void {
+  onCreate(options: {
+    private?: boolean; withBot?: boolean; bet?: number; challengeId?: string; code?: string
+  }): void {
     this.state = new DiJoujState()
 
-    const code = generateCode()
+    // Réclame le code précis demandé (défi entre amis — voir challengeId
+    // ci-dessous, acceptChallenge côté client) s'il est libre, sinon en
+    // génère un nouveau — même mécanisme que RondaRoom.onCreate.
+    const desired = options?.code?.trim().toUpperCase()
+    const code = desired && !resolveCode(desired) ? desired : generateCode()
     this.state.code = code
     this.setMetadata({ code })
     registerCode(code, this.roomId, 'dijouj')
 
     this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
+    this.challengeId = options?.challengeId ?? null
 
-    if (options?.private) this.setPrivate(true)
+    if (options?.private || this.challengeId) this.setPrivate(true)
 
     if (options?.withBot) {
       this.botSeat = 1
@@ -379,6 +391,16 @@ export class DiJoujRoom extends Room<DiJoujState> {
       console.log('[leaderboard] addWageredGold appelé:', { winner: winnerPseudo, bet: this.bet, game: 'dijouj' })
       void addWageredGold(winnerPseudo, this.bet, 'dijouj', winnerUid || undefined).catch((e) =>
         console.error('[leaderboard] addWageredGold error:', e))
+    }
+
+    // Défi entre amis : rapporte directement le vainqueur (uid) au document
+    // challenges/{id} — voir RondaRoom.ts pour l'équivalent Ronda.
+    if (this.challengeId && winnerSeat !== undefined) {
+      const winnerUid = this.uidBySeat[winnerSeat]
+      if (winnerUid) {
+        void completeChallenge(this.challengeId, winnerUid).catch((e) =>
+          console.error('[challenges] completeChallenge:', e))
+      }
     }
 
     this.broadcast('game_over', {

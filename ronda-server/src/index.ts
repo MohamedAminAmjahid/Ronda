@@ -16,6 +16,7 @@ import {
   type Tournament, type BracketRound, type BracketMatch,
 } from './db/tournamentQueries'
 import { cleanupGlobalChat } from './db/globalChat'
+import { cleanupExpiredChallenges } from './db/challengeQueries'
 import { RondaRoom } from './rooms/RondaRoom'
 import { LobbyRoom2v2 } from './rooms/LobbyRoom2v2'
 import { DiJoujRoom } from './rooms/DiJoujRoom'
@@ -519,6 +520,31 @@ app.post('/notify/friend-request', async (req, res) => {
   return res.json({ ok: true })
 })
 
+// Défi entre amis reçu.
+app.post('/notify/challenge', async (req, res) => {
+  const { fromToken, toUid, stake } = (req.body ?? {}) as { fromToken?: string; toUid?: string; stake?: number }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid || typeof toUid !== 'string') return res.status(401).json({ error: 'unauthorized' })
+  const fromName = await getUsername(fromUid)
+  const stakeAmount = Math.max(0, Math.floor(Number(stake) || 0))
+  void sendPushNotification(
+    toUid, `⚔️ ${fromName} te défie !`, `Mise : ${stakeAmount} 🪙 — Accepte le défi !`, { type: 'challenge' },
+  )
+  return res.json({ ok: true })
+})
+
+// Défi accepté — notifie l'auteur du défi.
+app.post('/notify/challenge-accepted', async (req, res) => {
+  const { fromToken, toUid } = (req.body ?? {}) as { fromToken?: string; toUid?: string }
+  const fromUid = await uidFromToken(fromToken)
+  if (!fromUid || typeof toUid !== 'string') return res.status(401).json({ error: 'unauthorized' })
+  const fromName = await getUsername(fromUid)
+  void sendPushNotification(
+    toUid, '⚔️ Défi accepté !', `${fromName} a accepté ton défi — rejoins la partie !`, { type: 'challenge_accepted' },
+  )
+  return res.json({ ok: true })
+})
+
 // ── Cron : cycle hebdomadaire du tournoi ────────────────────────────────────
 // Suppose une seule instance du serveur (pas de coordinateur distribué) —
 // avec plusieurs instances Railway, chaque réplique exécuterait ces tâches
@@ -591,6 +617,13 @@ cron.schedule('0 * * * *', async () => {
 // messages d'un autre auteur).
 cron.schedule('*/10 * * * *', () => {
   void cleanupGlobalChat()
+})
+
+// Toutes les 30 minutes → supprime les défis 'pending' expirés (24h, voir
+// challengeQueries.ts). Un défi accepté/décliné/terminé n'est jamais purgé
+// ici, seul le statut 'pending' est concerné.
+cron.schedule('*/30 * * * *', () => {
+  void cleanupExpiredChallenges()
 })
 
 // ── Colyseus ─────────────────────────────────────────────────────────────────

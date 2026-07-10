@@ -2,7 +2,7 @@ import type { Room } from 'colyseus.js'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { Card, Combination, GameEvent, PlayerId, Value } from '../engine/types'
 import {
-  joinOrCreate, createPrivate, joinByCode, joinTournamentRoom, getClient,
+  joinOrCreate, createPrivate, joinByCode, joinTournamentRoom, joinChallengeRoom, getClient,
   TOURNAMENT_ADVANCE_KEY,
 } from './client'
 import { invalidateLeaderboard } from './leaderboardCache'
@@ -286,6 +286,18 @@ export function connectTournamentRoom(
   pseudo: string, code: string, matchId: string, asCreator: boolean, isFinal: boolean, uid?: string,
 ): Promise<void> {
   return connect(() => joinTournamentRoom(pseudo, code, matchId, asCreator, uid), 0, { matchId, isFinal })
+}
+
+/**
+ * Rejoint (ou crée) la room d'un défi entre amis par son code — voir
+ * joinChallengeRoom pour le détail. Pas de `tournament` context (3e arg de
+ * connect) : un défi ne déclenche jamais la modale « tu avances au tour
+ * suivant », uniquement réservée aux matchs de tournoi.
+ */
+export function connectChallengeRoom(
+  pseudo: string, code: string, challengeId: string, asCreator: boolean, bet: number, uid?: string,
+): Promise<void> {
+  return connect(() => joinChallengeRoom(pseudo, code, challengeId, asCreator, uid), bet)
 }
 
 /** Reconnexion à une partie en cours via le jeton Colyseus (room.reconnectionToken). */

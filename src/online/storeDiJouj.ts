@@ -1,6 +1,6 @@
 import type { Room } from 'colyseus.js'
 import type { Suit, Value, PendingEffect } from '../engine-dijouj/types'
-import { joinDiJoujQuick, createDiJoujPrivate, joinByCode } from './client'
+import { joinDiJoujQuick, createDiJoujPrivate, joinByCode, joinDiJoujChallengeRoom } from './client'
 import { invalidateLeaderboard } from './leaderboardCache'
 import { addGold } from '../profile/profile'
 import { auth } from '../firebase/auth'
@@ -228,6 +228,16 @@ export function connectDiJoujFriendHost(pseudo: string, bet = 0): Promise<void> 
 /** Rejoint une room Di Jouj privée par code (invité). */
 export function connectDiJoujFriendGuest(pseudo: string, code: string, bet = 0): Promise<void> {
   return connect(() => joinByCode(pseudo, code, currentUid()), false, bet)
+}
+/**
+ * Rejoint (ou crée) la room Di Jouj d'un défi entre amis par son code — voir
+ * joinDiJoujChallengeRoom (online/client.ts) et connectChallengeRoom
+ * (store.ts, équivalent Ronda) pour le détail du rôle créateur/joiner.
+ */
+export function connectDiJoujChallengeRoom(
+  pseudo: string, code: string, challengeId: string, asCreator: boolean, bet = 0,
+): Promise<void> {
+  return connect(() => joinDiJoujChallengeRoom(pseudo, code, challengeId, asCreator, currentUid()), false, bet)
 }
 
 /** Transfert d'une room déjà connectée (depuis le lobby). */

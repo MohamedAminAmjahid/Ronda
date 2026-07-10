@@ -1,12 +1,12 @@
 import {
   getFirestore, doc, getDoc, getDocFromServer, setDoc, addDoc, updateDoc, deleteDoc, deleteField,
-  collection, query, where, getDocs, limit, serverTimestamp,
+  collection, query, where, getDocs, limit, serverTimestamp, Timestamp,
   onSnapshot, increment, orderBy, documentId,
 } from 'firebase/firestore'
 import { getAuth } from 'firebase/auth'
 import { firebaseApp } from './config'
 import type { User } from './auth'
-import { notifyInvite, notifyMessage, notifyFriendRequest } from '../online/serverApi'
+import { notifyInvite, notifyMessage, notifyFriendRequest, notifyChallenge, notifyChallengeAccepted } from '../online/serverApi'
 
 export const db = getFirestore(firebaseApp)
 
@@ -1392,6 +1392,182 @@ export function declineGameInvite(inviteId: string): Promise<void> {
 
 export function updateInviteRoomCode(inviteId: string, roomCode: string): Promise<void> {
   return updateDoc(doc(db, 'gameInvites', inviteId), { status: 'room_ready', roomCode })
+}
+
+// ── Défis entre amis (challenges) ───────────────────────────────────────────
+//
+// Aucune route serveur ni règle de sécurité versionnée n'existe dans ce
+// dépôt pour cette collection non plus (voir global_chat plus haut pour le
+// même constat) : à configurer manuellement dans la Console Firebase,
+// avec exactement les contraintes suivantes :
+//   match /challenges/{challengeId} {
+//     allow create: if request.auth.uid == request.resource.data.fromUid;
+//     allow read: if request.auth.uid == resource.data.fromUid
+//                 || request.auth.uid == resource.data.toUid;
+//     allow update: if request.auth.uid == resource.data.fromUid
+//                 || request.auth.uid == resource.data.toUid;
+//   }
+// Le champ `winnerUid`/`status:'completed'` n'est cependant JAMAIS écrit par
+// le client malgré cette règle update permissive : RondaRoom/DiJoujRoom
+// (serveur, Admin SDK qui bypasse les règles) les écrivent seuls via
+// completeChallenge() une fois la partie terminée — même principe que
+// recordMatchWinner pour les tournois, on ne fait jamais confiance à un
+// client pour désigner le vainqueur d'une mise réelle. La règle update
+// n'est donc utile ici que pour accept/declineChallenge (status) et
+// acceptChallenge qui y ajoute roomCode (voir plus bas).
+
+const CHALLENGE_EXPIRY_MS = 24 * 60 * 60 * 1000
+const CHALLENGE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // sans I/O/0/1 (ambigus)
+
+export interface ChallengeDoc {
+  id: string
+  fromUid: string
+  fromUsername: string
+  toUid: string
+  toUsername: string
+  game: 'ronda' | 'dijouj'
+  stake: number
+  status: 'pending' | 'accepted' | 'declined' | 'completed'
+  winnerUid: string | null
+  message: string
+  /** Code de room une fois le défi accepté (voir acceptChallenge) — absent du
+   * Challenge « idéal » du prompt, mais nécessaire : ce projet ne crée JAMAIS
+   * de room côté serveur (voir joinTournamentRoom/RondaRoom.onCreate), donc
+   * il faut un canal pour transmettre le code entre les deux joueurs. */
+  roomCode: string | null
+  createdAt: Date | null
+  expiresAt: Date | null
+}
+
+function toChallengeDoc(d: { id: string; data: () => Record<string, unknown> }): ChallengeDoc {
+  const data = d.data()
+  return {
+    id: d.id,
+    fromUid: data.fromUid as string,
+    fromUsername: (data.fromUsername as string) ?? 'Joueur',
+    toUid: data.toUid as string,
+    toUsername: (data.toUsername as string) ?? 'Joueur',
+    game: (data.game as 'ronda' | 'dijouj') ?? 'ronda',
+    stake: (data.stake as number) ?? 0,
+    status: (data.status as ChallengeDoc['status']) ?? 'pending',
+    winnerUid: (data.winnerUid as string) ?? null,
+    message: (data.message as string) ?? '',
+    roomCode: (data.roomCode as string) ?? null,
+    createdAt: (data.createdAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+    expiresAt: (data.expiresAt as { toDate?: () => Date } | null)?.toDate?.() ?? null,
+  }
+}
+
+/** Génère un code de room côté client (6 caractères, même alphabet que le
+ * serveur — voir ronda-server/src/rooms/registry.ts generateCode). Pas
+ * besoin d'unicité garantie ici : RondaRoom/DiJoujRoom.onCreate retombent
+ * sur un code généré serveur si celui-ci s'avère déjà pris (collision
+ * extrêmement improbable, ~1.3 milliard de combinaisons). */
+function generateChallengeCode(): string {
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += CHALLENGE_CODE_ALPHABET[Math.floor(Math.random() * CHALLENGE_CODE_ALPHABET.length)]
+  }
+  return code
+}
+
+/** Envoie un défi à un ami. Retourne l'ID du document créé. */
+export async function sendChallenge(
+  fromUid: string, fromUsername: string, toUid: string, toUsername: string,
+  game: 'ronda' | 'dijouj', stake: number, message: string,
+): Promise<string> {
+  const ref = doc(collection(db, 'challenges'))
+  await setDoc(ref, {
+    fromUid, fromUsername, toUid, toUsername, game,
+    stake: Math.max(0, Math.floor(stake)),
+    status: 'pending',
+    winnerUid: null,
+    message: message.trim().slice(0, 200),
+    roomCode: null,
+    createdAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + CHALLENGE_EXPIRY_MS),
+  })
+  notifyChallenge(toUid, stake)
+  return ref.id
+}
+
+/** Écoute les défis reçus en attente (filtre expiré + status côté client —
+ * comme sendGameInvite/subscribeIncomingInvites, pas de composite index). */
+export function subscribeIncomingChallenges(
+  myUid: string,
+  cb: (challenges: ChallengeDoc[]) => void,
+): () => void {
+  const q = query(collection(db, 'challenges'), where('toUid', '==', myUid), where('status', '==', 'pending'))
+  return onSnapshot(
+    q,
+    (snap) => {
+      const now = Date.now()
+      cb(snap.docs.map(toChallengeDoc).filter((c) => !c.expiresAt || c.expiresAt.getTime() > now))
+    },
+    () => cb([]),
+  )
+}
+
+/** Compte des défis reçus en attente (badge FriendsScreen/BottomNav). */
+export function subscribePendingChallengesCount(myUid: string, cb: (count: number) => void): () => void {
+  return subscribeIncomingChallenges(myUid, (list) => cb(list.length))
+}
+
+/** Écoute les défis acceptés (envoyés OU reçus, roomCode prêt) — affichés
+ * dans « Défis en attente » avec un bouton « Rejoindre » pour les deux
+ * joueurs, tant que la partie n'est pas terminée (status repasse alors à
+ * 'completed' côté serveur, voir completeChallenge/RondaRoom.finishGame,
+ * ce qui les fait disparaître automatiquement de cette liste). */
+export function subscribeReadyChallenges(
+  myUid: string,
+  cb: (challenges: ChallengeDoc[]) => void,
+): () => void {
+  let sent: ChallengeDoc[] = []
+  let received: ChallengeDoc[] = []
+  const emit = () => {
+    const all = [...sent, ...received]
+    all.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+    cb(all)
+  }
+  const u1 = onSnapshot(
+    query(collection(db, 'challenges'), where('fromUid', '==', myUid), where('status', '==', 'accepted')),
+    (snap) => { sent = snap.docs.map(toChallengeDoc); emit() },
+    () => { sent = []; emit() },
+  )
+  const u2 = onSnapshot(
+    query(collection(db, 'challenges'), where('toUid', '==', myUid), where('status', '==', 'accepted')),
+    (snap) => { received = snap.docs.map(toChallengeDoc); emit() },
+    () => { received = []; emit() },
+  )
+  return () => { u1(); u2() }
+}
+
+/** Accepte un défi reçu : génère le code de room et le fixe dans le même
+ * appel (l'accepteur est nécessairement en ligne à cet instant), puis
+ * notifie l'auteur du défi (challengerUid = challenge.fromUid). Retourne le
+ * code généré pour que l'appelant puisse rejoindre la partie immédiatement. */
+export async function acceptChallenge(challengeId: string, challengerUid: string): Promise<string> {
+  const roomCode = generateChallengeCode()
+  await updateDoc(doc(db, 'challenges', challengeId), { status: 'accepted', roomCode })
+  notifyChallengeAccepted(challengerUid)
+  return roomCode
+}
+
+export function declineChallenge(challengeId: string): Promise<void> {
+  return updateDoc(doc(db, 'challenges', challengeId), { status: 'declined' })
+}
+
+/** Historique des défis (envoyés + reçus) d'un joueur, triés du plus récent
+ * au plus ancien — pour la section « Mes duels » de ProfileScreen. Chargement
+ * ponctuel (pas de temps réel nécessaire pour un historique). */
+export async function getMyChallenges(myUid: string, count = 30): Promise<ChallengeDoc[]> {
+  const [sentSnap, receivedSnap] = await Promise.all([
+    getDocs(query(collection(db, 'challenges'), where('fromUid', '==', myUid), limit(count))),
+    getDocs(query(collection(db, 'challenges'), where('toUid', '==', myUid), limit(count))),
+  ])
+  const all = [...sentSnap.docs, ...receivedSnap.docs].map(toChallengeDoc)
+  all.sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))
+  return all.slice(0, count)
 }
 
 /** Écoute les non-lus par ami : { [friendUid]: count }. */

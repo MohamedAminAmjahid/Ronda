@@ -16,6 +16,7 @@ import type {
 } from '../engine/types'
 import { recordGame, touchPlayer, getStats, addWageredGold } from '../db/queries'
 import { recordMatchWinner } from '../db/tournamentQueries'
+import { completeChallenge } from '../db/challengeQueries'
 import { generateCode, registerCode, unregisterCode, resolveCode } from './registry'
 
 // ── Schéma Colyseus (état PUBLIC, identique aux deux joueurs) ─────────────────
@@ -107,13 +108,22 @@ export class RondaRoom extends Room<RondaState> {
    * confirmation côté client (le serveur Colyseus est déjà autoritaire). */
   private tournamentMatchId: string | null = null
 
+  /** Présent seulement pour une partie issue d'un défi entre amis (voir
+   * challengeQueries.ts) — même principe que tournamentMatchId : permet à
+   * finishGame() de rapporter le vainqueur via completeChallenge() dès que
+   * la partie se termine, sans confiance dans un résultat client. */
+  private challengeId: string | null = null
+
   // ── Lifecycle ───────────────────────────────────────────────────────────
 
-  onCreate(options: { private?: boolean; bet?: number; tournamentMatchId?: string; code?: string }): void {
+  onCreate(options: {
+    private?: boolean; bet?: number; tournamentMatchId?: string; challengeId?: string; code?: string
+  }): void {
     this.state = new RondaState()
     this.maxClients = 10  // 2 joueurs + jusqu'à 8 spectateurs
     this.bet = Math.max(0, Math.floor(Number(options?.bet ?? 0)) || 0)
     this.tournamentMatchId = options?.tournamentMatchId ?? null
+    this.challengeId = options?.challengeId ?? null
 
     // Match de tournoi : le premier joueur à ouvrir l'écran crée la room et
     // "réclame" le roomCode déjà assigné au match par generateBracket() (au
@@ -129,7 +139,7 @@ export class RondaRoom extends Room<RondaState> {
 
     // Rooms créées par code, ou pour un match de tournoi = privées (non
     // proposées au matchmaking rapide).
-    if (options?.private || this.tournamentMatchId) this.setPrivate(true)
+    if (options?.private || this.tournamentMatchId || this.challengeId) this.setPrivate(true)
 
     this.onMessage('play_card', (client, msg: { card: Card }) =>
       this.handleAction(client, { type: 'PLAY_CARD', playerId: 0, card: msg.card }, 'card'),
@@ -509,6 +519,16 @@ export class RondaRoom extends Room<RondaState> {
       if (winnerUid) {
         void recordMatchWinner(this.tournamentMatchId, winnerUid).catch((e) =>
           console.error('[tournament] recordMatchWinner:', e))
+      }
+    }
+
+    // Défi entre amis : même principe, le serveur rapporte directement le
+    // vainqueur (uid) au document challenges/{id}.
+    if (this.challengeId && winnerSeat !== null) {
+      const winnerUid = this.uidBySeat[winnerSeat]
+      if (winnerUid) {
+        void completeChallenge(this.challengeId, winnerUid).catch((e) =>
+          console.error('[challenges] completeChallenge:', e))
       }
     }
 

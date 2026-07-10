@@ -7,13 +7,16 @@ import { router } from 'expo-router'
 import { AvatarDisplay } from './ProfileScreen'
 import { xpRequired } from '../profile/profile'
 import { useAuth } from '../firebase/auth'
+import { useProfile } from '../profile/useProfile'
 import {
   searchUserByUsername, sendFriendRequest, acceptFriendRequest, declineFriendRequest,
   subscribePendingCount, subscribeFriendUnreadCounts,
   subscribeOnlineStatuses, removeFriend,
-  type FriendDoc, type UserDoc, type PresenceInfo,
+  subscribeIncomingChallenges, subscribeReadyChallenges, acceptChallenge, declineChallenge,
+  type FriendDoc, type UserDoc, type PresenceInfo, type ChallengeDoc,
 } from '../firebase/firestore'
 import { getCachedFriends, isFriendsStale, refreshFriends, subscribeFriends } from '../online/friendsCache'
+import { joinChallengeMatch } from '../online/challenges'
 import { useI18n } from '../i18n/useI18n'
 import { InviteToPlayModal } from './InviteToPlayModal'
 import { PresenceDot, presenceLabel } from './PresenceDot'
@@ -30,7 +33,7 @@ const C = {
   green:   '#27AE60',
 } as const
 
-type Tab = 'friends' | 'requests' | 'add'
+type Tab = 'friends' | 'requests' | 'challenges' | 'add'
 
 interface Props {
   onBack: () => void
@@ -38,6 +41,7 @@ interface Props {
 
 export function FriendsScreen({ onBack }: Props) {
   const { user, loading: authLoading } = useAuth()
+  const { username } = useProfile()
   const { t } = useI18n()
   const [tab, setTab] = useState<Tab>('friends')
 
@@ -117,6 +121,50 @@ export function FriendsScreen({ onBack }: Props) {
     const u2 = subscribeFriendUnreadCounts(user.uid, setUnreadCounts)
     return () => { u1(); u2() }
   }, [user])
+
+  // ── Défis entre amis ─────────────────────────────────────────────────────────
+  const [pendingChallenges, setPendingChallenges] = useState<ChallengeDoc[]>([])
+  const [readyChallenges, setReadyChallenges] = useState<ChallengeDoc[]>([])
+  const [challengeBusy, setChallengeBusy] = useState<string | null>(null)
+  const [challengeError, setChallengeError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user) { setPendingChallenges([]); setReadyChallenges([]); return }
+    const u1 = subscribeIncomingChallenges(user.uid, setPendingChallenges)
+    const u2 = subscribeReadyChallenges(user.uid, setReadyChallenges)
+    return () => { u1(); u2() }
+  }, [user])
+
+  const acceptChallengeHandler = async (c: ChallengeDoc) => {
+    if (!user || challengeBusy) return
+    setChallengeBusy(c.id)
+    setChallengeError(null)
+    try {
+      const roomCode = await acceptChallenge(c.id, c.fromUid)
+      await joinChallengeMatch({ ...c, status: 'accepted', roomCode }, user.uid, username || 'Joueur')
+    } catch {
+      setChallengeError(t('challengeJoinError'))
+    } finally {
+      setChallengeBusy(null)
+    }
+  }
+
+  const declineChallengeHandler = async (c: ChallengeDoc) => {
+    await declineChallenge(c.id).catch(() => {})
+  }
+
+  const joinReadyChallengeHandler = async (c: ChallengeDoc) => {
+    if (!user || challengeBusy) return
+    setChallengeBusy(c.id)
+    setChallengeError(null)
+    try {
+      await joinChallengeMatch(c, user.uid, username || 'Joueur')
+    } catch {
+      setChallengeError(t('challengeJoinError'))
+    } finally {
+      setChallengeBusy(null)
+    }
+  }
 
   // ── Recherche / ajout ────────────────────────────────────────────────────────
   const [search, setSearch] = useState('')
@@ -199,9 +247,10 @@ export function FriendsScreen({ onBack }: Props) {
   }
 
   const TABS: { key: Tab; label: string; badge: number }[] = [
-    { key: 'friends',  label: t('friendsTab'),  badge: 0 },
-    { key: 'requests', label: t('requestsTab'), badge: pendingCount },
-    { key: 'add',      label: t('addTab'),       badge: 0 },
+    { key: 'friends',    label: t('friendsTab'),    badge: 0 },
+    { key: 'requests',   label: t('requestsTab'),   badge: pendingCount },
+    { key: 'challenges', label: t('challengesTab'), badge: pendingChallenges.length },
+    { key: 'add',        label: t('addTab'),        badge: 0 },
   ]
 
   return (
@@ -234,7 +283,7 @@ export function FriendsScreen({ onBack }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-          {loading && tab !== 'add' && <FriendSkeletonRows count={5} />}
+          {loading && tab !== 'add' && tab !== 'challenges' && <FriendSkeletonRows count={5} />}
 
           {tab === 'friends' && !loading && (
             friends.length === 0
@@ -342,6 +391,74 @@ export function FriendsScreen({ onBack }: Props) {
                   </View>
                 )
               })
+          )}
+
+          {tab === 'challenges' && (
+            <>
+              {challengeError && <Text style={s.addMsg}>{challengeError}</Text>}
+              {pendingChallenges.length === 0 && readyChallenges.length === 0 ? (
+                <Text style={s.empty}>{t('noChallenges')}</Text>
+              ) : (
+                <>
+                  {pendingChallenges.map((c) => {
+                    const initial = c.fromUsername?.[0]?.toUpperCase() ?? '?'
+                    const busy = challengeBusy === c.id
+                    return (
+                      <View key={c.id} style={s.row}>
+                        <AvatarDisplay type="initial" initial={initial} emoji="" image="" size={40} />
+                        <View style={s.nameCol}>
+                          <Text style={s.rowName} numberOfLines={1}>
+                            ⚔️ {c.fromUsername} · {c.stake} 🪙 · {c.game === 'dijouj' ? 'Di Jouj' : 'Ronda'}
+                          </Text>
+                          {!!c.message && (
+                            <Text style={s.statusTxt} numberOfLines={1}>{c.message}</Text>
+                          )}
+                        </View>
+                        <View style={s.rowActions}>
+                          <TouchableOpacity
+                            style={s.btnAccept}
+                            onPress={() => { void acceptChallengeHandler(c) }}
+                            disabled={busy}
+                          >
+                            <Text style={s.btnAcceptTxt}>{busy ? '…' : t('acceptBtn')}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.btnDecline}
+                            onPress={() => { void declineChallengeHandler(c) }}
+                            disabled={busy}
+                          >
+                            <Text style={s.btnDeclineTxt}>{t('declineBtn')}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )
+                  })}
+                  {readyChallenges.map((c) => {
+                    const otherName = c.fromUid === user?.uid ? c.toUsername : c.fromUsername
+                    const initial = otherName?.[0]?.toUpperCase() ?? '?'
+                    const busy = challengeBusy === c.id
+                    return (
+                      <View key={c.id} style={s.row}>
+                        <AvatarDisplay type="initial" initial={initial} emoji="" image="" size={40} />
+                        <View style={s.nameCol}>
+                          <Text style={s.rowName} numberOfLines={1}>
+                            ⚔️ {otherName} · {c.stake} 🪙 · {c.game === 'dijouj' ? 'Di Jouj' : 'Ronda'}
+                          </Text>
+                          <Text style={[s.statusTxt, s.statusOnline]}>{t('challengeReady')}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={s.btnAccept}
+                          onPress={() => { void joinReadyChallengeHandler(c) }}
+                          disabled={busy}
+                        >
+                          <Text style={s.btnAcceptTxt}>{busy ? '…' : `▶️ ${t('challengeJoinBtn')}`}</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  })}
+                </>
+              )}
+            </>
           )}
 
           {tab === 'add' && (

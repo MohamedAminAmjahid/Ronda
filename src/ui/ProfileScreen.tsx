@@ -19,7 +19,10 @@ import { signInWithGoogle, signOut } from '../firebase/auth'
 import {
   incrementUsernameChanges, USERNAME_CHANGE_COST, xpRequired, resetProfile,
 } from '../profile/profile'
-import { updateUsername, isUsernameAvailable, getUserById, getReferrals, type ReferralEntry } from '../firebase/firestore'
+import {
+  updateUsername, isUsernameAvailable, getUserById, getReferrals, getMyChallenges,
+  type ReferralEntry, type ChallengeDoc,
+} from '../firebase/firestore'
 import { COUNTRIES, countryFlag, countryLabel } from '../data/countries'
 import { Svg, Circle } from 'react-native-svg'
 
@@ -318,6 +321,24 @@ export function ProfileScreen() {
     setRefData(data)
     setRefLoading(false)
   }
+
+  // ── Mes duels (défis entre amis) ─────────────────────────────────────────
+  const [showDuels, setShowDuels] = useState(false)
+  const [duels, setDuels] = useState<ChallengeDoc[]>([])
+  const [duelsLoading, setDuelsLoading] = useState(false)
+
+  const openDuels = async () => {
+    if (!user) return
+    setShowDuels(true)
+    setDuelsLoading(true)
+    const data = await getMyChallenges(user.uid)
+    setDuels(data)
+    setDuelsLoading(false)
+  }
+
+  const completedDuels = duels.filter((d) => d.status === 'completed')
+  const duelsWon = user ? completedDuels.filter((d) => d.winnerUid === user.uid).length : 0
+  const duelsLaunched = user ? duels.filter((d) => d.fromUid === user.uid).length : 0
 
   const copyReferral = async () => {
     try {
@@ -740,6 +761,19 @@ export function ProfileScreen() {
           </View>
         </View>
 
+        {/* ── Mes duels (défis entre amis) ─────────────────────────── */}
+        {user && (
+          <View style={s.card}>
+            <Text style={s.cardLabel}>⚔️ {t('myDuels')}</Text>
+            <Text style={s.referralCount}>
+              {t('duelsSummary').replace('{launched}', String(duelsLaunched)).replace('{won}', String(duelsWon))}
+            </Text>
+            <TouchableOpacity style={s.referralViewBtn} onPress={() => { void openDuels() }} activeOpacity={0.8}>
+              <Text style={s.referralViewTxt}>{t('viewMyDuels')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* ── Confidentialité ───────────────────────────────────── */}
         <View style={s.card}>
           <Text style={s.cardLabel}>{t('privacy')}</Text>
@@ -899,6 +933,51 @@ export function ProfileScreen() {
                     ))}
                   </>
                 )}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modale « Mes duels » ─────────────────────────────────── */}
+      <Modal visible={showDuels} transparent animationType="fade" onRequestClose={() => setShowDuels(false)}>
+        <View style={s.backdrop}>
+          <View style={[s.modalCard, s.referralModalCard]}>
+            <View style={s.avatarModalHeader}>
+              <Text style={s.modalTitle}>⚔️ {t('myDuels')}</Text>
+              <TouchableOpacity onPress={() => setShowDuels(false)} style={s.closeBtn}>
+                <Text style={s.closeBtnTxt}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {duelsLoading ? (
+              <ActivityIndicator color={C.brass} style={{ marginVertical: 24 }} />
+            ) : duels.length === 0 ? (
+              <Text style={s.referralEmpty}>{t('noDuelsYet')}</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                {duels.map((d) => {
+                  const sentByMe = d.fromUid === user?.uid
+                  const otherName = sentByMe ? d.toUsername : d.fromUsername
+                  const won = d.status === 'completed' && d.winnerUid === user?.uid
+                  const lost = d.status === 'completed' && d.winnerUid !== null && d.winnerUid !== user?.uid
+                  const resultTxt = won ? `🏆 +${d.stake} 🪙` : lost ? `💔 −${d.stake} 🪙` : (
+                    d.status === 'declined' ? t('duelDeclined') : d.status === 'accepted' ? '⏳' : t('duelPending')
+                  )
+                  return (
+                    <View key={d.id} style={s.referralRow}>
+                      <View style={s.referralRowMain}>
+                        <Text style={s.referralName} numberOfLines={1}>
+                          {sentByMe ? '➡️' : '⬅️'} {otherName}
+                        </Text>
+                        <Text style={s.referralDate}>{fmtDate(d.createdAt)}</Text>
+                      </View>
+                      <Text style={won ? s.referralReward : lost ? s.duelLost : s.referralWaiting}>
+                        {resultTxt}
+                      </Text>
+                    </View>
+                  )
+                })}
               </ScrollView>
             )}
           </View>
@@ -1076,6 +1155,7 @@ const s = StyleSheet.create({
   referralName: { fontFamily: 'Cairo_600SemiBold', fontSize: 14, color: C.bone },
   referralDate: { fontFamily: 'Cairo_400Regular', fontSize: 11, color: C.boneOff },
   referralReward: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.brass },
+  duelLost: { fontFamily: 'Cairo_600SemiBold', fontSize: 13, color: C.red },
   referralWaiting: { fontSize: 16 },
 
   // Stats

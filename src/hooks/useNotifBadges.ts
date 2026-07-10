@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { subscribePendingCount, subscribeTotalUnread, subscribeGlobalChatLatest } from '../firebase/firestore'
+import {
+  subscribePendingCount, subscribeTotalUnread, subscribeGlobalChatLatest, subscribePendingChallengesCount,
+} from '../firebase/firestore'
 import { fetchCurrentTournament } from '../online/client'
 import { loadLastSeenGlobalChat, getLastSeenGlobalChat, subscribeGlobalChatSeen } from '../online/globalChatCache'
 
@@ -13,19 +15,23 @@ const TOURNAMENT_POLL_MS = 5 * 60 * 1000 // 5 min
  * - `tournamentBadge` : 1 si un match de tournoi ('ready') attend ce joueur
  * - `globalChatBadge` : 1 si un message mondial est arrivé depuis la dernière
  *   visite de l'onglet Chat mondial (GlobalChatSlide.tsx)
+ * - `challengePending` : nombre de défis entre amis reçus en attente (onglet
+ *   Amis → « Défis en attente », FriendsScreen.tsx)
  */
 export function useNotifBadges(myUid: string | null) {
   const [pending, setPending] = useState(0)
   const [unread, setUnread] = useState(0)
   const [tournamentBadge, setTournamentBadge] = useState(0)
   const [globalChatBadge, setGlobalChatBadge] = useState(0)
+  const [challengePending, setChallengePending] = useState(0)
   const [latestGlobalMsg, setLatestGlobalMsg] = useState<{ uid: string; atMs: number } | null>(null)
 
   useEffect(() => {
-    if (!myUid) { setPending(0); setUnread(0); return }
+    if (!myUid) { setPending(0); setUnread(0); setChallengePending(0); return }
     const u1 = subscribePendingCount(myUid, setPending)
     const u2 = subscribeTotalUnread(myUid, setUnread)
-    return () => { u1(); u2() }
+    const u3 = subscribePendingChallengesCount(myUid, setChallengePending)
+    return () => { u1(); u2(); u3() }
   }, [myUid])
 
   useEffect(() => { void loadLastSeenGlobalChat() }, [])
@@ -71,5 +77,7 @@ export function useNotifBadges(myUid: string | null) {
     return () => { cancelled = true; clearInterval(id) }
   }, [myUid])
 
-  return { pending, unread, total: pending + unread, tournamentBadge, globalChatBadge }
+  return {
+    pending, unread, total: pending + unread, tournamentBadge, globalChatBadge, challengePending,
+  }
 }

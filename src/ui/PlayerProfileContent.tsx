@@ -8,6 +8,7 @@ import { xpRequired } from '../profile/profile'
 import { GoldTransferForm } from './GoldTransferForm'
 import { GoldGiftForm } from './GoldGiftForm'
 import { InviteToPlayModal } from './InviteToPlayModal'
+import { ChallengeModal } from './ChallengeModal'
 import { useAuth } from '../firebase/auth'
 import {
   getGoldHistory, subscribeOnlineStatus, sendFriendRequest, getFriendStatus,
@@ -75,6 +76,7 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
   const [profile, setProfile] = useState<UserDoc | null>(null)
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [showChallenge, setShowChallenge] = useState(false)
   const [history, setHistory] = useState<GoldHistoryEntry[]>([])
   const [presence, setPresence] = useState<PresenceInfo | null>(null)
   const [friendState, setFriendState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
@@ -328,22 +330,35 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
               </TouchableOpacity>
             )
           ) : (
-            <TouchableOpacity
-              style={s.actionBtnPrimary}
-              onPress={() => {
-                // Bot : pas de vraie invitation possible → relance directement
-                // une partie (matchmaking), sans jamais révéler que c'est un bot.
-                if (profile.isBot) {
-                  onNavigateAway?.()
-                  router.push('/bet?game=ronda' as never)
-                  return
-                }
-                setShowInvite(true)
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={s.actionBtnPrimaryTxt}>🎮 {t('inviteToPlay')}</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={s.actionBtnPrimary}
+                onPress={() => {
+                  // Bot : pas de vraie invitation possible → relance directement
+                  // une partie (matchmaking), sans jamais révéler que c'est un bot.
+                  if (profile.isBot) {
+                    onNavigateAway?.()
+                    router.push('/bet?game=ronda' as never)
+                    return
+                  }
+                  setShowInvite(true)
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={s.actionBtnPrimaryTxt}>🎮 {t('inviteToPlay')}</Text>
+              </TouchableOpacity>
+              {/* Un bot n'a pas de propriétaire réel à défier — même exclusion
+                  que pour l'invitation ci-dessus. */}
+              {!profile.isBot && (
+                <TouchableOpacity
+                  style={s.actionBtn}
+                  onPress={() => setShowChallenge(true)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={s.actionBtnTxt}>⚔️ {t('challengeBtn')}</Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
 
@@ -353,6 +368,11 @@ export function PlayerProfileContent({ uid, name, onNavigateAway }: Props) {
         visible={showInvite}
         friend={friendDoc}
         onClose={() => setShowInvite(false)}
+      />
+      <ChallengeModal
+        visible={showChallenge}
+        friend={profile ? { uid: profile.uid, username: profile.username } : null}
+        onClose={() => setShowChallenge(false)}
       />
     </>
   )

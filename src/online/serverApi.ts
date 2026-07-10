@@ -74,3 +74,9 @@ export function notifyFriendRequest(toUid: string): void {
 export function notifyGold(toUid: string, amount: number, type: 'gift' | 'transfer'): void {
   void notify('/notify/gold', { toUid, amount, type })
 }
+export function notifyChallenge(toUid: string, stake: number): void {
+  void notify('/notify/challenge', { toUid, stake })
+}
+export function notifyChallengeAccepted(toUid: string): void {
+  void notify('/notify/challenge-accepted', { toUid })
+}

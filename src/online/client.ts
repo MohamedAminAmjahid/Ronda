@@ -78,6 +78,49 @@ export async function joinTournamentRoom(
   return getClient().create('ronda', { pseudo, uid, private: true, code, tournamentMatchId: matchId })
 }
 
+/**
+ * Rejoint la room d'un défi entre amis (Ronda) par son roomCode — même
+ * mécanisme que joinTournamentRoom (rôle créateur/joiner assigné à l'avance,
+ * `asCreator` = je suis le fromUid du défi) : un défi peut être accepté
+ * jusqu'à 24h après son envoi, l'auteur n'est donc pas forcément en ligne au
+ * moment de l'acceptation — contrairement à une invitation classique
+ * (InviteToPlayModal), où l'hôte crée la room en direct pendant que l'invité
+ * attend, ici c'est le déterminisme du rôle (pas la présence simultanée des
+ * deux joueurs) qui garantit qu'une seule room est créée sous ce code.
+ */
+export async function joinChallengeRoom(
+  pseudo: string, code: string, challengeId: string, asCreator: boolean, uid?: string,
+): Promise<Room> {
+  if (asCreator) {
+    return getClient().create('ronda', { pseudo, uid, private: true, code, challengeId })
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await joinByCode(pseudo, code, uid)
+    } catch {
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  return getClient().create('ronda', { pseudo, uid, private: true, code, challengeId })
+}
+
+/** Équivalent Di Jouj de joinChallengeRoom ci-dessus. */
+export async function joinDiJoujChallengeRoom(
+  pseudo: string, code: string, challengeId: string, asCreator: boolean, uid?: string,
+): Promise<Room> {
+  if (asCreator) {
+    return getClient().create('dijouj', { pseudo, uid, private: true, code, challengeId })
+  }
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      return await joinByCode(pseudo, code, uid)
+    } catch {
+      if (attempt < 4) await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  return getClient().create('dijouj', { pseudo, uid, private: true, code, challengeId })
+}
+
 /** Crée un lobby 2v2 (l'hôte reçoit un code à partager). */
 export function createLobby2v2(pseudo: string): Promise<Room> {
   return getClient().create('ronda2v2', { pseudo })
